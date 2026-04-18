@@ -4,8 +4,8 @@ You are helping with WordPress development on a Runcloud-hosted site.
 
 ## Environment Details
 
-- **WordPress Root**: /home/runcloud/webapps/app-jbm26/
-- **Error Logs**: `tail -f /home/runcloud/webapps/app-jbm26/logs/error_log`
+- **WordPress Root**: /home/runcloud/webapps/[app-name]/
+- **Error Logs**: `tail -f /home/runcloud/webapps/[app-name]/logs/error_log`
 - **Nginx Logs**: `/var/log/nginx/[domain].error.log`
 - **SSH User**: runcloud
 
