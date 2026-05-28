@@ -159,7 +159,7 @@ Two rules govern almost everything in a build. They are easy to confuse because 
 
 ### The golden rule — never guess a Bricks schema
 
-**Never guess Bricks internal schemas. Build one example of the thing you need in the builder, save, read it back, then replicate that shape programmatically.**
+**Never guess Bricks schemas. Replicate a shape that has been saved through the builder — either by building a minimal example yourself, or by reading back one that already exists in the project.**
 
 This is the single most reliable principle for direct-DB work. Bricks runs a JS-side tree validator when the builder loads a template — unknown setting keys and malformed values get silently dropped, and the cleaned tree is re-saved on the next builder write. Every schema guess that is not builder-output-verified gets stripped. Every schema discovered this way sticks.
 
