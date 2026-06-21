@@ -2,6 +2,10 @@
 
 The opener primes Claude with what already exists. The closer adds to what exists. Together they're the loop that compounds.
 
+## Local Sites - Knowledgebase
+
+Read the knowledgebase at ~/claude-config/knowledgebase/ — files 00, 01, 02 fully, 03 as lookup. Then let's start.
+
 ---
 
 ## Session #1 — Brand New Project
@@ -18,7 +22,8 @@ It's a small distinction but it sets the right expectation: Claude won't be conf
 
 After session #1, switch to the standard opener:
 
-> Check memory first. Read CLAUDE.md and the files in /docs/ before we start.
+> Check memory first. Read the knowledgebase, then CLAUDE.md and this project's project-context.md before we start.
+
 
 ---
 
