@@ -83,8 +83,8 @@ To migrate `cssCode` to a central stylesheet: dump it, copy to the right `style.
 
 ### `update_post_meta` silently fails on `_bricks_page_*_2` keys from WP-CLI
 **Symptom:** `update_post_meta($post_id, '_bricks_page_content_2', $array)` returns `false`. No PHP warning, no log entry. `get_post_meta` afterward shows the meta unchanged. The script reports success; nothing lands.
-**Why:** Bricks hooks `update_post_metadata` for the three keys `_bricks_page_content_2`, `_bricks_page_header_2`, `_bricks_page_footer_2`. The callback returns `false` — blocking the update — when `Bricks\Capabilities::current_user_can_use_builder()` is false. WP-CLI runs as user 0, so the check fails and the write is silently blocked.
-**Fix:** Call `wp_set_current_user( 1 )` at the top of any `wp eval` / `wp eval-file` script before writing these keys. The `bricks_global_classes` option is not gated this way.
+**Why:** Bricks guards these three keys (`_bricks_page_content_2`, `_bricks_page_header_2`, `_bricks_page_footer_2`) two ways: an `update_post_metadata` filter (`Bricks\Ajax::update_bricks_postmeta`) and a `sanitize_post_meta__bricks_page_content_2` callback (`Bricks\Ajax::sanitize_bricks_postmeta` → `Helpers::security_check_elements_before_save()`). The sanitize path returns your new elements untouched **only** when the current user passes both `Builder_Permissions::user_can_modify_element_count()` **and** `Capabilities::current_user_can_execute_code()`; otherwise it hands back the *existing* stored elements (or runs non-code elements through `wp_filter_post_kses`). WP-CLI runs as user 0, so the check fails, the old array is returned unchanged, and `update_post_meta` sees no diff → returns `false`, with no warning and nothing logged. (An in-builder request carries a valid `bricks-nonce-builder`, which short-circuits the check — that path is unavailable from CLI, so an admin user context is the substitute.)
+**Fix:** Call `wp_set_current_user( 1 )` at the top of any `wp eval` / `wp eval-file` script before writing these keys (user 1 = admin with `full_access` + code execution, so `security_check_elements_before_save()` returns your elements as-is). The `bricks_global_classes` option is not gated this way.
 ```php
 wp_set_current_user( 1 );
 $content = get_post_meta( $tmpl_id, '_bricks_page_content_2', true );
@@ -305,6 +305,18 @@ document.querySelectorAll(STAGGER_SELECTORS).forEach(function (el) {
 ```
 The CSS `nth-child` rules still drive per-child `transition-delay`, so the cascade is preserved. Alternatively, on AJAX-rendered lists, make each card a standalone `.anim-fade-up` rather than a stagger child.
 **First seen:** AHML, 2026-04-30 — Blog Archive post grid.
+
+### Frontend Toolkit — never put `.anim-*` on a content wrapper taller than the viewport
+**Symptom / When:** On page load a long content block (single blog post body, area community section) renders at `opacity: 0` and only appears once the user scrolls a little. Small hero elements animate in normally.
+**Why:** The toolkit's IntersectionObserver uses `threshold: 0.1` — 10% of the target must be in view to reveal it. A wrapper holding an entire tall article can't show 10% of itself while the hero occupies the top of the viewport, so it never crosses the threshold on load and stays hidden until a scroll nudges it past 10%. An element taller than ~`viewport / 0.1` (≈10× the viewport) can never cross it at all. Because `.anim-*` sets `opacity: 0` up front, a broken reveal = invisible primary content (SEO/UX risk).
+**Fix:** Don't animate tall content containers. Animate the small, above-the-fold pieces (eyebrow, title, meta, featured image, CTA) and leave the body wrapper static. Strip the `anim-*` token from the wrapper that grows with content (it may be a stagger child — removing its class just makes it always-visible while its siblings keep staggering):
+```php
+wp_set_current_user( 1 );
+// drop the anim-* class from the reading-column / body wrapper's _cssClasses, then:
+update_post_meta( $tmpl_id, '_bricks_page_content_2', $content );
+\Bricks\Assets_Files::regenerate_css_files();
+```
+**First seen:** AHML, 2026-07-01 — Blog Single (tmpl 595) `article__inner` reading column and Area Single (tmpl 474) community-body wrapper both went invisible-until-scroll; removed `.anim-fade-up` from the body wrappers, kept hero + CTA animations.
 
 ## ACSS
 
