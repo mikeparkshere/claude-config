@@ -458,3 +458,250 @@ a:any-link:hover { text-decoration: underline; }
 # === PROJECT SECTION — "we learned" ===
 
 *Empty at kickoff. New gotchas discovered during this project's build append below, in the entry format above. At go-live these are reviewed and the validated ones fold into the established section of the master.*
+
+## VMG Client Portal
+
+*Discovered during the VMG Client Portal build (2026-06 → 2026-07). Awaiting go-live harvest review; validated entries fold up into ESTABLISHED.*
+
+### Bricks — register utility global-class "anchors" from a plugin so they show in the picker
+**Symptom / When:** A child-theme utility class (`.display`, `.eyebrow`) works on the front end but doesn't appear in the Bricks class picker, so it can't be assigned in the builder.
+**Why:** The picker lists entries in the `bricks_global_classes` option, not whatever exists in CSS. The class needs an entry there (CSS stays in the theme).
+**Fix:** Seed empty "anchor" entries idempotently from the functionality plugin (on `admin_init`, hash-guarded so it writes once). Per the verified Global Class shape: `settings` MUST be `array()`; IDs 6-char alphanumeric, never all-numeric. `bricks_global_classes` writes are **not** cap-gated (no `wp_set_current_user` needed). Anchors carry empty settings → emit no CSS; the theme `style.css` supplies the actual rules. Keeps the plugin (anchors, version-controlled) and theme (CSS) split clean.
+**First seen:** VMG, 2026-06-05 — `vmg-portal`'s `bricks-global-classes.php` seeder for `.display`/`.eyebrow`/etc.
+
+### Bricks — typed settings written via WP-CLI emit for some control types, silently not for others
+**Symptom / When:** Converting global-class `_cssCustom` to typed settings by a direct `bricks_global_classes` option write + `Assets_Files::regenerate_css_files()`. Some typed keys produce CSS; others persist in the option but emit nothing (no error, readback looks fine).
+**Why:** The option→CSS generator handles control types unevenly on this path. Verified Bricks 2.3.6. **Emit:** `_padding`/`_margin` (type `spacing`), `_typography`, `_border` (incl. `radius` with `var()`), `_background`, `_display` (`select`), `_alignItems`/`_justifyContent`. **Do NOT emit from a CLI write:** `_gap`/`_width`/`_widthMax`/`_heightMin` (type `number`+`units`) and `_flexDirection` (type `direction`) — the builder's own save owns that generation.
+**Fix:** Type everything in the emit set via CLI. For `number+units`/`direction`, either set them in the builder, or keep them as token-based `_cssCustom` (no magic numbers). Verify every typed write against the rendered page — silent no-emit is the failure mode.
+**First seen:** VMG, 2026-06-06 — Contact page typed conversion; gap/flex-direction/max-width dropped silently.
+
+### Bricks — empty `text-basic` renders nothing; use `block`/`div` for decorative empties
+**Symptom / When:** A `text-basic` with `text:''` (a CSS-only dot, accent bar, counter holder) produces no DOM output.
+**Why:** `text-basic` skips render on empty text; `block`/`div` render their wrapper regardless.
+**Fix:** Decorative empty element → `block` with `tag:'custom'`+`customTag:'span'` (or div), not `text-basic`.
+**First seen:** VMG, 2026-06-06 — Contact status dot vanished as a `text-basic`.
+
+### Bricks — `html` element is the ungated raw-markup injector; global-class CSS only emits for in-use classes
+**Symptom / When:** Need to inject static HTML (form stub, embed); and classes referenced only inside that HTML get no CSS.
+**Why:** The `html` element (`settings.html`) just `echo`s markup — no capability gate (the `code` element gates execution). Bricks emits a global class's CSS **only if a real Bricks element uses that class**; classes living only inside raw-HTML strings are never collected.
+**Fix:** Use `html` for raw markup. For CSS targeting raw-HTML-only classes, bundle those rules into the `_cssCustom` of a class that IS on a real element (the wrapping card/panel) so they emit.
+**First seen:** VMG, 2026-06-06 — Contact form stub; field CSS rode on `.contact__form-panel`.
+
+### Bricks — `{woo_product_price}` outputs price_html, rendered as HTML in a Basic Text element
+**Symptom / When:** Want a Woo (subscription) price in a card, styled (large amount, small interval).
+**Why / Fix:** `{woo_product_price}` returns Woo's `price_html` and renders as HTML (not escaped) in a `text-basic`. Structure: amount in `.woocommerce-Price-amount` (nested `.woocommerce-Price-currencySymbol`), subscription suffix in `.subscription-details`. Style by targeting those Woo classes from the card's price class; mirror the markup in mockups so the CSS transfers.
+**First seen:** VMG, 2026-06-06 — Hosting Plans price.
+
+### Bricks — flex/grid + gap that arranges BEM children belongs on the Container, not the single-child Section
+**Symptom / When:** You put `display:flex; flex-direction:column; gap` (or grid+gap) on the **Section** to stack its content, but the gap has no effect and the children sit flush.
+**Why:** In Section > Container > BEM, the Section's only child is the Container. `gap` only spaces an element's *direct children* — gap on the Section spaces `[the Container]` (one item → no effect). The intro/grid/status that need spacing are children of the **Container**, so the flex/grid+gap must live there. (`justify-content`/`align-items` for *centering* the single Container, by contrast, do belong on the Section.)
+**Fix:** Put the content-stacking layout (flex/grid + gap) on the Container — give it a BEM class to hold it. Keep the Section as the full-bleed stage (background, min-height). Cleanest: move the whole stage (min-height + flex column + gap + centering) onto the Container and leave the Section as a thin background wrapper.
+**First seen:** VMG, 2026-06-06 — Home split landing; `gap` on `.home` (section) was orphaned; moved the layout to `.home__container` (Mike classed the container for exactly this).
+
+### ACSS/Bricks — `.btn--primary` visual CSS is NOT global on the frontend; it's generated per Bricks Button element
+**Symptom / When:** A plain `<a class="btn btn--primary">` in a PHP-rendered template (dashboard, Woo override) renders unstyled — mono font only, no violet fill/padding/border — while the same classes look right on Bricks-built pages.
+**Why:** On the frontend the `.btn--primary`/`.btn--outline` color/padding/border CSS is emitted per-element by the Bricks Button element at render. It is NOT in any globally-enqueued stylesheet (only `automatic-gutenberg.css`, block-editor-only, plus the child theme's mono-font-only `.btn` rule). No Bricks Button on the page = no button CSS.
+**Fix:** For PHP/non-Bricks surfaces, define the button CSS yourself, scoped so it can't collide with Bricks' per-element CSS on builder pages (e.g. `.woocommerce .btn--primary{background:var(--primary);color:var(--white);…}`). Consume `--primary`/`--white`/`--primary-hover` to match the ACSS button.
+**First seen:** VMG, 2026-06-07 — dashboard CTAs rendered as bare links until portal `.btn` CSS was added under `.woocommerce`.
+
+### Bricks — the WooCommerce integration sheet loads AFTER the child theme and restyles My Account
+**Symptom / When:** A custom-themed My Account nav (or other Woo surface) renders with Bricks' default look — light nav background, `line-height:60px` block links, no custom styling — even though the child-theme CSS targets the right classes and is enqueued.
+**Why:** Bricks enqueues `themes/bricks/assets/css/integrations/woocommerce-layer.min.css` AFTER the child-theme `style.css`, with rules like `.woocommerce-account .woocommerce-MyAccount-navigation a{display:block;line-height:60px;padding:0 30px}` (0,2,1) and nav `background-color`/`min-width:25%`. These beat single-class child rules on both specificity and source order.
+**Fix:** When you're fully theming the surface, opt OUT rather than fight per-rule: drop the conventional hook class (here `woocommerce-MyAccount-navigation` from the `<nav>` in the navigation.php override; keep your own `.acct__nav`). Per-`<li>` `--{endpoint}` classes from `wc_get_account_menu_item_classes()` are unaffected. Opting out also disables Bricks' account-nav JS that would double with a custom toggle.
+**Process note (carry-forward):** ACSS-section, `.btn`, and this nav finding ALL appear only with the full stylesheet cascade loaded. When verifying a PHP-rendered Woo/portal surface by headless screenshot, replicate the page's ENTIRE stylesheet set in source order (Advanced Themer → automatic.css → frontend-light-layer → child style.css → woocommerce-layer → content-default → theme-style-* → post-* → automatic-bricks). A tokens+ACSS+style.css subset gives false confidence — pull the real list from the rendered page's `<link>`s (auth-cookie curl for gated pages).
+**First seen:** VMG, 2026-06-07 — dashboard account nav rendered unstyled on the real page; a partial-CSS preview had shown it correct.
+
+### Bricks/HTML — `<details>` content can't be force-shown on desktop (Chrome `::details-content` content-visibility); don't use it for responsive disclosure
+**Symptom / When:** A `<details>`/`<summary>` used as a responsive menu (collapsed on mobile, "always open" on desktop via CSS) renders the content HIDDEN on desktop — the CSS override to keep it open has no effect, so a desktop sidebar collapses to nothing.
+**Why:** Recent Chrome hides closed-`<details>` content via a `::details-content` pseudo with `content-visibility:hidden`, not a simple `display:none` on the child. Overriding the child's `display` doesn't un-hide it; `::details-content` support is too new/uneven to rely on.
+**Fix:** For a disclosure that must be open at one breakpoint and collapsible at another, use a checkbox-controlled pattern (`input + label + list`, `:checked ~ list{display}`) or a `<button aria-expanded>` + JS toggling a class — both give full author control of `display`. Reserve `<details>` for collapse-everywhere cases.
+**First seen:** VMG, 2026-06-07 — account-nav disclosure; the desktop sidebar collapsed to nothing until switched to a checkbox toggle.
+
+### Bricks — woo-layer paints `.woocommerce-order-details table tfoot` bricks-bg-light (a white box on dark)
+**Symptom / When:** The order-details table (thank-you, view-order) shows a near-white block behind the Subtotal/Total rows, even after theming the cells transparent.
+**Why:** `integrations/woocommerce-layer.min.css` sets `.woocommerce-order-details table tfoot { background-color: var(--bricks-bg-light) }` (#f5f6f7) on the `<tfoot>` ELEMENT (not the cells), and loads AFTER the child theme. Transparent `td`/`th` let the tfoot bg show through. Its selector is (0,1,2) and out-sources style.css.
+**Fix:** Beat it with the doubled-class trick (no `!important`): `.woocommerce-table--order-details.woocommerce-table--order-details tfoot { background: transparent; }` — 2 classes (0,2,1) outranks Bricks' 1-class (0,1,2). (Same family as the woo-nav and ghost-border layered-cascade fights.)
+**First seen:** VMG, 2026-06-07 — thank-you / view-order order-details tfoot.
+
+### Bricks — header/footer TEMPLATE content lives in `_bricks_page_header_2` / `_bricks_page_footer_2`, not `_bricks_page_content_2`
+**Symptom / When:** You write a built element tree to a header or footer template (`bricks_template`, `_bricks_template_type` = header/footer) via `_bricks_page_content_2`, readback confirms the elements, regen succeeds — but the template renders NOTHING on the front end (the `<header>`/`<footer>` landmark is absent or empty).
+**Why:** Bricks keys template content by template TYPE. A page/single template uses `_bricks_page_content_2`; a header template uses `_bricks_page_header_2`; a footer template uses `_bricks_page_footer_2`. Writing the tree to `_content_2` on a footer template stores valid data on a key the footer renderer never reads — so it's a silent no-render (distinct from the cap-gated silent no-WRITE; here the write lands, on the wrong key).
+**Fix:** Match the key to the template type. Confirm with `wp post meta get <id> _bricks_template_type` first, then write to the matching `_bricks_page_{content|header|footer}_2`. Cross-check by reading an existing working template of the same type (e.g. the header) — its content key tells you which one the renderer reads.
+**First seen:** VMG, 2026-06-07 — footer template 34 rendered empty until the tree moved from `_bricks_page_content_2` to `_bricks_page_footer_2`.
+
+### Bricks — build a whole template section as a native element tree, NOT one `html` element (golden rule, even with no builder in front of you)
+**Symptom / When:** Tempted to ship a footer/header/section by dropping the entire markup into a single Bricks `html` element (`settings.html`) with all styling in the child theme. It renders fine on first load — but the whole section is invisible and uneditable in the Bricks UI (no element tree, no typed panels, no global classes), which is the exact handoff failure the pipeline exists to prevent. It also skips the golden rule entirely.
+**Why:** The `html` element is a raw-markup injector for genuinely non-native bits (embeds, form stubs) — not a substitute for the `SECTION > CONTAINER > BEM` element tree. The reflex to use it (or to hand-author markup + `style.css`) usually comes from "I can't open the builder from CLI, so I can't discover schemas." But the golden rule's discovery source doesn't have to be a fresh builder session: any EXISTING builder-made template is a verified example. The site header, and any already-built page, hold the exact verified shapes (`section`/`container`/`block`/`svg`/`text-basic`, typed `_typography`/`_padding`/`_border`/`fill`, the ACSS color-object `{raw:'var(--x)'}`, query-loop, link) — read them back and replicate.
+**Fix:** Harvest schemas from existing builder output: `wp post meta get <header_id> _bricks_page_header_2 --format=json` and a built page's `_bricks_page_content_2`; plus the global classes those elements reference (`bricks_global_classes`). Build the section's element tree from those shapes via WP-CLI. Reserve `html` for true raw-markup needs only. (Companion: a footer Legal column became a Query Loop over the `vmg_legal` CPT — auto-syncing — instead of a hardcoded list, once built as real elements.)
+**First seen:** VMG, 2026-06-07 — footer first shipped as one `html` blob + `style.css`; rebuilt as a 44-element native tree (typed settings on 24 global classes, logo lockup replicated element-for-element from the header, Legal as a `vmg_legal` query loop).
+
+### ACSS — configure the palette/settings programmatically via `Database_Settings::save_settings()`
+**Symptom / When:** You need to set the ACSS palette or any Dashboard setting from WP-CLI (no UI access) and have the stylesheets regenerate. Hand-editing the `automatic_css_settings` option (2000+ keys) directly is error-prone and does NOT rebuild the CSS.
+**Why:** ACSS stores settings in the `automatic_css_settings` option and regenerates via `CSS_Engine::generate_all_css_files()`. `Database_Settings::save_settings()` is the exact path the Dashboard "Save" uses — it validates, persists, and regenerates in one call.
+**Fix:**
+```php
+wp_set_current_user( 1 ); // save_settings requires the manage_options cap
+$ds   = \Automatic_CSS\Model\Database_Settings::get_instance();
+$vals = $ds->get_vars();                 // current FULL settings array
+$vals['color-primary'] = '#842abf';      // hex = source of truth for parent --primary (+ --primary-h/s/l)
+// Derived shades are stored independently — to fully recolor, rewrite each shade's H and S
+// (keep the -l lightness targets): primary-{hover,ultra-light,light,semi-light,medium,semi-dark,dark,ultra-dark}-h / -s
+$vals['vp-max']      = 1280;             // -> --content-width (px ÷ root = rem)
+$vals['base-radius'] = '6px';            // -> --radius
+$ds->save_settings( $vals, true );        // true = validate + regenerate all CSS files
+```
+Back up first: `wp option get automatic_css_settings --format=json > backup.json`. The contextual/dark-scheme vars (`--body-bg-color`, `--text-color`, `--h1`, `--space-*`) are better overridden in a child-theme `:root` bridge that loads after `automatic.css` — `automatic-bricks.css` loads last but only *consumes* vars (no `:root` blocks), so the bridge wins the cascade.
+**First seen:** VMG, 2026-06-05 — configured the violet/obsidian/ink palette + content-width + radius entirely from CLI.
+
+### ACSS — configure a DARK-FIRST site via a child-theme `:root` bridge (it wins the cascade)
+**Symptom / When:** ACSS is light-first (`--body-bg-color` = white, `--text-color`/`--neutral` = near-black). A dark-first brand needs the default surface dark + light text, plus VMG type/spacing on top of the palette.
+**Why:** All ACSS variables are defined in `automatic.css` (handle loads early). `automatic-bricks.css` loads **last** but contains **no `:root` blocks** — it only *consumes* vars (`background: var(--body-bg-color, …)`). So a child-theme `:root` block loading after `automatic.css` overrides the contextual/type vars and nothing later re-defines them. Verified by checking every `.css` in `<head>` for who *defines* (not uses) `--body-bg-color`/`--h1`/`--primary`.
+**Fix:** Two layers — (1) set the 3 palette colors (`color-primary/base/neutral`) in ACSS settings (see the `save_settings` entry); (2) a child-theme `:root` bridge for the rest:
+```css
+:root {
+  --body-bg-color: var(--obsidian); --body-color: var(--ink-100);
+  --text-color: var(--ink-100); --heading-color: var(--ink-100);
+  --heading-font-weight: 500; --heading-font-family: var(--font-display);
+  --link-color: var(--sapphire-light);
+  --h1: var(--f-h1); --h2: var(--f-h2); --text-m: var(--f-body); /* type scale */
+}
+```
+Spacing piggybacks the same mechanic: a brand `--space-*` defined in a token file loading after `automatic.css` overrides ACSS's for the shared steps — no settings edit needed. Don't use `.bg--dark` for brand sections (its bg is `--neutral-dark`); use the raw surface tokens.
+**First seen:** VMG, 2026-06-05 — dark-first violet/obsidian portal on ACSS 3.3.6.
+
+### ACSS — `:where(section…)` makes any hand-rendered `<section>` flex-column-centred; `section > div` forces its children to column
+**Symptom / When:** A plugin/PHP-rendered card built as `<section class="card">` (with `<div>` children) renders with content horizontally centred and spread vertically, and direct-child rows you set `display:flex` come out stacked as columns — though your CSS never says so. Shows only on real pages (ACSS loaded), not in a stripped mockup.
+**Why:** ACSS ships `section:where(:not(.bricks-shape-divider)){display:flex;flex-direction:column;align-items:center;gap:…}` and `section > div:where(…){display:flex;flex-direction:column;align-items:flex-start;gap:…}`. Intended for Bricks sections, but they match ANY top-level `<section>` and its direct `<div>` children. They use `:where()` (specificity 0,0,1 / 0,0,1) so they're trivially overridden — but ONLY for properties you explicitly declare; relying on element defaults (no `display`/`flex-direction`) lets ACSS win.
+**Fix:** On hand-authored sections, declare the layout explicitly: `.card{display:block}` and `flex-direction:row` on every direct-child flex row (`.card__head`, etc.). Don't rely on element defaults inside a `<section>` on an ACSS site.
+**First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centred + stacked; the login card too.
+
+## WooCommerce
+
+### WooCommerce Subscriptions — create subscription products from WP-CLI
+**Symptom / When:** Need to create recurring/subscription products programmatically (seeding plans, migrations). A plain `WC_Product_Simple` has no recurring price.
+**Why:** Woo Subscriptions registers a `subscription` product type + `WC_Product_Subscription` class; the recurring terms live in `_subscription_*` meta. Setting the product-type term alone isn't enough — use the class so the data store wires it.
+**Fix (run via `wp eval-file`, idempotent by SKU):**
+```php
+$p = new WC_Product_Subscription();
+$p->set_name('Basic Hosting'); $p->set_status('publish');
+$p->set_regular_price('24.95'); $p->set_virtual(true); $p->set_sku('vmg-basic');
+$p->update_meta_data('_subscription_price','24.95');
+$p->update_meta_data('_subscription_period','month');        // day|week|month|year
+$p->update_meta_data('_subscription_period_interval','1');
+$p->update_meta_data('_subscription_length','0');            // 0 = until cancelled
+$p->update_meta_data('_subscription_sign_up_fee','0');
+$p->update_meta_data('_subscription_trial_length','0');
+$id = $p->save();
+```
+`get_price_html()` then renders "$24.95 / month". Guard re-runs with `wc_get_product_id_by_sku()`. Card content (tagline, feature bullets) is cleaner as an ACF group on `product` than Woo attributes.
+**First seen:** VMG, 2026-06-05 — seeded 2 hosting plans from the live site's data.
+
+### WooCommerce — Cart/Checkout pages default to BLOCKS, which bypass classic template overrides
+**Symptom / When:** You add `woocommerce/checkout/form-checkout.php` (or `cart/cart.php`) overrides + CSS, but the live page renders the default block UI and ignores your template entirely — and a curl shows a React skeleton (`is-loading`, no billing fields).
+**Why:** Modern WooCommerce seeds the Cart and Checkout pages with the **block** markup (`<!-- wp:woocommerce/checkout -->`, `<!-- wp:woocommerce/cart -->`), not the classic `[woocommerce_checkout]` / `[woocommerce_cart]` shortcodes. The blocks are React-hydrated and DO NOT use the classic PHP templates, so theme template overrides never run.
+**Fix:** For a classic, template-override-themed checkout (the MPD/VMG approach), replace the page content with the shortcode: `wp post update <id> --post_content='<!-- wp:shortcode -->[woocommerce_checkout]<!-- /wp:shortcode -->'` (and `[woocommerce_cart]`). Then the classic templates + foundation CSS apply. Verify with `wp post get <id> --field=post_content` — if you see `wp:woocommerce/checkout`, it's still the block.
+**First seen:** VMG, 2026-06-07 — checkout override produced nothing live; page 17 held the checkout block, not the shortcode.
+
+### WooCommerce Subscriptions — manual gateways (COD) are hidden on subscription carts until "Accept Manual Renewals" is on
+**Symptom / When:** Checkout for a subscription product shows "Sorry, it seems there are no available payment methods which support subscriptions," even though a gateway (e.g. COD) is enabled and works for simple products.
+**Why:** WCS only offers gateways that support automatic recurring payments for a subscription purchase — UNLESS manual renewals are accepted, which lets manual gateways (COD, BACS, cheque) qualify. Stripe etc. support automatic and always show; COD does not.
+**Fix:** `update_option('woocommerce_subscriptions_accept_manual_renewals','yes')` (WooCommerce → Settings → Subscriptions → "Accept Manual Renewals"). For Local testing with COD this is required to reach the place-order step. Revisit when the real automatic gateway (Stripe) is added — you may turn manual renewals back off.
+**First seen:** VMG, 2026-06-07 — COD enabled for checkout testing but absent from a subscription checkout until manual renewals were accepted.
+
+### Verifying gated/cart-dependent Woo pages — the WC cart session can't be held over curl; render via do_shortcode
+**Symptom / When:** Curling `/checkout/` or `/cart/` (even with a valid auth cookie) renders an empty page — no form, no items — while the product is genuinely in the customer's cart.
+**Why:** Checkout/cart render against the **WC cart session**, which a plain curl chain doesn't reliably carry (the session cookie + persistent-cart merge don't survive the way a browser session does). My Account pages curl fine because they don't depend on the cart. (Also watch malformed Netscape cookie-jar lines silently dropping the auth cookie → requests fall back to logged-out.)
+**Fix:** To verify cart/checkout theming headlessly, load the cart server-side and capture the template output directly, then screenshot it under the full CSS cascade:
+```php
+wp_set_current_user($uid); wc_load_cart(); WC()->cart->get_cart_from_session();
+if ( WC()->cart->is_empty() ) { WC()->cart->add_to_cart( $product_id ); WC()->cart->calculate_totals(); }
+file_put_contents('/tmp/checkout.html', do_shortcode('[woocommerce_checkout]'));
+```
+A real browser with a real cart renders identically — the empty curl is a harness limitation, not a site bug.
+**First seen:** VMG, 2026-06-07 — checkout verified via do_shortcode (full themed form) after curl kept showing empty. (Same limitation hits order-pay + order-received — verify with `wc_get_template('checkout/form-pay.php'|'checkout/thankyou.php', array('order'=>...))`.)
+
+### WooCommerce — "Coming Soon" (Launch Your Store) gates STORE pages to non-managers; looks like a broken page
+**Symptom / When:** Cart, Checkout, Pay-for-Order, Thank-you (and Shop) render a generic "Great things are on the horizon" page for logged-in customers (and a ~475 KB page weight), while My Account renders normally. Your template overrides appear to do nothing.
+**Why:** WooCommerce's Launch-Your-Store "Coming soon" mode (`woocommerce_coming_soon=yes`, `woocommerce_store_pages_only=yes`) shows a placeholder on STORE pages to anyone who can't manage the store. Only admins/shop-managers bypass it — so cart/checkout/etc. must be reviewed while logged in as an admin, and the test CUSTOMER sees the placeholder.
+**Fix:** For verification, view store pages as an admin (or temporarily `wp option update woocommerce_coming_soon no`, then restore). It's a deliberate build-time gate; **disable it at launch** (in the launch-cleanup list). Not a theming bug.
+**First seen:** VMG, 2026-06-07 — order-pay/thank-you "rendered empty" via the customer cookie; it was the coming-soon placeholder.
+
+### WooCommerce — the cart's sparse 6-column table needs `table-layout: fixed`, not auto
+**Symptom / When:** The classic cart row misaligns — the empty `product-remove` / `product-quantity` columns balloon (e.g. remove = 434px) while `product-name` collapses to its content, so the × and thumbnail float in a wide gap.
+**Why:** With `table-layout: auto`, the browser distributes the table's free width across columns by its own heuristic; on a sparse cart (virtual product → empty quantity, single qty) it dumps the slack into the wrong columns and ignores `width` hints on the cells.
+**Fix:** `table.cart { table-layout: fixed }` + explicit widths on remove/thumbnail/price/quantity/subtotal so `product-name` (no width) takes the remainder. Tighten cell `padding-inline` and set the subscription price cells to `--f-small` so "$X / month" stays one line. (The mobile stacked layout — Woo `shop_table_responsive` — is unaffected since cells become `display:block`.)
+**First seen:** VMG, 2026-06-07 — cart row alignment; probed cell widths to find auto-layout was the cause.
+
+### WooCommerce Subscriptions — the staging-site lock silently SKIPS all automatic renewals after a Local→production migration
+**Symptom / When:** On a freshly-migrated production site (e.g. Duplicator restore from a Local build), automatic subscription renewals never charge. The renewal order is created but left unpaid with the note *"Payment processing skipped - renewal order created on staging site under staging site lock. Live site is at http://<old-local-url>"*; the subscription goes on-hold; **the gateway is never called** (no PaymentIntent in Stripe). Looks like a Stripe/card failure — it isn't.
+**Why:** WCS stores the "real" site URL in option `wc_subscriptions_siteurl`, encoded with a `_[wc_subscriptions_siteurl]_` marker so search-replace tools can't rewrite it on migration. When the live URL differs from that lock, `WCS_Staging::is_duplicate_site()` returns true and WCS disables automatic payments — a deliberate guard against a clone double-charging customers. After a migration the lock still points at the old (Local) URL, so production is treated as the clone.
+**Fix:** On production after migration, mark it live so WCS re-locks to the production URL. Admin: the "This is a live site / allow automatic payments" notice button. CLI (mirrors that button exactly):
+```php
+wp eval 'WCS_Staging::set_duplicate_site_url_lock();'
+wp eval 'var_dump( WCS_Staging::is_duplicate_site() );'   // expect false
+```
+Add to the deploy checklist for ANY Local→server migration carrying subscriptions. Verify renewals actually charge by firing `do_action("woocommerce_scheduled_subscription_payment", <sub_id>)` on a test subscription and confirming a captured charge (HPOS: use `wcs_get_subscription()` / `wc_get_order()`, not `wp post meta`).
+**First seen:** VMG, 2026-06-07 — first off-session renewal test silently skipped under the lock (sub forced on-hold, no Stripe call); renewals charged cleanly once the lock was reset to vmgdma.com.
+
+### WooCommerce — Woo overrides `wp_mail_from`, so transactional mail can fail DMARC even when plugin mail passes
+**Symptom / When:** Mailgun/SMTP logs show DMARC failures (and rejections) for WooCommerce emails — new-account, order/invoice, password reset, subscription notices — while your own plugin's `wp_mail()` sends pass cleanly. SPF/DKIM/MX all validate in Mailgun; the records aren't the problem.
+**Why:** WooCommerce sends its emails From its OWN setting, `woocommerce_email_from_address` (default = the WP admin email), **ignoring any `wp_mail_from` filter** a functionality plugin sets. If that admin address is on a different domain than the one the mail is authenticated as (e.g. Mailgun signs `d=mailer.example.com` / envelope on the sending subdomain, but Woo's From is `admin@somewhere-else.com`), neither SPF nor DKIM aligns with the From domain → DMARC fails. If that other domain publishes `p=reject`, receivers bounce the mail outright.
+**Fix:** Set Woo's From to an address on the authenticated sending domain (org-domain match = relaxed DMARC alignment), matching whatever `wp_mail_from` uses:
+```bash
+wp option update woocommerce_email_from_address 'noreply@example.com'
+wp option update woocommerce_email_from_name 'Site Name'
+```
+Don't assume a plugin's `wp_mail_from` covers WooCommerce — it's a separate From source. Verify with a mail-tester.com send routed through `wp eval 'wp_mail(...)'` and confirm `dkim=pass / spf=pass / dmarc=pass`.
+**First seen:** VMG, 2026-06-07 — Woo mail went out From the admin's `michaelparks.me` (which has `p=reject`) over Mailgun's `mailer.vmgdma.com` auth → rejected; fixed by pointing Woo's From at `noreply@vmgdma.com`. Verified 10/10 on mail-tester.
+
+### WooCommerce — brand transactional emails via SETTINGS, not template overrides (esp. with `email_improvements` ON)
+**Symptom / When:** You need WooCommerce emails on-brand. Tempting to copy `email-header.php`/`email-styles.php` into the theme — don't: `email-styles.php` is version-sensitive and an outdated override silently breaks email layout.
+**Why / how it works (Woo 10.x):** Check `FeaturesUtil::feature_is_enabled('email_improvements')` first — it's ON by default on fresh 10.x and changes the model: the header band background = the **body** color (so the header is LIGHT, not the base color — your header logo must read on white/light), links **auto-follow the base color**, and it exposes extra native settings: `woocommerce_email_footer_text_color`, `_header_alignment`, `_header_image_width`, `_font_family` (curated email-safe list — Space Grotesk/web fonts can't load in email, so body falls back to a system face). The whole palette flows from `woocommerce_email_base_color`. CTAs render as **violet text-links**, not filled buttons.
+**Fix / levers:** Set the options (`base_color` → brand accent, `background_color`/`body_background_color`/`text_color`/`footer_text_color`, `header_alignment`, `header_image_width`, `header_image`) — that alone themes everything; no override needed. **Email CSS can't use `var()`** — if you must add polish use literal hexes via the `woocommerce_email_styles` filter (appends after Woo's CSS) or `woocommerce_email_content_type`. **Header image MUST be a raster (PNG/JPG) — SVG is stripped by virtually every email client.** No `var()`, inlined table CSS only.
+**Multipart gotcha:** to add a plaintext part (clears SpamAssassin `MIME_HTML_ONLY`), set each email's `email_type` to `multipart` in its `woocommerce_{id}_settings` option (what the admin UI toggles; loop `WC()->mailer()->get_emails()` to do it in bulk). **But `WC_Email::get_email_type()` silently returns `'plain'` if `DOMDocument` is missing** — setting multipart without ext-dom would downgrade emails to plain text and DROP the HTML/branding. Verify `class_exists('DOMDocument')` first.
+**Verify without a client:** render with `EmailPreview` (`\Automattic\WooCommerce\Internal\Admin\EmailPreview\EmailPreview` → `set_email_type('WC_Email_...')->render()`), send a real branded email via `wp_mail` (plugin From filters + Mailgun SMTP), confirm acceptance via the **Mailgun events API** (`/v3/{domain}/events?recipient=`), and score auth/spam on mail-tester. **CLI caveat:** `is_ssl()` is false under WP-CLI, so emails rendered/sent via CLI emit some `http://` asset URLs (e.g. the product placeholder) → harmless 301s that DON'T occur on real web-triggered sends (which are https). And the EmailPreview uses fabricated line items, so a `placeholder.webp` / `example.com` link in a CLI/preview test is preview-only — real product emails use the real images (verify the products actually have featured images).
+**First seen:** VMG, 2026-06-08 — themed all transactional email via settings only (base `#842ABF`, light theme, centered PNG logomark @180px, From "VMG Client Portal", text-link CTAs); replaced a broken `logomark.svg` header; flipped 41 emails to multipart (DOMDocument confirmed). mail-tester: DKIM valid + SPF pass, SpamAssassin -1.1 (clear of the -5 spam threshold).
+
+### WooCommerce — admin-created customers get WP's PLAIN email, not the branded WC welcome
+**Symptom / When:** You onboard a client from wp-admin → Users → Add New (role Customer, "send notification" checked) and they receive WordPress's generic plain-text "set your password" email — not the branded WooCommerce customer_new_account email that checkout buyers get.
+**Why:** WooCommerce's branded `customer_new_account` email fires on `woocommerce_created_customer`, which is dispatched only by `wc_create_new_customer()` — used by checkout, My Account registration, and `wp wc customer create`. The wp-admin "Add New User" screen uses `wp_insert_user()` directly, so WC never fires; WP's own new-user notification sends instead.
+**Fix (bridge in a plugin):** hook `user_register`; if `is_admin()` (and not ajax/REST — those other paths aren't is_admin, so no double-send) and the new user has the `customer` role and the core `send_user_notification` checkbox was set, (a) suppress WP's plain email and (b) send WC's branded one with a set-password link:
+```php
+// suppress WP's plain email for this user
+add_filter( 'wp_new_user_notification_email', fn( $e ) => array_merge( $e, array( 'to' => '' ) ), 99 );
+// send the branded WC welcome WITH a set-password link (3rd arg = $password_generated)
+WC()->mailer()->get_emails()['WC_Email_Customer_New_Account']->trigger( $user_id, '', true );
+```
+`trigger( $id, '', true )` makes the email include the "set your password" link, which points at the **themed My Account reset page** (`/my-account/lost-password/?action=newaccount&key=…&login=…`), not raw wp-login. Emptying `to` is the cleanest core-safe way to cancel WP's email (no clean "skip" filter exists). CLI `wp wc customer create` needs none of this — it already fires the branded email.
+**Account model (who needs an account):** subscriptions **force** account creation at checkout (WCS, no guest subs) — so custom service subscriptions REQUIRE the admin-invite path. One-off **invoices don't need an account** if billed as a **guest order** (paid via the secure order-pay link, no login); but an order **assigned to a registered customer requires that customer to log in to pay** (`woocommerce_order_received_verify_known_shoppers` defaults true, gates both order-received and order-pay). Sequencing trap: assigning a first invoice to a brand-new customer means they must set their password (welcome email) before they can log in to pay it.
+**First seen:** VMG, 2026-06-08 — `vmg-portal/inc/accounts.php`; verified E2E (created a customer → branded set-password welcome → Mailgun delivered → user deleted). Password-at-checkout flow set via `woocommerce_registration_generate_password=no`; public registration left off.
+
+## WS Form
+
+### WS Form — theme an entire form by remapping its `--wsf-*` root vars; the skin sets them at ZERO specificity
+**Symptom / When:** You need a WS Form (1.11.x) to match a design system. Writing selector overrides (`.wsf-field { … }`) is a losing game — hundreds of selectors, brittle across updates.
+**Why / how it actually works:** WS Form themes everything through `--wsf-*` CSS custom properties. Each **Style (skin)** compiles to `uploads/ws-form/css/public/public.style.{id}.css`, which defines the vars scoped to `:where([data-wsf-style-id="N"])` — **specificity 0,0,0**. Critically, the whole component layer *derives* from a small **root tier of ~10 semantic colours** (`--wsf-form-color-base`, `-base-contrast`, `-primary`, `-accent`, `-neutral`, `-secondary`, `-success`/`-info`/`-warning`/`-danger`) via `var(--wsf-form-color-*)` references and `color-mix()` light/dark ramps (`--wsf-form-color-primary-dark-20: color-mix(in oklab, var(--wsf-form-color-primary), #000 20%)`).
+**Fix / pattern:** A child-theme block scoped to `.wsf-form` (specificity 0,1,0) beats the `:where()` skin regardless of load order. Override the **root tier** → your tokens and every derived var recomputes automatically (the skin's `color-mix()` re-evaluates against your value, since `var()` resolves to the element's computed value). Only hand-map component literals where one root var can't serve two roles — on a DARK theme, field *text* (`--wsf-field-color` → bright ink) must differ from field *border* (`--wsf-field-border-color` → subtle ink), but both default to `var(--wsf-form-color-base)`. Useful specifics: `--wsf-field-box-shadow-width-focus: 0` kills the focus ring (border-only focus); the submit button renders as `.wsf-button-primary` so it draws the `--wsf-field-button-primary-*` tier (bg = primary, text = base-contrast) — no need to touch the neutral button tier; button typography is fully var-driven (`--wsf-field-button-font-family/-weight/-letter-spacing/-text-transform`). Note `--wsf-form-color-base-contrast` is the "light text on a coloured fill" role (button text → near-white), NOT a literal contrast of base. Keep it a **bridge** (map to tokens), edit the tokens to reshade.
+**First seen:** VMG, 2026-06-08 — `bricks-child-theme/assets/css/ws-form.css` maps the root tier + field literals to the VMG tokens (fields matched to the existing Woo/account input treatment, submit to `.btn--primary`). ~25 var declarations theme the whole form. Fields are JS-injected at runtime, so the form can't be verified over curl — confirm visually (see also the Simply-Static "WS Form = empty `<form>` shell at export" note).
+
+## WP-CLI
+
+### WP-CLI — inline `wp eval` fatals silently on `"{$arr[barekey]}"` in PHP 8
+**Symptom / When:** A multi-line inline `wp eval '...'` appears to produce no/truncated output and its writes don't land; the PHP log later shows a fatal "in eval()'d code on line N".
+**Why:** In *complex* interpolation `"{$c[h]}"`, the bareword `h` is parsed as a constant (unlike *simple* `"$c[h]"` where it's a string key). PHP 8 throws on undefined constants, fataling the whole eval mid-run — the partial stdout just looks "cut off".
+**Fix:** Quote the key (`"{$c['h']}"`), or — for anything non-trivial — write a `.php` file and run `wp eval-file script.php > out.txt 2>&1` so output and fatals are captured. Default to `eval-file` for multi-step DB work.
+**First seen:** VMG, 2026-06-05 — the ACSS config script silently no-opped via inline eval; identical logic worked as `eval-file`.
+
+### WP-CLI — `is_ssl()` is false, so WooCommerce reports gateways "unavailable" and strips the Payment Methods nav
+**Symptom / When:** From `wp eval`, a correctly-configured **live** payment gateway reads as unavailable — `$gateway->is_available()` returns `false`, `WC()->payment_gateways()->get_available_payment_gateways()` omits it, and `wc_get_account_menu_items()` drops the `payment-methods` endpoint — even though the live front end charges fine. Looks like a broken gateway/menu; it isn't.
+**Why:** WP-CLI has no HTTP request, so `$_SERVER['HTTPS']` is unset and `is_ssl()` returns `false`. WC Stripe (and other gateways) gate **live-mode** availability on `is_ssl()`; an unavailable tokenization gateway in turn makes WooCommerce remove the `payment-methods` account menu item (it only shows when a gateway supporting saved methods is available). Pure CLI-context artifact — nothing wrong with the config.
+**Fix:** Simulate HTTPS before introspecting, then re-init gateways — or verify on the real front end (auth-cookie curl / browser). Don't trust CLI gateway-availability or account-menu output at face value.
+```php
+$_SERVER['HTTPS'] = 'on';
+WC()->payment_gateways()->init();
+$g = WC()->payment_gateways()->payment_gateways()['stripe'];
+var_dump( $g->is_available() );          // now true
+print_r( wc_get_account_menu_items() );   // now includes payment-methods
+```
+**First seen:** VMG, 2026-06-07 — after the Stripe live flip, `is_available()` and the Payment Methods nav both read as missing in `wp eval`; both flipped to present once HTTPS was simulated. (Confirmed the origin terminates real HTTPS — RunCloud LE cert, CF Full mode — so `is_ssl()` is genuinely true on real requests.)
+
