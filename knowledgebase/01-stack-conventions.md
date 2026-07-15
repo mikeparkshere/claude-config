@@ -73,6 +73,23 @@ Specificity stays flat. BEM means each element has its own class; do not nest se
 
 String expansion in Bricks: write `--variable` in a Bricks field and ACSS expands it to `var(--variable)`.
 
+### Specificity cheat sheet
+
+When an ACSS utility or a framework rule overrides your custom class, climb specificity with compound selectors rather than `!important` — `!important` trumps specificity but kills debuggability, and every later override has to escalate again.
+
+| Selector | Specificity |
+|---|---|
+| `.card` | `(0,1,0)` |
+| `.card.clickable-parent` | `(0,2,0)` |
+| `.card:hover` | `(0,2,0)` |
+| `.clickable-parent:not(a)` | `(0,1,1)` — `:not(a)` adopts `a`'s `(0,0,1)` |
+| `.clickable-parent:not(a) a` | `(0,1,2)` |
+| `.card .card__meta a` | `(0,2,1)` |
+
+The doubled-class trick (`.foo.foo`) is the cheapest legal climb: `(0,2,0)` beats `(0,1,0)` with no new selector surface. It is the first move against Bricks' inline Global Class CSS, `@layer bricks` framework rules, and any stylesheet that enqueues after the child theme — all three cases are catalogued in `03`.
+
+Before fighting any rule with a selector, check whether it consumes a token you could override instead (`03`, ACSS `automatic-bricks.css`). Overriding the token is almost always the smaller change.
+
 ---
 
 ## ACSS variable reference
@@ -155,6 +172,30 @@ Project-specific vocabulary overrides come from the project record.
 Accessibility is structural — encode it in the markup at build time, not via runtime ARIA injection.
 
 ---
+
+## Inheriting a project — the silent-strip startup audit
+
+Bricks' validator silently drops settings with unknown keys at write time, and **the dropped values stay in the DB** — Bricks doesn't clean them up. The class still carries the wrong-key data; it just never renders. This matters on handover: learning a schema lesson fixes future scaffolds, it does **not** retroactively fix classes written before the lesson landed. A project built by someone else (or by you, before a gotcha was known) can be carrying dormant settings that were meant to do something.
+
+So on any project you weren't there for the build of, audit before you style:
+
+```bash
+wp eval '
+$classes = get_option("bricks_global_classes", []);
+$bad = ["_maxWidth","_minWidth","_maxHeight","_minHeight","_borderRadius","objectFit"];
+foreach ($bad as $bk) {
+    $hits = [];
+    foreach ($classes as $c) {
+        if (isset($c["settings"][$bk])) $hits[] = $c["name"] . " = " . json_encode($c["settings"][$bk]);
+    }
+    if ($hits) { echo "\n$bk → " . count($hits) . " classes:\n"; foreach ($hits as $h) echo "  - $h\n"; }
+}
+'
+```
+
+Correct keys: `_widthMax` / `_widthMin` / `_heightMax` / `_heightMin` (suffix, not prefix), `_border.radius` (nested, side keys map to corners), `_objectFit` (leading underscore). When hits are found, migrate in one sweep — read the value, write it to the correct key, unset the old one.
+
+The migration is a pure win: settings that did nothing become settings that do something. The values were already in the DB, just dormant — no element-tree restructure, no DOM change. Expect the layout to *gain back* constraints it was always supposed to have (max-widths capping content, min-heights setting card floors, radii rounding corners). Spot-check afterward; if one restored constraint produces an unwanted shift, unset that class rather than reverting the sweep.
 
 ## Editor strategy
 

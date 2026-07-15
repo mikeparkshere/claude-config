@@ -10,17 +10,22 @@ Verified against Bricks 2.3.4 / ACSS 3.3.6 / WordPress 6.9.x. V1 baseline: 2026-
 
 This is a knowledgebase for how the MPD stack works and how Mike works with it. It exists so that a new build starts hot — stack up, ACSS configured, tokens known, wireframes in hand — with no training tax. You should not have to be walked through the golden rule or told to go read the gotchas. It is already here.
 
-The knowledgebase is five files:
+The knowledgebase is six files:
 
 - **00-operating-rules.md** (this file) — how to behave: the memory model, the session lifecycle, the read and write protocols, the two core principles, surface selection, the auth requirement.
-- **01-stack-conventions.md** — how Mike builds: BEM/ACSS structure, the styling-layers priority order, semantic HTML and ARIA, the variable reference.
+- **01-stack-conventions.md** — how Mike builds: BEM/ACSS structure, the styling-layers priority order, semantic HTML and ARIA, the variable reference, the inherited-project audit.
 - **02-build-pipeline.md** — the core capability: token-aware wireframe in, built Bricks page out. Front half (wireframe intake) and back half (WP-CLI build), plus the verified schema library.
-- **03-stack-gotchas.md** — non-obvious stack behaviors discovered the hard way. A lookup catalog, consulted by symptom.
+- **03-stack-gotchas.md** — non-obvious **build stack** behaviors discovered the hard way (Bricks, ACSS, ACF, WS Form, Rank Math). A lookup catalog, consulted by symptom.
+- **04-hosting-cutover.md** — non-obvious **hosting layer** behaviors: the box, the CDN, the caches, and the cutover itself (RunCloud, RunCache, Cloudflare, ShortPixel, Perfmatters). Same catalog contract as `03`.
 - **99-project-context.template.md** — the template for the per-project working log.
 
-Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulator** is `03` — provisional knowledge, each entry a real incident with a fix, grows every project.
+Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulators** are `03` and `04` — provisional knowledge, each entry a real incident with a fix, grows every project.
 
-The knowledgebase serves new builds. It is not for the pre-AI fleet and not for live-site maintenance. Its lifecycle is Local → Staging → go-live, and go-live ends its involvement with a project.
+**Why `03` and `04` are separate:** `03` is how the build stack behaves while you build; `04` is the layer underneath and after. Different domains, consulted at different moments. Keeping ops out of `03` keeps `03` fast to scan by symptom, which is its whole job.
+
+The knowledgebase serves new builds, through go-live. It is not for the pre-AI fleet. Its lifecycle is Local → Staging → **cutover**, and the cutover is where its involvement ends.
+
+**Scope note (2026-07-15).** This originally read "not for live-site maintenance… go-live ends its involvement." The TAB harvest stretched that line honestly: a cutover *is* the end of the lifecycle and belongs here, and the post-launch performance lessons (RUCSS on a lean site, PSI lab noise, a cache plugin's broken Redis flush silently reverting content writes) were bought at real cost and will be paid for again on the next launch if they aren't written down. They live in `04`. What remains out of scope: ongoing maintenance of a delivered site — that's the project's own docs, not portable stack knowledge.
 
 ---
 
@@ -32,7 +37,7 @@ Three layers hold knowledge, each with a different scope and lifespan. Knowing w
 |---|---|---|---|
 | **Auto-memory** | Claude Code's per-project memory | Fast-changing state: current build status, in-flight decisions, this week's client blockers, ephemeral todos | No — per-machine, per-path |
 | **Project files** | The project repo — `CLAUDE.md` and the project's `project-context.md` | Project canon: stack versions, file layout, decisions and their reasoning, completed and upcoming work, the "why and how we got here" narrative | Yes — travels with the repo |
-| **The knowledgebase** | `claude-config/knowledgebase/` — these five files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline. True on every project, every machine | Yes — the master in `claude-config` |
+| **The knowledgebase** | `claude-config/knowledgebase/` — these six files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline, the hosting layer. True on every project, every machine | Yes — the master in `claude-config` |
 
 The test: if a fact would still be true and useful when the repo is cloned on a different server six months from now, it belongs in a project file or the knowledgebase. If it is about *right now* — what is mid-build, what the client is blocking on this week — auto-memory is the right home.
 
@@ -47,7 +52,7 @@ The relationship between the layers: `CLAUDE.md` is "what is" for a project. `pr
 At the start of any build session:
 
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
-2. **Lookup tier:** `03` is a catalog. Do not read it cover to cover. Consult it when a symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
+2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
 3. **Check the project phase.** Open the project's `project-context.md` and read the Current Status / phase field. Local vs Staging tells you how close to launch the project is. It is informational, not a hard mode switch — it tells you how freely you can experiment. A project in Local is fine for discovery work; a project in Staging is closer to launch, so weigh changes accordingly.
 
 The point of reading `00`/`01`/`02` fully is that there is no separate training step. The canon is the training.
@@ -78,7 +83,8 @@ The closer is not optional. It is the mechanism that moves a discovery out of th
 
 Then triage explicitly, per the memory model and the write protocol below:
 
-- New stack gotchas → the project's copy of `03`, below the seam.
+- New build-stack gotchas → the project's copy of `03`, below the seam.
+- New hosting/cutover/performance gotchas → the project's copy of `04`, below the seam.
 - New verified schemas → the project's copy of `02`, the schema library.
 - New project decisions or completed milestones → `CLAUDE.md`.
 - New project-specific findings → `project-context.md`.
@@ -96,15 +102,18 @@ When you discover something during a build, capture it. The knowledgebase only r
 
 **Which file.** Decide by the nature of what you learned:
 
-- A **gotcha** — a non-obvious behavior, a silent failure, a thing that bit you — goes in `03`. It has a symptom and an incident.
+- A **build-stack gotcha** — a non-obvious behavior, a silent failure, a thing that bit you in Bricks/ACSS/ACF/WS Form/Rank Math — goes in `03`. It has a symptom and an incident.
+- A **hosting/cutover/performance gotcha** — the box, the CDN, the caches, the migration — goes in `04`. Same format, same bar. If you're unsure which: ask whether the fix is in the build or in the infrastructure.
 - A **verified schema** — a Bricks element or setting shape discovered via the golden rule — goes in the schema library in `02`. It is reference, not an incident.
 - A **convention** — a settled "this is how we build it" decision — goes in `01`. Conventions are rare mid-build; most of the time a discovery is a gotcha or a schema. A convention usually arrives by promotion (see harvest below), not by mid-build capture.
 
 **Where it goes.** New entries append to **the project's copy** of the file, never to the master in `claude-config`. Each project runs on its own copy, inherited at kickoff. The master changes only at harvest.
 
-**`03` has a seam.** The gotchas file is split by a structural marker into the established section ("we know" — everything inherited at kickoff) and the project section ("we learned" — empty at kickoff, fills during the build). Append new gotchas below the seam, in the project section. Do not edit entries above the seam during a build.
+**`03` and `04` both have a seam.** Each is split by a structural marker into the established section ("we know" — everything inherited at kickoff) and the project section ("we learned" — empty at kickoff, fills during the build). Append new gotchas below the seam, in the project section. Do not edit entries above the seam during a build.
 
-**Entry format for `03`** — match the existing entries exactly:
+**If a discovery contradicts an entry above the seam, do not silently edit the entry** — append yours below the seam and flag the conflict explicitly for the harvest. Two entries that disagree are a decision for Mike to make once, not a fight for each session to re-litigate. (TAB did exactly this with the `--skip-themes` finding, and the flag is why it was reconciled correctly rather than merged as a phantom second mechanism.)
+
+**Entry format for `03` / `04`** — match the existing entries exactly:
 
 ```
 ### [Short pattern title — what you'd search to find this]
@@ -124,10 +133,12 @@ Go-live is the one moment the master knowledgebase changes.
 
 When a project goes live, its learning is done. Everything it was going to discover, it has discovered. At that point:
 
-1. The project's `03` project-section entries (everything below the seam) get reviewed by Mike.
-2. Validated entries fold into the master `03` — promoted above the seam into the established section, provenance kept.
+1. The project's `03` and `04` project-section entries (everything below the seam) get reviewed by Mike.
+2. Validated entries fold into the master `03` / `04` — promoted above the seam into the established section, provenance kept.
 3. New verified schemas captured during the build fold into the master `02` schema library.
 4. Anything that turned out to be wrong, project-specific, or already covered gets dropped, not merged.
+5. Where a project entry **extends** an existing master entry rather than standing alone, fold it into that entry and keep both provenances — one mechanism, one entry. Two entries describing the same mechanism from different angles is how a catalog rots.
+6. Conflicts flagged during the build get **resolved** here, not carried. Where a conflict is empirically testable, test it — the answer is worth more than either claim.
 
 This is a reviewed file edit in the `claude-config` repo. It is the same discipline as the existing CLAUDE.md → Notion sync — edit markdown, review the diff, commit. There is no slash command. The review is the point: the master is what every future project inherits, so nothing reaches it unexamined.
 
@@ -207,4 +218,4 @@ Full incident and mechanism: `03`, "update_post_meta silently fails on `_bricks_
 
 ## Phase 2 note
 
-This knowledgebase is built as plain markdown so it works now. The intended end state is a Skill that Claude Code auto-loads when the work is Bricks/WordPress/ACSS — no manual pointing, no command. When that promotion happens, this file's content largely becomes `SKILL.md` and the other four become supporting files. The file structure is designed so that wrap is mechanical. Until then, this knowledgebase is loaded by being referenced from each project's CLAUDE.md or pointed at directly at session start.
+This knowledgebase is built as plain markdown so it works now. The intended end state is a Skill that Claude Code auto-loads when the work is Bricks/WordPress/ACSS — no manual pointing, no command. When that promotion happens, this file's content largely becomes `SKILL.md` and the other five become supporting files. The file structure is designed so that wrap is mechanical. Until then, this knowledgebase is loaded by being referenced from each project's CLAUDE.md or pointed at directly at session start.
