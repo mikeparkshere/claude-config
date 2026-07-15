@@ -134,6 +134,11 @@ getent hosts domain                                          # what the box actu
 **Fix:** Verify against the exact URL the page references (grep the page for `style.css?ver=…` and curl that), or append a cache-buster (`?cb=$RANDOM`). Trust the on-disk file and the versioned URL, not the bare URL.
 **First seen:** TAB, 2026-06-25 — chased a "CSS not applying" ghost for several steps; the versioned URL had served the correct CSS all along.
 
+### Migrating a site that carries WooCommerce Subscriptions — reset the staging-site lock or renewals silently stop
+**Symptom / When:** Post-migration, automatic subscription renewals are created but never charged; the gateway is never called.
+**Why / Fix:** WCS's duplicate-site guard still points at the pre-migration URL, so production is treated as a clone. Full mechanism, the CLI fix and the verification step: `03` → **WooCommerce** → "the staging-site lock silently SKIPS all automatic renewals after a Local→production migration". **Belongs on the deploy checklist for any migration carrying subscriptions.**
+**First seen:** VMG, 2026-06-07 — cross-referenced here at the 2026-07-15 harvest because the trigger is the cutover, while the mechanism is WCS's.
+
 ## RunCache (RunCloud Hub successor)
 
 ### RunCache flushes rewrite rules on activation → every CPT page 404s
