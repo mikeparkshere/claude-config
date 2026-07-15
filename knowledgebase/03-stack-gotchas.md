@@ -91,7 +91,20 @@ $content = get_post_meta( $tmpl_id, '_bricks_page_content_2', true );
 // ... mutate $content ...
 update_post_meta( $tmpl_id, '_bricks_page_content_2', $content );
 ```
-**First seen:** AHML, 2026-04-27 — appending the article section to the Blog Single template. The script printed success and exited cleanly; the element count in the DB stayed unchanged. (This is the full incident record for the auth requirement named in `00` and `02`.)
+**Alternative fix — run the whole script as a builder-capable user:** `wp eval-file script.php --user=<admin-login>`. Equivalent to the `wp_set_current_user()` call and cleaner for a script that writes these keys throughout. **Either way, check the return value** — `update_post_meta` returning `false` is the *only* signal you get.
+**First seen:** AHML, 2026-04-27 — appending the article section to the Blog Single template. The script printed success and exited cleanly; the element count in the DB stayed unchanged. (This is the full incident record for the auth requirement named in `00` and `02`.) Confirmed still current on Bricks 2.3+ — NLTA, 2026-07-06, injecting a native breadcrumbs element into single templates; first run reported success and saved nothing.
+
+### Bricks Element Manager — a disabled element renders as NOTHING, even when it's in the template data
+**Symptom / When:** An element is confirmed present in `_bricks_page_content_2` but produces zero frontend output — no wrapper div, no error, nothing. Looks exactly like a failed write, so you go re-debug the write path (see the entry above) and find the data is fine.
+**Why:** Bricks 2.x's Element Manager (`bricks_element_manager` option) lets you disable unused elements for performance, and a disabled element is **skipped entirely at render**. Installs that have been through a performance pass can have 20+ elements disabled — so an element you never used before is exactly the one likely to be off.
+**Fix:** Re-enable the one you need, then opcache reset + cache purge:
+```php
+$m = get_option( 'bricks_element_manager', [] );
+unset( $m['breadcrumbs'] );
+update_option( 'bricks_element_manager', $m );
+```
+**Check this BEFORE debugging a write** when a programmatically-injected element doesn't render — it's a one-line check and it's the cheaper hypothesis.
+**First seen:** NLTA, 2026-07-06 — an injected breadcrumbs element didn't render; `breadcrumbs` was among ~23 disabled elements on that install.
 
 ### Bricks Query Filter elements need a manual reindex AND a cron tick after programmatic creation
 **Symptom:** A `filter-radio` / `filter-checkbox` / `filter-select` element added via `update_post_meta` renders, but the filter's `<ul>` is empty — no options. `Bricks\Query_Filters::reindex()` returns `true`, but `wp_bricks_filters_index` stays empty.
@@ -361,6 +374,17 @@ Before fighting any `automatic-bricks.css` rule with a selector, check whether i
 **Fix:** Either change the bg-context button variables in ACSS Dashboard → Buttons, or override the wrapper at equal-or-higher specificity in the child theme — the child sheet enqueues after `automatic.css`, so `(0,3,0)` matching the ACSS wrapper wins. Encode the brand rule once project-wide rather than fighting it per button.
 **First seen:** KSCBS, 2026-05-07 — hero buttons set to `btn--base` rendered green-on-charcoal, failing the dark-section contrast rule.
 
+### ACSS — "light"/"dark" variants of a NEAR-BLACK base resolve to LIGHT colors
+**Symptom / When:** You build a dark-theme surface on `var(--base-light)` expecting "slightly lighter than the near-black base" and get a light grey-lavender. White text on it is unreadable.
+**Why:** ACSS variant lightness values are absolute-ish scale positions, **not relative offsets** from the base. For a base around `#08090D` (L≈4%), `--base-light` lands in genuinely light territory. There is no generated "base but 7% lighter" variable — the mental model of `-light` meaning "a bit lighter than what I set" is simply wrong at the dark end of the scale.
+**Fix:** Derive dark surfaces from the base **hue** with explicit lightness — ACSS exposes the HSL components:
+```css
+--surface:      hsl( var(--base-h), var(--base-s), 11% );
+--surface-deep: hsl( var(--base-h), var(--base-s),  7% );
+```
+Still brand-tracked (hue and saturation follow the palette), and guaranteed dark.
+**First seen:** NLTA, 2026-07-06 — form inputs on a dark page rendered lavender with white text on top.
+
 ### ACSS — changing a base color hex in the Dashboard can wipe variation overrides on that family
 **Symptom / When:** A manual variation override on a color (e.g. a customized `--base-light`) does not survive a change to the parent base color hex.
 **Why:** Not fully pinned down — appears that reconfiguring a parent color regenerates the family and discards manual variation overrides.
@@ -374,6 +398,37 @@ Before fighting any `automatic-bricks.css` rule with a selector, check whether i
 **Why:** ACF treats `default_value` as a form pre-fill, not a runtime fallback. Until the options page is saved once, the underlying option does not exist and `get_field()` returns null.
 **Fix:** Either save the options page once in admin after registering defaults (cheapest), or guard reads in helper functions with a hardcoded fallback. For projects where the options page is guaranteed saved before launch, the admin-save approach is cleaner — make it a launch-checklist gate: "Site Options must be saved once in admin before launch."
 **First seen:** KSCBS, 2026-05-05 — core plugin scaffold; field defaults seeded but `kscbs_get_company_name()` returned empty.
+
+### ACF — `true_false` opt-out fields: legacy posts have NO meta row, so `value='1'` excludes them
+**Symptom / When:** You add a "default ON" `true_false` field as a suppression lever (include everything; toggle off to exclude), then a `meta_query` for `value => '1'` returns **nothing** for existing posts.
+**Why:** ACF only writes the meta row when a post is saved *after* the field exists. Pre-existing posts have **no row at all** — so `value='1'` doesn't match them, and neither does `!= '0'`. (Same root cause as the `default_value` entry above: ACF defaults are a form pre-fill, not data.)
+**Fix:** Treat "missing" as included — match NOT EXISTS **OR** explicit `'1'`, and set `default_value => 1` so newly-saved posts store it. Only an explicit `'0'` then suppresses:
+```php
+'meta_query' => [ 'relation' => 'OR',
+  [ 'key' => 'include_in_email', 'compare' => 'NOT EXISTS' ],
+  [ 'key' => 'include_in_email', 'value' => '1' ],
+],
+```
+**First seen:** NLTA, 2026-06-16 — an "include in email" suppression toggle on an existing CPT; every legacy post silently fell out of the query.
+
+### ACF — `acf/prepare_field`: `$field['name']` is the PREFIXED input name; match on `_name`
+**Symptom / When:** A `prepare_field` filter that looks up `$field['name']` in a map silently matches nothing. No error — the filter just never fires its branch.
+**Why:** By prepare time ACF has rewritten `name` to the **form input name** (`acf[field_abc123]`). The original field name lives in `$field['_name']`.
+**Fix:** `$name = $field['_name'] ?? $field['name'];` before any name-keyed logic.
+**First seen:** NLTA, 2026-07-06 — a per-field placeholder swap on a front-end form matched nothing.
+
+### ACF — `acf_form()` front-end survival kit
+**When:** Building a front-end authoring form with `acf_form()` (reuses the field schema you already register in PHP — a strong alternative to rebuilding the whole field set in a form plugin and maintaining a mapping forever).
+**The non-obvious parts:**
+- **The `fields` param accepts `'_post_title'`** mixed in with field keys — full control of cross-group field order. Tradeoff: the form is **curated**, so fields added to the admin groups later do **not** auto-appear. (Group-based `field_groups` rendering auto-inherits but can't interleave.) Pick per project and document the choice.
+- **Route `_post_title` yourself anyway** in `acf/save_post` (title + `sanitize_title()` slug) — belt and braces, and you get clean permalinks at pending stage.
+- **Taxonomy fields as `select`/`multi_select` ride select2 + admin-ajax** — fragile on the front end. `field_type => 'radio'` / `'checkbox'` render native inputs (inside `.categorychecklist-holder`), keep `save_terms`, and CSS-grid into columns.
+- **Section headings can't be pure CSS** — ACF fields float at inline %-widths, so a `::before` on a 33%-wide field can't span the row. Inject `<h3>` client-side keyed on the stable `div[data-key="field_…"]` selector.
+- **ACF's form CSS is the wp-admin light theme** — on a dark site every input and surface needs explicit overrides, including select2, `.acf-switch`, gallery chrome, and `accent-color` for radios/checkboxes.
+- **A hidden `#acf-hidden-wp-editor` with TinyMCE in the markup is normal** — it ships with the uploader/media modal, not a rendered WYSIWYG. Don't chase it.
+- **Location-rule-driven "conditional" groups don't switch on the front end** — location rules resolve at render. Mimic with a server-side selector (`?type=x` → a per-type field list) and set the driving term in `acf/save_post` from a **whitelisted** hidden input.
+- **Pair with the Perfmatters entry below** — Delay JS *and* Defer JS each independently kill the media modal on any page with an `acf_form()` uploader.
+**First seen:** NLTA, 2026-07-06 — a gated front-end profile submission form.
 
 ## Rank Math + Bricks
 
@@ -403,6 +458,89 @@ CPTs that keep real copy in `post_content` (body rendered via the Bricks Post Co
 **Why:** Bricks registers `bricks_template` as `publicly_queryable` (needed for builder preview), and Rank Math defaults `pt_bricks_template_sitemap = on` with `pt_bricks_template_robots = index`. Nothing flags it.
 **Fix:** In RM options set `pt_bricks_template_sitemap = off` and `pt_bricks_template_robots = ['noindex']` + `pt_bricks_template_custom_robots = 'on'`, then `\RankMath\Sitemap\Cache::invalidate_storage()`. Do **not** disable Bricks' `publicly_queryable` — that breaks builder preview. Check on every Bricks + RM project at SEO-config time.
 **First seen:** AHML, 2026-06-02 — sitemap verification found 9 internal templates live at 200/index and listed in the sitemap.
+
+### Rank Math — SEO scores are computed CLIENT-SIDE; the DB value goes stale and NULL ≠ unoptimized
+**Symptom / When:** `rank_math_seo_score` postmeta is NULL or outdated even though title, description, and focus keyword are all set. An audit keying off the score column miscounts — both directions.
+**Why:** Rank Math's content analysis runs as **JavaScript in the block editor** and only writes the score on an editor save. CLI or programmatic meta edits never touch it. The score is cosmetic; the meta itself is what ships to crawlers.
+**Fix:** Judge optimization state by the **actual meta keys** — `rank_math_title`, `rank_math_description`, `rank_math_focus_keyword` — never by the score. To refresh the dashboard numbers, open and re-save the post in wp-admin.
+**First seen:** NLTA, 2026-07-06 — an audit reported "1 post at score 25"; the real state was 2 posts missing focus keywords (one unnoticed) and 4 missing excerpts. Scores for CLI-fixed posts stayed stale afterward. *(Generalizes: any plugin metric computed in the editor is unreliable as an audit source — verify the underlying data.)*
+
+### Rank Math — `og:type` defaults to `article` on EVERY non-homepage page, including archives
+**Symptom / When:** `<meta property="og:type" content="article">` on a CPT archive or taxonomy archive, where it should be `website`. Share previews on Facebook/LinkedIn render collection pages as articles, with publish-date metadata that makes no sense.
+**Why:** Rank Math's `Facebook::get_type()` (`includes/opengraph/class-facebook.php`) only branches on `is_front_page()`/`is_home()` → `website`, `is_author()` → `profile`, and `is_product()` → `product`. **Everything else** — post-type archives, taxonomy archives, search, date archives — falls through to `article`. There is no UI setting; the per-archive Open Graph fields don't expose `og:type`.
+**Fix:** Hook the `rank_math/opengraph/type` filter:
+```php
+add_filter( 'rank_math/opengraph/type', function( $type ) {
+    if ( is_post_type_archive() || is_tax() || is_category() || is_tag() ) {
+        return 'website';
+    }
+    return $type;
+});
+```
+**Verify:** `curl -s <url> | grep og:type` — singles should still be `article`, archives now `website`.
+**First seen:** NLTA, 2026-04-29 — flagged in an SEO audit; fixed via a filter in the core plugin.
+
+## Perfmatters
+
+### Perfmatters — a list option written as a STRING via CLI = sitewide 500s, with the full page body
+**Symptom / When:** Pages return HTTP 500 but render the **complete** page body (right down to `</html>`). Only *some* pages 500 — those where Remove Unused CSS needs to regenerate — so pages with a warm RUCSS cache still return 200 and the breakage **spreads gradually** as caches expire. Nothing in the nginx error log.
+**Why:** Perfmatters processes the page in an **output-buffer callback at `shutdown`** (`Buffer::process` → `CSS::optimize`). Its list-type options (`rucss_excluded_selectors`, `rucss_excluded_stylesheets`, …) are **arrays** — the settings UI explodes textarea input into arrays on save. Setting one to a plain string via `wp option patch` / `wp eval` makes `array_merge($defaults, $string)` throw a TypeError *inside the ob callback*: the buffered HTML has already been generated (so the full page ships) but headers haven't been sent (so PHP sets 500). **Wrong status + right body = the fatal-in-ob-callback signature.**
+**Fix:** Re-save the option as an array, then opcache reset + cache purge:
+```php
+$o = get_option( 'perfmatters_options' );
+$o['assets']['rucss_excluded_selectors'] = [ '.brx-a11y-hidden' ];
+update_option( 'perfmatters_options', $o );
+```
+**Diagnosis playbook — full body + 500 (generalizes to ANY ob-callback fatal):**
+1. Hook the `status_header` filter — if it never fires, the 500 isn't being set via WP.
+2. Log `http_response_code()` at hooks through `shutdown` (priority `PHP_INT_MIN` and `PHP_INT_MAX`) — if the `PHP_INT_MAX` checkpoint never logs, a fatal occurred during `shutdown`.
+3. `ini_set('log_errors','1'); ini_set('error_log', WP_CONTENT_DIR.'/trace.log');` in a temporary mu-plugin gated by a query arg — captures the fatal FPM otherwise swallows.
+4. Remember opcache (`validate_timestamps=0`) — reset it before each retest, or you're testing stale code. See `04`.
+**General rule:** when writing any plugin option from CLI, **read it first and preserve its shape.** A string where an array is expected is a silent, delayed, sitewide outage.
+**First seen:** NLTA, 2026-07-06 — `rucss_excluded_selectors` saved as a bare string; every single-post page 500'd for ~35 min (Googlebot included) while cached pages masked it.
+
+### Perfmatters — Delay JS *and* Defer JS EACH independently kill the WP media modal
+**Symptom / When:** On any front-end page with a WP uploader (an `acf_form()` image/gallery field), "Add Image" buttons and drag-drop do nothing. Console shows two distinct failure modes: `media-views` crashing on a missing `wp.i18n`, and `acf is not defined` / `tinymce is not defined` from inline scripts.
+**Why:** Two separate ordering breaks in one dependency chain — **fixing one is not enough:**
+1. **Delay JS** with `/wp-includes/js/dist/` in its inclusions holds `wp-i18n`/`wp-hooks` until user interaction, but deferred `media-views.js` needs `wp.i18n` at DOM-ready → throws, and `wp.media` never initializes.
+2. **Defer JS** defers the external `acf-input.min.js` / `editor.min.js` / TinyMCE files while their **inline companion scripts** (`acf.data = …`, `*-js-after` bootstraps) still run immediately → `acf`/`tinymce` undefined; the modal later dies in `acf.getMimeType` because `acf.data`'s mime map never loaded.
+**Diagnosis:** grep the page HTML for `pmdelayedscript` vs `defer` on `dist/i18n`, `acf-input`, `media-views`.
+**Fix — disable both, per page, from the site plugin (keeps the optimizations sitewide):**
+```php
+$off = fn( $on ) => is_page( 'submit-form-slug' ) ? false : $on;
+add_filter( 'perfmatters_delay_js', $off );
+add_filter( 'perfmatters_defer_js', $off );
+```
+**First seen:** NLTA, 2026-07-06 — a front-end submission form's Add Image was dead; the same config already carried a `ws-form` delay exclusion for the same failure class.
+
+## Mailster + Mailgun
+
+### Mailster/Mailgun — `mailgun_track` overrides the Mailgun dashboard toggle and breaks SSL on the tracking subdomain
+**Symptom / When:** Recipients report an SSL/cert error when clicking links in a campaign. The broken URL is a Mailgun click-tracking redirect (`https://email.mg.<domain>/c/…`) — **even though the Mailgun dashboard shows Click/Open tracking "Off."**
+**Why:** Mailster's Mailgun add-on stores a `mailgun_track` option (empty, `opens`, `clicks`, or `opens,clicks`). When set, Mailster passes `o:tracking-opens=yes` / `o:tracking-clicks=yes` **per message** — and the per-message API flags **override the domain-level dashboard toggle**. Mailgun then rewrites links through the tracking hostname; if HTTPS was never enabled for it (which it wasn't, *because the dashboard toggle is off*), there's no LE cert → cert errors for every recipient. Compounding: Mailster also has its own tracking that rewrites through the WordPress domain, so links get **double-wrapped** — Mailster wraps first, Mailgun wraps that, and the broken HTTPS host ends up outermost.
+**Diagnosis:** `wp option get mailster_options --format=json` → inspect `mailgun_track`.
+**Fix (default — keep Mailster-side tracking only):** `wp option patch update mailster_options mailgun_track ""`. Mailster's own tracking rides the working WordPress domain and is what feeds its campaign reports anyway.
+**Only if the client actually wants Mailgun analytics:** enable HTTPS on the tracking domain in the Mailgun dashboard; confirm the `email.mg` CNAME is **DNS-only / grey cloud** in Cloudflare (Mailgun cannot provision LE certs through CF's proxy); wait up to ~24h for the cert; then turn off Mailster's own tracking to avoid double-counting.
+**First seen:** NLTA, 2026-04-29 — client reported an SSL error clicking a campaign link.
+
+### Mailster — custom dynamic tags use `{tag:option}` syntax and resolve at SEND time, not in the editor
+**Symptom / When:** Building an auto-populating email block (a live roster, a product list). The custom-tag API and its argument syntax aren't obvious, and the tag renders as literal text in the drag-and-drop editor — which reads as "broken."
+**Why:** Register with `mailster_add_tag( 'name', $callback )` on the `mailster_add_tag` action. The matching regex (`placeholder.class.php`) allows only `[a-z0-9-_]` in the tag name and parses **one** colon argument — the form is `{name:option}` (or `{name:option|fallback}`), **not** HTML-attribute syntax like `{name foo="bar"}`. Callback signature: `( $option, $fallback, $campaign_id, $subscriber_id )`, returning an HTML string. Tags resolve at **send / preview / test-send only** — the editor shows the raw shell by design.
+**Fix / pattern:** One parameterized tag, many uses — pack a mode plus an optional limit into the single option (`{roster:female}`, `{roster:los-angeles,9}`) and branch inside the callback.
+**To send a test programmatically** (mirrors `ajax.class.php::send_test()`): `sanitize_content($html,null)` → `mailster('placeholder',$c)` (`set_campaign`/`add_defaults`/`add_custom`) → `get_content()` → `helper->prepare_content()` → `inline_css()` → `strip_structure_html()` (**this** is what strips the editor-only `<module>/<single>/<multi>/<buttons>` tags) → `apply_filters('mailster_campaign_content', …)` → `mailster('mail')->send()`.
+**First seen:** NLTA, 2026-06-16 — a dynamic roster tag for a custom campaign template.
+
+## ShortPixel
+
+### ShortPixel — WebP/AVIF images don't render in Outlook desktop, and there's no JPEG to fall back to
+**Symptom / When:** Images are blank or broken boxes in Outlook desktop (Windows) email, but fine in Gmail and Apple Mail. Site media is served as `.webp` / `.avif`.
+**Why:** Outlook desktop uses the Word rendering engine, which can't display WebP/AVIF. Worse, ShortPixel's CDN delivery (`spcdn.shortpixel.ai/spio/…,to_auto,s_webp:avif/…`) serves WebP **even to clients that never send `Accept: image/webp`** when the origin file is itself `.webp` + `to_auto` — there is no JPEG fallback. ShortPixel only optimizes *toward* next-gen formats; `to_jpg` against a webp origin just 307-redirects back to the webp. **So no JPEG exists anywhere to link to.**
+**Fix:** Transcode to JPEG server-side and serve it directly:
+1. GD (`imagecreatefromwebp()` → flatten onto white → `imagejpeg()`), cached under `uploads/<prefix>-email/`, regenerated only when the source is newer. (Check `function_exists('imagecreatefromwebp')` — Imagick was absent on this box; GD had WebP read support.)
+2. **Exclude that cache path from ShortPixel** so it can't re-optimize and flip it back: append to `wpSPIO()->settings()->excludePatterns` → `['type'=>'path','value'=>'<prefix>-email','apply'=>'all','validated'=>true]`.
+3. Safety net: filter the campaign content late (priority 999) to strip any `spcdn.shortpixel.ai/spio/<dir>/` wrapper off the JPEG URLs, so a CDN rewrite can't undo the fix.
+**Verify:** `curl -s -o /dev/null -D - -H "Accept: image/png,image/*;q=0.8" "<url>" | grep -i content-type` — must return `image/jpeg`, not `image/webp`.
+**First seen:** NLTA, 2026-06-16 — roster images in an email campaign broke in Outlook.
 
 ## Roles & Capabilities
 
