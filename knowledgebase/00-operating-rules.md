@@ -10,17 +10,22 @@ Verified against Bricks 2.3.4 / ACSS 3.3.6 / WordPress 6.9.x. V1 baseline: 2026-
 
 This is a knowledgebase for how the MPD stack works and how Mike works with it. It exists so that a new build starts hot — stack up, ACSS configured, tokens known, wireframes in hand — with no training tax. You should not have to be walked through the golden rule or told to go read the gotchas. It is already here.
 
-The knowledgebase is five files:
+The knowledgebase is six files:
 
 - **00-operating-rules.md** (this file) — how to behave: the memory model, the session lifecycle, the read and write protocols, the two core principles, surface selection, the auth requirement.
 - **01-stack-conventions.md** — how Mike builds: BEM/ACSS structure, the styling-layers priority order, semantic HTML and ARIA, the variable reference.
 - **02-build-pipeline.md** — the core capability: token-aware wireframe in, built Bricks page out. Front half (wireframe intake) and back half (WP-CLI build), plus the verified schema library.
 - **03-stack-gotchas.md** — non-obvious stack behaviors discovered the hard way. A lookup catalog, consulted by symptom.
+- **04-infra-ops.md** — RunCloud/hosting behavior: the API's quirks, cron ownership, the cache layers, log paths, secrets convention. A lookup catalog, like `03`.
 - **99-project-context.template.md** — the template for the per-project working log.
 
-Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulator** is `03` — provisional knowledge, each entry a real incident with a fix, grows every project.
+Three layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulator** is `03` — provisional knowledge, each entry a real incident with a fix, grows every project. **Ops** is `04` — the server underneath, true regardless of what is being built on it.
 
-The knowledgebase serves new builds. It is not for the pre-AI fleet and not for live-site maintenance. Its lifecycle is Local → Staging → go-live, and go-live ends its involvement with a project.
+The **build** knowledgebase (`00`–`03`) serves new builds. It is not for the pre-AI fleet and not for live-site maintenance. Its lifecycle is Local → Staging → go-live, and go-live ends its involvement with a project.
+
+`04` is the deliberate exception: the server does not have a go-live. That knowledge applies during a build, at deploy, and for as long as the site is hosted — so it has no seam, no per-project copy, and no harvest ritual. Entries land in it directly.
+
+**This repo is public.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document mechanisms, not coordinates — coordinates are per-machine state and belong in auto-memory anyway (see the memory model below). Real incidents are fine as provenance; scrub the identifying particulars.
 
 ---
 
@@ -32,7 +37,7 @@ Three layers hold knowledge, each with a different scope and lifespan. Knowing w
 |---|---|---|---|
 | **Auto-memory** | Claude Code's per-project memory | Fast-changing state: current build status, in-flight decisions, this week's client blockers, ephemeral todos | No — per-machine, per-path |
 | **Project files** | The project repo — `CLAUDE.md` and the project's `project-context.md` | Project canon: stack versions, file layout, decisions and their reasoning, completed and upcoming work, the "why and how we got here" narrative | Yes — travels with the repo |
-| **The knowledgebase** | `claude-config/knowledgebase/` — these five files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline. True on every project, every machine | Yes — the master in `claude-config` |
+| **The knowledgebase** | `claude-config/knowledgebase/` — these six files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline, the server underneath. True on every project, every machine | Yes — the master in `claude-config` |
 
 The test: if a fact would still be true and useful when the repo is cloned on a different server six months from now, it belongs in a project file or the knowledgebase. If it is about *right now* — what is mid-build, what the client is blocking on this week — auto-memory is the right home.
 
@@ -207,4 +212,4 @@ Full incident and mechanism: `03`, "update_post_meta silently fails on `_bricks_
 
 ## Phase 2 note
 
-This knowledgebase is built as plain markdown so it works now. The intended end state is a Skill that Claude Code auto-loads when the work is Bricks/WordPress/ACSS — no manual pointing, no command. When that promotion happens, this file's content largely becomes `SKILL.md` and the other four become supporting files. The file structure is designed so that wrap is mechanical. Until then, this knowledgebase is loaded by being referenced from each project's CLAUDE.md or pointed at directly at session start.
+This knowledgebase is built as plain markdown so it works now. The intended end state is a Skill that Claude Code auto-loads when the work is Bricks/WordPress/ACSS — no manual pointing, no command. When that promotion happens, this file's content largely becomes `SKILL.md` and the other five become supporting files. The file structure is designed so that wrap is mechanical. Until then, this knowledgebase is loaded by being referenced from each project's CLAUDE.md or pointed at directly at session start.

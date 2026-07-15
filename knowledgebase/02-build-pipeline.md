@@ -228,6 +228,23 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 }, 10, 2 );
 ```
 
+## Query Loop — ACF Repeater (nestable inside a post loop)
+
+An ACF repeater field is itself a loop provider — no custom query type needed. On the list element (e.g. a `block` with tag `ul`):
+
+```json
+{
+  "hasLoop": true,
+  "query": { "objectType": "acf_plan_features" }
+}
+```
+
+- `objectType` is `acf_` + the **repeater field name** (`acf_plan_features`).
+- Inside the loop, output a sub-field with the **fully-qualified** tag `{acf_<repeater>_<subfield>}` — e.g. `{acf_plan_features_feature}`. **Trap:** the short form `{acf_<subfield>}` renders as a literal string, not a value. No error, just the raw tag on the page.
+- Nests correctly: inside an outer post Query Loop it resolves the repeater against the current outer-loop post.
+
+Verified: VMG, 2026-06-06 — Hosting Plans feature lists.
+
 ## Image with dynamic src
 
 ```json
@@ -311,6 +328,72 @@ Nested array shape: the outer array is AND groups, inner arrays are OR rules wit
 
 Width is a per-side object, style is a scalar, color is a single object, radius is a per-side object. Per-side nested shapes (`_border.bottom.{width,style,color}`) persist in the DB without error but emit zero border CSS. For "bottom border only," set `width.bottom = '1'`, other sides `'0'`. Full incident: `03`.
 
+## Typed `_padding` / `_margin` (verified)
+
+```php
+'_padding' => [ 'top' => 'var(--space-m)', 'right' => '0', 'bottom' => 'var(--space-m)', 'left' => '0' ],
+```
+
+Per-side object, string values. Accepts `var(--x)` and `auto`.
+
+## Typed `_typography` (verified)
+
+```php
+'_typography' => [
+    'font-family'    => 'custom_font_123',
+    'font-size'      => 'var(--text-m)',
+    'font-weight'    => '500',
+    'line-height'    => '1.6',
+    'letter-spacing' => '0.15em',
+    'text-transform' => 'uppercase',
+    'color'          => [ 'raw' => 'var(--ink-70)' ],
+],
+```
+
+- `color` is an **object** (`['raw' => …]`), every other key is a flat scalar string.
+- **`font-family` is the trap:** it must be a registered Bricks Custom Font referenced as `custom_font_{post_id}` — **not** `var(--font-heading)`. A `var()` here silently does not apply.
+- Breakpoint overrides go on the OUTER key (`_typography:mobile_portrait`), never as a sibling inside the dict — see `03`.
+
+## Typed `_background` (verified)
+
+```php
+'_background' => [ 'color' => [ 'raw' => 'var(--obsidian)' ] ],
+```
+
+## Typed layout scalars (verified)
+
+```php
+'_display'        => 'grid',      // 'grid' | 'flex' | 'block'
+'_alignItems'     => 'center',    // plain CSS value string
+'_justifyContent' => 'space-between',
+'_widthMax'       => '100%',      // special-cased — see 03
+```
+
+## Element envelope (verified)
+
+```php
+[
+  'id'       => 'abc123',   // 6-char alphanumeric, never all-numeric
+  'name'     => 'block',
+  'parent'   => 'xyz789',
+  'children' => [ 'def456' ],
+  'label'    => 'Optional builder label',
+  'settings' => [
+      '_cssGlobalClasses' => [ 'clsID1', 'clsID2' ],  // array of global-class IDs
+      '_cssClasses'       => 'raw-class other',        // string — DYNAMIC-DATA-PARSED
+      '_cssId'            => 'my-hook',                // id attr; stable PHP-filter hook
+      '_attributes'       => [ [ 'id' => 'a1', 'name' => 'href', 'value' => '/?add-to-cart={post_id}' ] ],
+      'tag'               => 'custom',
+      'customTag'         => 'article',
+  ],
+]
+```
+
+- `_cssClasses` (raw string) and `_attributes[].value` are both **dynamic-data-parsed** — `value: "/?add-to-cart={post_id}"` resolves per loop item, which is how you build per-item add-to-cart links without PHP.
+- Non-native tags: `tag: 'custom'` + `customTag: '…'`.
+
+Verified: VMG, 2026-06-06 (Bricks 2.3.6, builder output + source) — Contact + Hosting Plans built end-to-end via WP-CLI.
+
 ## SVG element
 
 ```json
@@ -356,10 +439,10 @@ add_filter( 'bricks/dynamic_data/render_content', function( $content, $post, $co
 
 The following element-level visual schemas have not yet been verified via the golden rule and need fresh discovery on first use:
 
-- `_typography` — full shape (color object, font-size, line-height, weight, etc.). Partially seen; breakpoint-suffix placement is documented in `03`.
-- `_padding` / `_margin` — typed spacing shapes.
-- `_background` — typed background shape (color, image, gradient).
+- `_background` — the **image and gradient** shapes. The color-only shape is verified above.
 - `_gridTemplateColumns` and related grid typed settings.
+
+*(`_typography`, `_padding`/`_margin`, and `_background` color were captured on VMG 2026-06-06 and are now in the library above.)*
 
 An incomplete library is expected. When you need one of these, discover it via the golden rule and append it here for the harvest.
 
