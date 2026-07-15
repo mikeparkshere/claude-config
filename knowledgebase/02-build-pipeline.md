@@ -228,23 +228,6 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 }, 10, 2 );
 ```
 
-## Query Loop — ACF Repeater (nestable inside a post loop)
-
-An ACF repeater field is itself a loop provider — no custom query type needed. On the list element (e.g. a `block` with tag `ul`):
-
-```json
-{
-  "hasLoop": true,
-  "query": { "objectType": "acf_plan_features" }
-}
-```
-
-- `objectType` is `acf_` + the **repeater field name** (`acf_plan_features`).
-- Inside the loop, output a sub-field with the **fully-qualified** tag `{acf_<repeater>_<subfield>}` — e.g. `{acf_plan_features_feature}`. **Trap:** the short form `{acf_<subfield>}` renders as a literal string, not a value. No error, just the raw tag on the page.
-- Nests correctly: inside an outer post Query Loop it resolves the repeater against the current outer-loop post.
-
-Verified: VMG, 2026-06-06 — Hosting Plans feature lists.
-
 ## Image with dynamic src
 
 ```json
@@ -328,72 +311,6 @@ Nested array shape: the outer array is AND groups, inner arrays are OR rules wit
 
 Width is a per-side object, style is a scalar, color is a single object, radius is a per-side object. Per-side nested shapes (`_border.bottom.{width,style,color}`) persist in the DB without error but emit zero border CSS. For "bottom border only," set `width.bottom = '1'`, other sides `'0'`. Full incident: `03`.
 
-## Typed `_padding` / `_margin` (verified)
-
-```php
-'_padding' => [ 'top' => 'var(--space-m)', 'right' => '0', 'bottom' => 'var(--space-m)', 'left' => '0' ],
-```
-
-Per-side object, string values. Accepts `var(--x)` and `auto`.
-
-## Typed `_typography` (verified)
-
-```php
-'_typography' => [
-    'font-family'    => 'custom_font_123',
-    'font-size'      => 'var(--text-m)',
-    'font-weight'    => '500',
-    'line-height'    => '1.6',
-    'letter-spacing' => '0.15em',
-    'text-transform' => 'uppercase',
-    'color'          => [ 'raw' => 'var(--ink-70)' ],
-],
-```
-
-- `color` is an **object** (`['raw' => …]`), every other key is a flat scalar string.
-- **`font-family` is the trap:** it must be a registered Bricks Custom Font referenced as `custom_font_{post_id}` — **not** `var(--font-heading)`. A `var()` here silently does not apply.
-- Breakpoint overrides go on the OUTER key (`_typography:mobile_portrait`), never as a sibling inside the dict — see `03`.
-
-## Typed `_background` (verified)
-
-```php
-'_background' => [ 'color' => [ 'raw' => 'var(--obsidian)' ] ],
-```
-
-## Typed layout scalars (verified)
-
-```php
-'_display'        => 'grid',      // 'grid' | 'flex' | 'block'
-'_alignItems'     => 'center',    // plain CSS value string
-'_justifyContent' => 'space-between',
-'_widthMax'       => '100%',      // special-cased — see 03
-```
-
-## Element envelope (verified)
-
-```php
-[
-  'id'       => 'abc123',   // 6-char alphanumeric, never all-numeric
-  'name'     => 'block',
-  'parent'   => 'xyz789',
-  'children' => [ 'def456' ],
-  'label'    => 'Optional builder label',
-  'settings' => [
-      '_cssGlobalClasses' => [ 'clsID1', 'clsID2' ],  // array of global-class IDs
-      '_cssClasses'       => 'raw-class other',        // string — DYNAMIC-DATA-PARSED
-      '_cssId'            => 'my-hook',                // id attr; stable PHP-filter hook
-      '_attributes'       => [ [ 'id' => 'a1', 'name' => 'href', 'value' => '/?add-to-cart={post_id}' ] ],
-      'tag'               => 'custom',
-      'customTag'         => 'article',
-  ],
-]
-```
-
-- `_cssClasses` (raw string) and `_attributes[].value` are both **dynamic-data-parsed** — `value: "/?add-to-cart={post_id}"` resolves per loop item, which is how you build per-item add-to-cart links without PHP.
-- Non-native tags: `tag: 'custom'` + `customTag: '…'`.
-
-Verified: VMG, 2026-06-06 (Bricks 2.3.6, builder output + source) — Contact + Hosting Plans built end-to-end via WP-CLI.
-
 ## SVG element
 
 ```json
@@ -419,32 +336,178 @@ add_filter( 'bricks/dynamic_tags_list', function( $tags ) {
 });
 
 add_filter( 'bricks/dynamic_data/render_tag', function( $tag, $post, $context = 'text' ) {
+    // REQUIRED on Bricks 2.3.x: $tag can arrive as a parsed-tag ARRAY, not the
+    // '{my_tag}' string. Without this guard the site fatals on first render
+    // (trim(): Argument #1 must be of type string, array given). Returning $tag
+    // unchanged lets Bricks' native parsed-tag handler take over.
+    if ( ! is_string( $tag ) ) return $tag;
+
     if ( $tag !== '{my_tag}' ) return $tag;
     return 'resolved value';
 }, 10, 3 );
 
 // Required separately for when the tag appears inside a larger content string
+// AND for any tag used in an element _conditions (conditions resolve via
+// render_content, never render_tag).
 add_filter( 'bricks/dynamic_data/render_content', function( $content, $post, $context = 'text' ) {
-    if ( false === strpos( $content, '{my_tag}' ) ) return $content;
+    if ( ! is_string( $content ) || false === strpos( $content, '{my_tag}' ) ) return $content;
     return str_replace( '{my_tag}', 'resolved value', $content );
 }, 10, 3 );
 ```
 
 - `render_tag` handles a standalone tag; `render_content` handles a tag embedded in a string (e.g. `tel:{my_tag}` — the prefix makes it a content string, not a standalone tag). A tag used in both contexts needs both filters.
+- **Element `_conditions` resolve via `render_content`, not `render_tag`** — a gate tag registered only on `render_tag` passes through as a literal, and a literal is non-empty, so `empty_not` is always true and the gate never fires. Register both. Boolean gate tags should return `'1'` or `''`.
+- **When you refactor to a shared prefix guard, make it cover every prefix the tag map exposes** — a new tag with a different prefix silently fails the guard. Both failure modes are in `03`.
 - Inside the render filter, `\Bricks\Query::get_loop_object()` returns the current loop item if called during a loop iteration.
 - ACF field names in Bricks dynamic tags use an underscore, not a colon: `{acf_video_duration}`, not `{acf:video_duration}`.
 - As the tag count grows, refactor from one-tag-per-filter-body to a single map array that all three filters iterate.
 
+## Typed visual settings (verified — TAB, 2026-05-28 / 2026-05-31)
+
+Read back from builder-saved pages via the golden rule. These four were the library's long-standing gaps (`_typography`, `_padding`/`_margin`, `_background`, `_gridTemplateColumns`) — all now captured.
+
+**Layout**
+- `_display`: `"grid"` | `"flex"` · `_direction`: `"row"` | `"column"` · `_alignItems`: `"center"` | `"start"` | `"stretch"` · `_justifyContent` · `_flexWrap`: `"wrap"`
+- Bricks `block` / `container` **default to flex column**, so `_direction:"column"` + `_rowGap` works *without* setting `_display`. (A class that only does this is redundant with ACSS `.gap--N` — see `03`.)
+- `_columnGap` / `_rowGap`: token or value — `"var(--space-m)"`, `"0.6rem"`
+- `_gridTemplateColumns`: a **string** — `"90px 1fr auto"` or `"var(--grid-3)"`. Responsive via breakpoint suffix on the **outer** key: `"_gridTemplateColumns:tablet_portrait": "var(--grid-1)"`
+- `_width` / `_height`: `"100%"`, `"90px"`, `"var(--width-xl)"` · `_widthMax`: `"560px"` (note the `'100%'` special case in `03`)
+- `_overflow`: `"hidden"` · `_aspectRatio`: a **scalar string** — `"4/3"`, `"1"` (not an object)
+- Absolute positioning: `_position: "relative"|"absolute"`, `_top`/`_right`/`_bottom`/`_left`: `".8rem"`, `_zIndex: "2"`
+
+**Spacing**
+```php
+'_padding' => [ 'top' => 'var(--space-m)', 'bottom' => 'var(--space-m)' ],  // partial keys allowed
+'_margin'  => [ 'left' => 'auto', 'right' => 'auto' ],                      // 'auto' for centering
+```
+
+**Typography**
+```php
+'_typography' => [
+    'font-family'    => 'custom_font_169',   // named families MUST use custom_font_<id> — see 03
+    'font-size'      => 'var(--h4)',         // or '0.85rem'
+    'font-weight'    => '600',
+    'letter-spacing' => '0.1em',
+    'text-transform' => 'uppercase',
+    'text-align'     => 'center',
+    'line-height'    => '1.3',
+    'color'          => [ 'raw' => 'var(--token)' ],   // {raw} alone works; fuller {id,name,raw} also valid
+],
+'_typography:tablet_portrait' => [ 'font-size' => '3rem' ],   // breakpoint on the OUTER key
+```
+
+**Background**
+```php
+'_background' => [ 'color' => [ 'raw' => 'var(--token)' ] ],   // {raw}-only works even for non-ACSS child-theme tokens
+```
+
+**Two-colour border.** Typed `_border` is single-colour. For e.g. a gold top plus a light all-round: set 1px all sides via typed `_border`, then add `_cssCustom: ".class{ border-top:3px solid var(--secondary); }"` (literal selector).
+
+## Element envelope (verified — VMG, 2026-06-06)
+
+The wrapper every element is written in. The traps in each field have their own `03` entries; this is the shape.
+
+```php
+[
+  'id'       => 'abc123',   // 6-char alphanumeric, never all-numeric — see 03
+  'name'     => 'block',
+  'parent'   => 'xyz789',
+  'children' => [ 'def456' ],   // MUST be populated — parent alone renders empty shells (03)
+  'label'    => 'Optional builder label',
+  'settings' => [
+      '_cssGlobalClasses' => [ 'clsID1', 'clsID2' ],  // class IDs, NOT names — see 03
+      '_cssClasses'       => 'raw-class other',        // string — dynamic-data-parsed
+      '_cssId'            => 'my-hook',                // id attr; the stable PHP-filter hook (03)
+      '_attributes'       => [ [ 'id' => 'a1', 'name' => 'href', 'value' => '/?add-to-cart={post_id}' ] ],
+      'tag'               => 'custom',
+      'customTag'         => 'article',
+  ],
+]
+```
+
+- Both `_cssClasses` (the raw string) and `_attributes[].value` are **dynamic-data-parsed** — `value: "/?add-to-cart={post_id}"` resolves per loop item, which is how you build per-item links with no PHP. See `03` for the loop-aware-tag delimiter caveat.
+- Non-native tags: `tag: 'custom'` + `customTag: '…'` (see Block HTML tag options above for what's native).
+
+## Photo-in-wrapper (the standard for any contained image)
+
+Two elements — a wrapper (block) carrying the box, an image inside carrying object-fit. **Do not collapse this into an image-as-figure for aspect-ratio'd photos** — the image element's `_aspectRatio` dual-routes to the inner img and the figure collapses (`03`).
+
+```php
+// wrapper class (block; add tag:"figure" if it needs a figcaption)
+[ '_aspectRatio' => '3/4', '_overflow' => 'hidden', '_background' => [...], '_border' => [ 'radius' => [...] ] ]
+// image class
+[ '_width' => '100%', '_height' => '100%', '_objectFit' => 'cover' ]
+// image element settings
+[ 'image' => [ 'useDynamicData' => '{featured_image}', 'size' => 'medium' ] ]
+```
+Circle (author photo): wrapper `_aspectRatio: "1"` + `_border.radius` = `var(--radius-circle)`.
+
+## Query Loop — ACF field (relational rendering, no custom code)
+
+Any ACF **Relationship** or **Post Object** field on the current post is auto-exposed as a query loop:
+
+```json
+{ "hasLoop": true, "query": { "objectType": "acf_post_related_service" } }
+```
+
+- Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item. **LINK tags do not** — see `03`.
+- **Repeater** loops work too (`objectType: acf_<repeater>`), but subfield tags are namespaced: `{acf_<repeater>_<subfield>}`. The bare subfield tag prints literally.
+- **`gallery` and `image` fields are NOT loopable** — they aren't `CONTEXT_LOOP`. Use a custom query type. See `03`.
+
+## Hide-when-empty (two verified mechanisms)
+
+- **Loop on the section element** — when the query returns 0, the section + subtree render 0 times → entirely absent. Cleanest whole-section hide.
+- **`_conditions` on the section** — the Conditions schema above, `compare: "empty_not"`. Note conditions read an ACF `true_false` as raw `"1"`/`""` (not "True"/"False"), and custom gate tags need `render_content` registered. Both in `03`.
+
+## Archive template conditions
+
+```php
+// CPT archive  (/projects/)
+[ 'main'=>'archiveType', 'archiveType'=>['postType'], 'archivePostTypes'=>['project'] ]
+// Taxonomy archive  (/projects/category/{term}/)
+[ 'main'=>'archiveType', 'archiveType'=>['term'], 'archiveTerms'=>['project_category::all'] ]
+// Specific page (scores 8 — beats a `main:any` default)
+[ 'id'=>'cnd001', 'main'=>'ids', 'ids'=>[ $page_id ] ]
+```
+The keys are `archivePostTypes` / `archiveTerms` — **not** `postType` / `taxonomy`, which are silently ignored and match every archive (`03`). One template can hold both conditions. The built-in `post` type needs the `page_for_posts` workaround instead (`03`).
+
+## post-content element
+
+Renders `the_content()` with **no element settings** — just a Global Class. Style rendered descendants via that class's `_cssCustom` (`.class h2`, `.class blockquote`, …) since they have no typed control; add `scroll-margin-top` for in-content anchor jumps.
+
+## Button (dynamic CTA)
+
+```json
+{ "text": "{acf_cta_text}", "style": "btn--primary",
+  "link": { "type": "meta", "useDynamicData": "{acf_cta_url}" } }
+```
+`type` MUST be `"meta"` for dynamic hrefs — `"external"` is literal-`url`-only and emits **no href at all** (`03`).
+
+## BricksExtras ProSlider
+
+Element type is `xproslider`. Each slide block (typically `block` with `tag: "li"`) MUST carry the identity classes, or the SSR markup lacks them until Splide's JS initialises — slides flash unstyled, and screen readers that don't wait for JS miss the carousel semantics:
+
+```php
+'_hidden' => [ '_cssClasses' => 'x-slider_slide splide__slide' ]
+```
+
+**Control value types are inconsistent — read an existing slider before writing one:**
+
+| Setting | Type |
+|---|---|
+| `pagination` | **boolean** (`true`/`false`) |
+| `arrows` | **string** (`"true"`/`"false"`) — NOT boolean |
+| `autoplay`, `pauseOnHover` | boolean |
+| `interval`, `speed` | numeric strings |
+
+`arrows: true` (boolean) is silently dropped. `listTag: 'ul'` + a slide with `tag:'li'` gives proper list semantics.
+
 ## Schemas not yet captured
 
-The following element-level visual schemas have not yet been verified via the golden rule and need fresh discovery on first use:
+- `_border` image/gradient backgrounds (`_background` beyond a flat color).
+- Bricks native form element settings.
 
-- `_background` — the **image and gradient** shapes. The color-only shape is verified above.
-- `_gridTemplateColumns` and related grid typed settings.
-
-*(`_typography`, `_padding`/`_margin`, and `_background` color were captured on VMG 2026-06-06 and are now in the library above.)*
-
-An incomplete library is expected. When you need one of these, discover it via the golden rule and append it here for the harvest.
+An incomplete library is expected. When you need one, discover it via the golden rule and append it here for the harvest.
 
 ---
 

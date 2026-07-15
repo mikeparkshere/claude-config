@@ -13,19 +13,21 @@ This is a knowledgebase for how the MPD stack works and how Mike works with it. 
 The knowledgebase is six files:
 
 - **00-operating-rules.md** (this file) — how to behave: the memory model, the session lifecycle, the read and write protocols, the two core principles, surface selection, the auth requirement.
-- **01-stack-conventions.md** — how Mike builds: BEM/ACSS structure, the styling-layers priority order, semantic HTML and ARIA, the variable reference.
+- **01-stack-conventions.md** — how Mike builds: BEM/ACSS structure, the styling-layers priority order, semantic HTML and ARIA, the variable reference, the inherited-project audit.
 - **02-build-pipeline.md** — the core capability: token-aware wireframe in, built Bricks page out. Front half (wireframe intake) and back half (WP-CLI build), plus the verified schema library.
-- **03-stack-gotchas.md** — non-obvious stack behaviors discovered the hard way. A lookup catalog, consulted by symptom.
-- **04-infra-ops.md** — RunCloud/hosting behavior: the API's quirks, cron ownership, the cache layers, log paths, secrets convention. A lookup catalog, like `03`.
+- **03-stack-gotchas.md** — non-obvious **build stack** behaviors discovered the hard way (Bricks, ACSS, ACF, WS Form, Rank Math). A lookup catalog, consulted by symptom.
+- **04-hosting-cutover.md** — non-obvious **hosting layer** behaviors: the box, the CDN, the caches, and the cutover itself (RunCloud, RunCache, Cloudflare, ShortPixel, Perfmatters). Same catalog contract as `03`.
 - **99-project-context.template.md** — the template for the per-project working log.
 
-Three layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulator** is `03` — provisional knowledge, each entry a real incident with a fix, grows every project. **Ops** is `04` — the server underneath, true regardless of what is being built on it.
+Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulators** are `03` and `04` — provisional knowledge, each entry a real incident with a fix, grows every project.
 
-The **build** knowledgebase (`00`–`03`) serves new builds. It is not for the pre-AI fleet and not for live-site maintenance. Its lifecycle is Local → Staging → go-live, and go-live ends its involvement with a project.
+**Why `03` and `04` are separate:** `03` is how the build stack behaves while you build; `04` is the layer underneath and after. Different domains, consulted at different moments. Keeping ops out of `03` keeps `03` fast to scan by symptom, which is its whole job.
 
-`04` is the deliberate exception: the server does not have a go-live. That knowledge applies during a build, at deploy, and for as long as the site is hosted — so it has no seam, no per-project copy, and no harvest ritual. Entries land in it directly.
+The knowledgebase serves new builds, through go-live. It is not for the pre-AI fleet. Its lifecycle is Local → Staging → **cutover**, and the cutover is where its involvement ends.
 
-**This repo is public.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document mechanisms, not coordinates — coordinates are per-machine state and belong in auto-memory anyway (see the memory model below). Real incidents are fine as provenance; scrub the identifying particulars.
+**Scope note (2026-07-15).** This originally read "not for live-site maintenance… go-live ends its involvement." The TAB harvest stretched that line honestly: a cutover *is* the end of the lifecycle and belongs here, and the post-launch performance lessons (RUCSS on a lean site, PSI lab noise, a cache plugin's broken Redis flush silently reverting content writes) were bought at real cost and will be paid for again on the next launch if they aren't written down. They live in `04`. What remains out of scope: ongoing maintenance of a delivered site — that's the project's own docs, not portable stack knowledge.
+
+**This repo is PUBLIC.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document **mechanisms, not coordinates** — "the RunCloud panel owns the crontab" travels; an IP address does not. This matters most at harvest time, because auto-memory (the natural source) is full of coordinates, and `04` is the file most likely to attract them. Coordinates belong in auto-memory anyway: per the memory model below, they're per-machine state that goes stale. Real incidents are fine as provenance — scrub the identifying particulars (say "a $95/mo hosting order", not the client's username and order id). Scan the staged diff before committing.
 
 ---
 
@@ -37,7 +39,7 @@ Three layers hold knowledge, each with a different scope and lifespan. Knowing w
 |---|---|---|---|
 | **Auto-memory** | Claude Code's per-project memory | Fast-changing state: current build status, in-flight decisions, this week's client blockers, ephemeral todos | No — per-machine, per-path |
 | **Project files** | The project repo — `CLAUDE.md` and the project's `project-context.md` | Project canon: stack versions, file layout, decisions and their reasoning, completed and upcoming work, the "why and how we got here" narrative | Yes — travels with the repo |
-| **The knowledgebase** | `claude-config/knowledgebase/` — these six files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline, the server underneath. True on every project, every machine | Yes — the master in `claude-config` |
+| **The knowledgebase** | `claude-config/knowledgebase/` — these six files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline, the hosting layer. True on every project, every machine | Yes — the master in `claude-config` |
 
 The test: if a fact would still be true and useful when the repo is cloned on a different server six months from now, it belongs in a project file or the knowledgebase. If it is about *right now* — what is mid-build, what the client is blocking on this week — auto-memory is the right home.
 
@@ -52,7 +54,7 @@ The relationship between the layers: `CLAUDE.md` is "what is" for a project. `pr
 At the start of any build session:
 
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
-2. **Lookup tier:** `03` is a catalog. Do not read it cover to cover. Consult it when a symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
+2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
 3. **Check the project phase.** Open the project's `project-context.md` and read the Current Status / phase field. Local vs Staging tells you how close to launch the project is. It is informational, not a hard mode switch — it tells you how freely you can experiment. A project in Local is fine for discovery work; a project in Staging is closer to launch, so weigh changes accordingly.
 
 The point of reading `00`/`01`/`02` fully is that there is no separate training step. The canon is the training.
@@ -83,7 +85,8 @@ The closer is not optional. It is the mechanism that moves a discovery out of th
 
 Then triage explicitly, per the memory model and the write protocol below:
 
-- New stack gotchas → the project's copy of `03`, below the seam.
+- New build-stack gotchas → the project's copy of `03`, below the seam.
+- New hosting/cutover/performance gotchas → the project's copy of `04`, below the seam.
 - New verified schemas → the project's copy of `02`, the schema library.
 - New project decisions or completed milestones → `CLAUDE.md`.
 - New project-specific findings → `project-context.md`.
@@ -101,15 +104,18 @@ When you discover something during a build, capture it. The knowledgebase only r
 
 **Which file.** Decide by the nature of what you learned:
 
-- A **gotcha** — a non-obvious behavior, a silent failure, a thing that bit you — goes in `03`. It has a symptom and an incident.
+- A **build-stack gotcha** — a non-obvious behavior, a silent failure, a thing that bit you in Bricks/ACSS/ACF/WS Form/Rank Math — goes in `03`. It has a symptom and an incident.
+- A **hosting/cutover/performance gotcha** — the box, the CDN, the caches, the migration — goes in `04`. Same format, same bar. If you're unsure which: ask whether the fix is in the build or in the infrastructure.
 - A **verified schema** — a Bricks element or setting shape discovered via the golden rule — goes in the schema library in `02`. It is reference, not an incident.
 - A **convention** — a settled "this is how we build it" decision — goes in `01`. Conventions are rare mid-build; most of the time a discovery is a gotcha or a schema. A convention usually arrives by promotion (see harvest below), not by mid-build capture.
 
 **Where it goes.** New entries append to **the project's copy** of the file, never to the master in `claude-config`. Each project runs on its own copy, inherited at kickoff. The master changes only at harvest.
 
-**`03` has a seam.** The gotchas file is split by a structural marker into the established section ("we know" — everything inherited at kickoff) and the project section ("we learned" — empty at kickoff, fills during the build). Append new gotchas below the seam, in the project section. Do not edit entries above the seam during a build.
+**`03` and `04` both have a seam.** Each is split by a structural marker into the established section ("we know" — everything inherited at kickoff) and the project section ("we learned" — empty at kickoff, fills during the build). Append new gotchas below the seam, in the project section. Do not edit entries above the seam during a build.
 
-**Entry format for `03`** — match the existing entries exactly:
+**If a discovery contradicts an entry above the seam, do not silently edit the entry** — append yours below the seam and flag the conflict explicitly for the harvest. Two entries that disagree are a decision for Mike to make once, not a fight for each session to re-litigate. (TAB did exactly this with the `--skip-themes` finding, and the flag is why it was reconciled correctly rather than merged as a phantom second mechanism.)
+
+**Entry format for `03` / `04`** — match the existing entries exactly:
 
 ```
 ### [Short pattern title — what you'd search to find this]
@@ -129,10 +135,12 @@ Go-live is the one moment the master knowledgebase changes.
 
 When a project goes live, its learning is done. Everything it was going to discover, it has discovered. At that point:
 
-1. The project's `03` project-section entries (everything below the seam) get reviewed by Mike.
-2. Validated entries fold into the master `03` — promoted above the seam into the established section, provenance kept.
+1. The project's `03` and `04` project-section entries (everything below the seam) get reviewed by Mike.
+2. Validated entries fold into the master `03` / `04` — promoted above the seam into the established section, provenance kept.
 3. New verified schemas captured during the build fold into the master `02` schema library.
 4. Anything that turned out to be wrong, project-specific, or already covered gets dropped, not merged.
+5. Where a project entry **extends** an existing master entry rather than standing alone, fold it into that entry and keep both provenances — one mechanism, one entry. Two entries describing the same mechanism from different angles is how a catalog rots.
+6. Conflicts flagged during the build get **resolved** here, not carried. Where a conflict is empirically testable, test it — the answer is worth more than either claim.
 
 This is a reviewed file edit in the `claude-config` repo. It is the same discipline as the existing CLAUDE.md → Notion sync — edit markdown, review the diff, commit. There is no slash command. The review is the point: the master is what every future project inherits, so nothing reaches it unexamined.
 
