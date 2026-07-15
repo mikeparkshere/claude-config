@@ -71,6 +71,18 @@ A session has a beginning and an end ritual. The opener primes; the closer prese
 
 > This is the first session on a new project. No memory exists yet. Read the knowledgebase, then help scaffold this project's `CLAUDE.md` and `project-context.md` from the `99` template before we start building.
 
+**Before you copy the master at kickoff, check whether a live project is sitting unharvested.** A project's `03`/`04` copy is a **snapshot, not a subscription** — taken once, never updated again. If a sibling has already launched and its learning is still below the master's seam, that knowledge is missing from this project's copy *permanently*, even after the sibling gets harvested next week.
+
+```bash
+git -C ~/claude-config pull    # the master moves; a stale local copy is its own trap
+# then: does either accumulator's PROJECT SECTION hold entries from an already-live project?
+# and: does `git log --oneline` show a sibling appending straight to the master?
+```
+
+If it does, **harvest that project first, then copy.** Go-live is the trigger (see the harvest below), so a live project's entries are already overdue — they are not "pending", they are late.
+
+> **(2026-07-15.)** MMHN — a WooCommerce build — was an hour from inheriting a `03` with **zero** WooCommerce entries. Every Woo entry sat in VMG Client Portal's project section, unharvested, though VMG was live and therefore already past its trigger. Copying first would have frozen that gap into the one project that most needed it. Harvest cadence runs late by default (TAB launched 06-27, harvested 07-15), so "is anything overdue?" belongs at every kickoff, not in the edge cases. The same check surfaced that VMG had been appending straight to the master rather than keeping its own copy — a deviation from the write protocol worth catching early.
+
 **On every session after the first:**
 
 > Check memory first. Read the knowledgebase, then `CLAUDE.md` and this project's `project-context.md` before we start.
@@ -109,7 +121,7 @@ When you discover something during a build, capture it. The knowledgebase only r
 - A **verified schema** — a Bricks element or setting shape discovered via the golden rule — goes in the schema library in `02`. It is reference, not an incident.
 - A **convention** — a settled "this is how we build it" decision — goes in `01`. Conventions are rare mid-build; most of the time a discovery is a gotcha or a schema. A convention usually arrives by promotion (see harvest below), not by mid-build capture.
 
-**Where it goes.** New entries append to **the project's copy** of the file, never to the master in `claude-config`. Each project runs on its own copy, inherited at kickoff. The master changes only at harvest.
+**Where it goes.** New entries append to **the project's copy** of the file, never to the master in `claude-config`. Each project runs on its own copy, inherited at kickoff. The master changes only at harvest — with one exception, for corrections: see "The correction exception" below.
 
 **`03` and `04` both have a seam.** Each is split by a structural marker into the established section ("we know" — everything inherited at kickoff) and the project section ("we learned" — empty at kickoff, fills during the build). Append new gotchas below the seam, in the project section. Do not edit entries above the seam during a build.
 
@@ -131,7 +143,7 @@ For entries with no concrete incident — inherited knowledge that predates the 
 
 ## The go-live harvest
 
-Go-live is the one moment the master knowledgebase changes.
+Go-live is the moment the master knowledgebase **grows**. (It is not the only moment it *changes* — a false entry is corrected on sight; see the next section.)
 
 When a project goes live, its learning is done. Everything it was going to discover, it has discovered. At that point:
 
@@ -145,6 +157,28 @@ When a project goes live, its learning is done. Everything it was going to disco
 This is a reviewed file edit in the `claude-config` repo. It is the same discipline as the existing CLAUDE.md → Notion sync — edit markdown, review the diff, commit. There is no slash command. The review is the point: the master is what every future project inherits, so nothing reaches it unexamined.
 
 After harvest, the project is done with the knowledgebase. Whatever happens to the site afterward is out of scope.
+
+---
+
+## The correction exception — a false entry is fixed on sight
+
+The harvest rule says the master changes only at go-live. That rule exists to keep **unreviewed** knowledge out of the master. It is not a reason to leave knowledge that is **demonstrably wrong** sitting inside it.
+
+So there is one standing exception. **When an entry is proven false mid-build, correct it in the master immediately** — test, propose the rewrite, review, commit. Do not park the correction below a project seam and wait months for a ritual.
+
+The cost of the alternative is measured, not hypothetical. `02`'s three-filter dynamic-tag example shipped without its `is_string()` guard and fatals on Bricks 2.3.x. TAB hit it and flagged the fix on 2026-05-28; TAB's harvest ran **seven weeks later**. Every project scaffolded in that window inherited a live bug from the file that is supposed to be canon — and the flag was sitting there the whole time. **Flagging is not fixing.**
+
+The discipline is the harvest's, minus the wait:
+
+- **Test before you rewrite.** Rule 6 applies with *more* force here, not less: a refutation is only worth acting on if it is empirical. A Local box settles most schema questions in minutes, and the answer is worth more than either claim.
+- **Rewrite, don't extend, when the mechanism is wrong.** Rule 5 says one mechanism, one entry. An entry whose **Why** is false cannot be repaired by appending a correction underneath it — the reader hits the wrong explanation first and stops there.
+- **Keep the original provenance.** The incident was real even when the diagnosis wasn't. Record both in `First seen`: what was observed, what actually caused it, and who found which.
+- **Mike still reviews the diff.** Unchanged, and non-negotiable. The exception is about *timing*, not about skipping review.
+- **Re-sync the project's own copy afterward** — otherwise the project that found the bug keeps carrying it above its own seam. (Snapshot, not subscription.)
+
+**This applies to corrections only.** New knowledge still accumulates below the seam and waits for the harvest. That queue is not bureaucracy: it exists so entries get reviewed *as a batch, against each other*, which is where duplicates, folds and conflicts surface. A false entry has nothing to gain from that wait — it is already known to be wrong, and every day it stays costs a project.
+
+> **(2026-07-15 — first applied.)** VMG's typed-settings entry was harvested carrying an explicit untested-conflict flag against `02`'s schema library. MMHN tested it the same day on a Local box: the entry was wrong on all three of its claims, and it was steering every future project away from a library that was correct. Rewritten at source in `dca8db1` rather than carried to MMHN's go-live, with VMG's provenance kept and MMHN's copy re-synced. The conflict flag is what made this possible — it survived the harvest instead of being smoothed over, which is exactly what the write protocol's "flag the conflict explicitly" clause is for.
 
 ---
 
