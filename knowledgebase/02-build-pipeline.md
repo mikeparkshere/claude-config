@@ -367,9 +367,9 @@ add_filter( 'bricks/dynamic_data/render_content', function( $content, $post, $co
 Read back from builder-saved pages via the golden rule. These four were the library's long-standing gaps (`_typography`, `_padding`/`_margin`, `_background`, `_gridTemplateColumns`) — all now captured.
 
 **Layout**
-- `_display`: `"grid"` | `"flex"` · `_direction`: `"row"` | `"column"` · `_alignItems`: `"center"` | `"start"` | `"stretch"` · `_justifyContent` · `_flexWrap`: `"wrap"`
+- `_display`: `"grid"` | `"flex"` · `_direction`: `"row"` | `"column"` (**layout elements only** — `_flexDirection` elsewhere) · `_alignItems`: `"center"` | `"start"` | `"stretch"` · `_justifyContent` · `_flexWrap`: `"wrap"`
 - Bricks `block` / `container` **default to flex column**, so `_direction:"column"` + `_rowGap` works *without* setting `_display`. (A class that only does this is redundant with ACSS `.gap--N` — see `03`.)
-- `_columnGap` / `_rowGap`: token or value — `"var(--space-m)"`, `"0.6rem"`
+- `_columnGap` / `_rowGap`: token or value — `"var(--space-m)"`, `"0.6rem"`. **Layout elements only** (`section`/`container`/`block`/`div`) — on any other element the gap key is `_gap`, and `_direction` is `_flexDirection`. Wrong key for the element type = silent no-emit; see `03`.
 - `_gridTemplateColumns`: a **string** — `"90px 1fr auto"` or `"var(--grid-3)"`. Responsive via breakpoint suffix on the **outer** key: `"_gridTemplateColumns:tablet_portrait": "var(--grid-1)"`
 - `_width` / `_height`: `"100%"`, `"90px"`, `"var(--width-xl)"` · `_widthMax`: `"560px"` (note the `'100%'` special case in `03`)
 - `_overflow`: `"hidden"` · `_aspectRatio`: a **scalar string** — `"4/3"`, `"1"` (not an object)
