@@ -108,6 +108,20 @@ ACSS ships `.bg--ultra-light` / `.bg--light` / `.bg--dark` / `.bg--ultra-dark` b
 
 ---
 
+## ACSS configuration
+
+Configure ACSS the way we build Bricks: **programmatically, verified against output** — not by hand in the dashboard. The mechanism is `Automatic_CSS\Model\Database_Settings::save_settings( $values, $trigger_css_generation = true )`:
+
+- `wp_set_current_user(1)` first — `save_settings` runs a capability check (same class of gotcha as Bricks' gated `_bricks_page_*` writes).
+- **Pass the full settings array**, merged from the current option — `save_settings` resets any *omitted* allow-listed variable to its default.
+- One call saves **and** regenerates the CSS (ScssPhp compiler). No separate regen step.
+
+Direct-value settings — type sizes and **per-level Font Size Overrides**, scales, radius, button typography, font families, line-heights, focus — are fully scriptable this way (seconds, not a UI session). **The colour palette is the one exception:** its shade ladder (`-light/-dark/-hover/-trans` + `-h/-s/-l` partials) is computed by the dashboard's JS and stored in the option; generation reads those stored keys, so writing only the base hex leaves the ramp on the old colour. Either prompt the user to enter the palette in the dashboard once (it runs the derivation) — the established default — or replicate the derivation in PHP (keep base H/S, set each shade's L to its fixed step). Reserve browser automation for the palette-only case; never for the scriptable settings. Full mechanism and the boundary incident: `03` → ACSS; the ordered procedure: `02`.
+
+**Governance-minimal palette.** Enable only the ACSS colour slots the brand uses. Every enabled slot emits ~15 auto-derived, full-saturation intermediates into the Bricks/AT colour picker — off-brand, and an invitation to pick off-script. Represent one-off brand colours (a flat surface, an accessible-text variant) as **pinned custom tokens in Global SCSS**, not slots; keep sub-14px sizes (eyebrows) out of the general text scale for the same reason.
+
+---
+
 ## Clickable card and focus patterns
 
 For cards where the entire primary content (image plus title) should be clickable, wrap that content in a **visible `<a>`** rather than a stretched-link pseudo-element. Secondary links — category tags, meta actions — live as siblings of the anchor, inside the same list item.

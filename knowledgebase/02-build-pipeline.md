@@ -30,6 +30,16 @@ Before any build, these must be in hand. If any is missing, ask for it — do no
 4. **Plugin path and name** — the core functionality plugin, for CSS handoff reference.
 5. **Semantic vocabulary overrides** — any project-specific deviations from the semantic defaults in `01`.
 
+## ACSS brand-configuration (before token extraction)
+
+Required-context item 1 (the ACSS token map) assumes ACSS is **already** configured to the brand. That configuration is its own procedure — WP-CLI-first, per the convention in `01`:
+
+1. **Palette (the one interactive step).** Prompt the user to enter the brand palette in the ACSS dashboard (`?acssOpenDashboard=1`) — base colours + which slots to enable (governance-minimal). This is the only dashboard step; the shade derivation is JS-side (`03` → ACSS). Or run a PHP derivation helper.
+2. **Everything else by WP-CLI** — one `wp eval-file`: `wp_set_current_user(1)`, read the option, merge type sizes / per-level Font Size Overrides (mobile=min, desktop=max = brand ranges) / scales / radius / button typography / fonts / line-heights / focus, then `save_settings($merged, true)`.
+3. **Tokens** — pinned customs (`--cream`, a `--display` step above `--h1`, focus overrides) into Global SCSS. This delivers **inline** after `automatic.css` (`03` → ACSS), so `:root` overrides win the cascade.
+4. **Verify on the rendered front end, not the on-disk files** — `curl` and grep the inline `automaticcss-core-inline-css` block + compiled `automatic.css` for palette hexes, per-level clamp sizes, button vars, and that custom overrides win.
+5. **Then extract the token map** (below) — now that ACSS is brand-true.
+
 ## What good input looks like
 
 A wireframe is good input when:

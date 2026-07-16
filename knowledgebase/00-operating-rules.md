@@ -191,6 +191,7 @@ There are three surfaces for build work. They are complementary, not interchange
 | Turning a token-aware wireframe into a built Bricks page | **WP-CLI build** — the pipeline in `02`. This is the primary path. |
 | Discovering an unknown Bricks schema; building or extending a template with Bricks UI controls available | **Bricks builder** — visual, authoritative. Build one example, save, read it back. |
 | Bulk operations: batch class creation, global class CSS population, custom query types, dynamic tags, CPT scaffolding, ACF fields | **WP-CLI direct DB edit** — the back half of `02`. |
+| Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::save_settings($merged, true)` after `wp_set_current_user(1)`; convention in `01`, procedure in `02`. The **colour palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
 
 When a WP-CLI edit stalls — Bricks stripping writes, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
 

@@ -847,6 +847,30 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Fix:** On hand-authored sections, declare the layout explicitly: `.card{display:block}` and `flex-direction:row` on every direct-child flex row. Don't rely on element defaults inside a `<section>` on an ACSS site.
 **First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centred and stacked; the login card too.
 
+### ACSS palette shades are dashboard-derived — a WP-CLI base-colour write leaves the ramp stale
+**Symptom / When:** Scripting the ACSS palette via `save_settings`: you write `color-primary` (or `color-accent`), regenerate, and `--primary` updates but `--primary-light/-dark/-hover/…` stay on the OLD colour.
+**Why:** The shade ladder (`-light/-dark/-hover/-trans` + the `-h/-s/-l` partials, ~2,113 keys) is computed by the dashboard's JS and **stored in the option**; the SCSS compiler reads those stored keys — it does NOT recompute shades from the base hex. A base-only write updates the base and nothing else. (Everything non-colour — type, radius, buttons, scales, focus — has no derivation and scripts cleanly.)
+**Fix:** For the palette, prompt the user to set it in the dashboard once (it runs the derivation), then script the rest by WP-CLI — the established pattern. Or replicate the derivation in PHP: keep base H/S, set each shade's L to its fixed step (ultra-light 95 / light 85 / semi-light 65 / semi-dark 35 / dark 25 / ultra-dark 10; hover a smaller L bump — confirm), write base + all `-h/-s/-l`, then `save_settings`. Convention + procedure: `01`, `02`.
+**First seen:** MMHN, 2026-07-16 — `color-accent=#112233` changed `--accent` but left `--accent-light/-dark` gold; confirmed the SCSS reads the stored shade keys.
+
+### ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file
+**Symptom / When:** Custom vars/rules added in the ACSS Global SCSS are in the on-disk `automatic-custom-css.css`, but the front-end `<head>` doesn't link that file and the linked `automatic.css` still shows the framework default (e.g. `--focus-width:2px`, no `--cream`). Looks like the custom CSS isn't loading / an override was lost.
+**Why:** With `cssLoading=file`, the front end enqueues `automatic.css` and the Global SCSS is added **inline** via `wp_add_inline_style` on the ACSS core handle — printed in `<style id="automaticcss-core-inline-css">` immediately AFTER the `automatic.css` `<link>`. The standalone `automatic-custom-css.css` is a build artifact, not what loads; and because the inline block follows `automatic.css`, `:root` overrides in Global SCSS win the cascade.
+**Fix:** Verify custom CSS on the **rendered page**, not the disk files (`curl -sk <url> | grep -A2 automaticcss-core-inline-css`). Overriding an ACSS framework variable in Global SCSS is a valid, load-order-safe technique.
+**First seen:** MMHN, 2026-07-16 — nearly reported `--focus-width:3px` working off the disk files; the page confirmed it only via the inline block.
+
+### ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it
+**Symptom / When:** Automating the ACSS dashboard, `read_page`/`form_input` return only the WP admin bar; none of the dashboard inputs/toggles/dropdowns are reachable by element ref.
+**Why:** As of v3 the settings UI is a real-time dashboard on the front end (`?acssOpenDashboard=1`, or SHIFT+CMD+O in the builder), rendered in a shadow DOM.
+**Fix:** Prefer WP-CLI (`01`/`02`) and avoid the dashboard for scriptable settings. If you must drive it (palette only), use screenshot + coordinate clicks; it's a single-expand accordion whose expanded header stays at its compact row, so expand→set→collapse in one batch keeps fields on-screen.
+**First seen:** MMHN, 2026-07-16.
+
+### ACSS type: per-level Font Size Override hits a non-geometric brand scale exactly
+**Symptom / When:** A brand type scale isn't geometric (H1 46–56, H2 34–48, H3 22–26 — H2:H3 ≠ H1:H2), so ACSS's base-size + single ratio can't land every level.
+**Why:** ACSS Typography has a per-level tab (H1…H6, and XXL…XS for text) with a **Font Size Override (mobile / desktop px)** on top of the global base+scale. The mobile/desktop pair is the fluid-clamp min/max — i.e. the brand's range.
+**Fix:** Set the brand ranges as per-level overrides (mobile=min, desktop=max); leave base+scale for the unspecified levels. Scriptable via `save_settings`. Pin a floor with a per-level override where a scale step would dip below it (e.g. `text-s`=14/14 for a 14px floor).
+**First seen:** MMHN, 2026-07-16.
+
 ## ACF
 
 ### ACF Pro — `default_value` seeds the form only, not `get_field()` reads
@@ -1281,6 +1305,14 @@ a:any-link:hover { text-decoration: underline; }
 **First seen:** VMG, 2026-06-07 — an account-nav disclosure; the desktop sidebar collapsed to nothing until it was switched to a checkbox toggle.
 
 
+## Fonts
+
+### Variable-font prep for Bricks: TTF→WOFF2 (keep axes), subset, and the opsz-instance trap
+**Symptom / When:** Google Fonts downloads are TTF; Bricks Custom Fonts wants WOFF2. And a "variable" font added to Bricks may quietly be a single optical-size **instance** (wght axis only, no `opsz`), so `font-optical-sizing:auto` does nothing at display sizes.
+**Why:** WOFF2 is just a compression container — `fontTools` (`f.flavor='woff2'; f.save()`) converts TTF→WOFF2 losslessly, keeping all axes (wght, opsz, ital). Full-glyph variable files are big (~210–240KB); latin-subset via `pyftsubset --unicodes=<latin range> --flavor=woff2` (keeps axes), and optionally clamp wght to used weights (`fonttools varLib.instancer wght=400:600`) to shrink (~100KB). Bricks stores faces in `bricks_font_faces` post meta (weight/style → attachment id); **variable weights point multiple weights at ONE file** (400 & 600 → same attachment), italic is a **separate file**. A file whose internal family name is e.g. "Newsreader 16pt" is the 16pt instance — no opsz.
+**Fix:** Verify axes with fontTools (`'fvar' in TTFont(f)` → list `f['fvar'].axes`), don't trust the filename. For optical sizing, download the full variable font WITH the opsz axis. `@font-face` maps discrete `font-weight:400/600` to the same variable file — true weights only if the file is really variable (else "600" renders 400 outlines). `font-optical-sizing` defaults to `auto`; don't set it `none`.
+**First seen:** MMHN, 2026-07-16 — first-added Newsreader files were the 16pt instance (no opsz); re-converted the full opsz+wght TTFs to latin-subset WOFF2.
+
 ## WP-CLI
 
 ### WP-CLI — inline `wp eval` fatals silently on `"{$arr[barekey]}"` in PHP 8
@@ -1302,6 +1334,12 @@ print_r( wc_get_account_menu_items() );   // now includes payment-methods
 ```
 **First seen:** VMG, 2026-06-07 — after a live gateway flip, `is_available()` and the Payment Methods nav both read as missing in `wp eval`; both flipped to present once HTTPS was simulated. (The origin terminated real HTTPS, so `is_ssl()` was genuinely true on real requests.)
 
+
+### Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
+**Symptom / When:** `wp db query "…"` errors `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`, while `wp option get`, `wp eval`, `wp post list` in the same shell work.
+**Why:** `wp db query` shells out to the `mysql` client, which needs the live socket path; Local's bundled MySQL uses its own socket and is only up while the site runs (and not at `/tmp/mysql.sock`). PHP-based WP-CLI commands connect via `DB_HOST`/mysqli and are unaffected. (A fully stopped Local site fails all DB access — no `mysqld`.)
+**Fix:** Use PHP-path WP-CLI (`wp eval`, `wp eval-file`, `wp option get/update`, `wp post *`) for DB work on Local; avoid `wp db query`/`wp db cli`. If everything DB-related fails, start the Local site first.
+**First seen:** MMHN, 2026-07-16.
 
 ## Diagnostic patterns
 
