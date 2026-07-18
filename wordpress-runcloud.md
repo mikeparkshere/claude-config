@@ -85,15 +85,17 @@ wp db query "SELECT * FROM wp_posts LIMIT 5"
 
 ## Logs & Debugging
 
+Runcloud writes logs to `/home/runcloud/logs/`, **not** inside the webapp directory. Naming convention: `<app-name>_error.log`.
+
 ```bash
-# PHP / application errors
-tail -f /home/runcloud/webapps/[APP_NAME]/logs/error_log
+# PHP / Apache (proxy_fcgi) — primary app errors
+tail -f /home/runcloud/logs/apache2/[APP_NAME]_error.log
 
 # Nginx errors
-/var/log/nginx/[domain].error.log
+tail -f /home/runcloud/logs/nginx/[APP_NAME]_error.log
 
 # Always check error log after making changes
-tail -50 /home/runcloud/webapps/[APP_NAME]/logs/error_log
+tail -50 /home/runcloud/logs/apache2/[APP_NAME]_error.log
 ```
 
 ---
