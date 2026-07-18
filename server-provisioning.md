@@ -97,7 +97,7 @@ ln -sf ~/claude-config/skills/wp-wpcli-and-ops ~/.claude/skills/wp-wpcli-and-ops
 
 Vendoring (copying into this repo) beats cloning the upstream repo per-server: the upstream was already pruned 17→4, upstream drift is unwanted, and step 0 then keeps the skills current fleet-wide for free.
 
-{CONFIRM: the upstream repo URL — needed once, to pull the four skill files in. Check claude.ai chat history for the skills review conversation.}
+**Upstream: `https://github.com/WordPress/agent-skills`** (began under Automattic, now WordPress org). Vendored 2026-07-18 from upstream commit `c212346`; the repo had grown to 18 skills by then. `skills/VENDORED.md` records provenance.
 
 ## 8. RunCloud API token
 
