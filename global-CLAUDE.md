@@ -18,6 +18,19 @@ Base: `https://manage.runcloud.io/api/v3`
 Auth: `Authorization: Bearer <token>`
 Use the API first for any RunCloud task. SSH only for files or things the API doesn't expose.
 
+## Cron (server jbm001, all 10 webapps)
+WP-Cron disabled site-side (`DISABLE_WP_CRON=true` in every wp-config.php). Driven by the
+`runcloud` **user crontab** (hand-rolled, not RunCloud-managed — deliberate: identical reliability,
+keeps fine stagger control + inline comments). Frequency tiered to workload (retier 2026-06-30):
+- **1 min** — app-lwv, app-mbc25 (live WooCommerce / Action Scheduler; lwv also Mailster).
+- **5 min** — app-ahml (production), app-fmed (heaviest event load).
+- **10 min** — bbbrave, fmnb25, holdingspace, mediof, morristow, expert-t (brochure).
+
+Command form: `/usr/local/bin/wp cron event run --due-now --quiet --path=<webapproot>` (no `cd`).
+Stderr → `~/cron-logs/<app>.log` (empty on success; growth = a real recurring error).
+Crontab backup: `~/cron-handrolled.bak`. Restore: `crontab ~/cron-handrolled.bak`.
+New webapp → add `DISABLE_WP_CRON` + a crontab line in the matching tier.
+
 ## Project conventions
 Three-tier classification: Tier 1 active builds, Tier 2 live Claude-assisted, Tier 3 legacy.
 CLAUDE.md is source of truth — syncs to Notion automatically.
