@@ -23,7 +23,7 @@ The public key goes onto the server via the RunCloud dashboard (server → SSH k
 
 Verify: `ssh {alias}` from the Mac drops you at a `runcloud@` prompt with no password.
 
-{CONFIRM: is the key deployed via RunCloud dashboard, or copied manually? And is it one shared keypair across the fleet or per-server keys?}
+Keys are configured per environment (established during the April 2026 8-environment rollout). {CONFIRM: deployed via RunCloud dashboard, or copied manually?}
 
 ## 2. GitHub authentication
 
@@ -75,15 +75,29 @@ ln -sf ~/claude-config/wordpress-runcloud-backup.md ~/.claude/commands/wordpress
 ln -sf ~/claude-config/wordpress-audit.md ~/.claude/commands/wordpress-audit.md
 ```
 
-Same symlink logic as step 5: pull once, everything current.
+Symlinks are the confirmed fleet convention — the April 2026 rollout converted all local command copies to symlinks pointing at the repo, precisely so `git pull` is the only sync step.
 
 {CONFIRM: which playbooks are wired as commands on servers — all of them, or just the runcloud set? `wordpress-local.md` presumably stays Mac-only.}
 
-## 7. Vendored WP skills
+## 7. Vendored WP skills — NOT YET DEPLOYED
 
-Four skills from the pruned WordPress agent skills repo: wp-performance, wp-plugin-development, wp-rest-api, wp-wpcli-and-ops.
+Four skills were selected from an external WordPress agent skills repo (reviewed in claude.ai for workflow relevance): wp-performance, wp-plugin-development, wp-rest-api, wp-wpcli-and-ops.
 
-{CONFIRM: where do these live on a server and how do they get there — separate repo cloned to ~/.claude/skills/? Vendored into a directory this repo doesn't show? This is the least-documented piece of the whole setup.}
+**Status as of 2026-07-18: selected but never installed.** They exist on no server and not in this repo — the evaluation happened, the deployment didn't. Discovered while writing this checklist, which is the checklist doing its job.
+
+When deploying, use the same pattern as everything else: vendor the four skill directories into `skills/` in this repo, then symlink on each box:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -sf ~/claude-config/skills/wp-performance ~/.claude/skills/wp-performance
+ln -sf ~/claude-config/skills/wp-plugin-development ~/.claude/skills/wp-plugin-development
+ln -sf ~/claude-config/skills/wp-rest-api ~/.claude/skills/wp-rest-api
+ln -sf ~/claude-config/skills/wp-wpcli-and-ops ~/.claude/skills/wp-wpcli-and-ops
+```
+
+Vendoring (copying into this repo) beats cloning the upstream repo per-server: the upstream was already pruned 17→4, upstream drift is unwanted, and step 0 then keeps the skills current fleet-wide for free.
+
+{CONFIRM: the upstream repo URL — needed once, to pull the four skill files in. Check claude.ai chat history for the skills review conversation.}
 
 ## 8. RunCloud API token
 
