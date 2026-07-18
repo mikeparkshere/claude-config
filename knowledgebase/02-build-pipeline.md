@@ -102,6 +102,29 @@ Discovery workflow:
 
 When a schema is not in the library below, this is how you get it. An incomplete schema library is expected — the golden rule is the method for filling it.
 
+### Discovery cost — the golden rule can evict itself
+
+A readback on a content-bearing page is not free: one `_bricks_page_content_2` blob on staging can run tens of thousands of tokens. Enough of them and the session compacts, evicting the knowledgebase — including this rule. The discovery method must not destroy the context that enforces it. Two disciplines:
+
+**Extract narrowly. Never read a whole blob to learn one shape.**
+
+```bash
+# one element type, first match only
+wp post meta get <id> _bricks_page_content_2 --format=json \
+  | jq '[.[] | select(.name=="section")][0]'
+
+# just the settings keys an element uses (schema discovery without the payload)
+wp post meta get <id> _bricks_page_content_2 --format=json \
+  | jq '[.[] | select(.name=="heading")][0].settings | keys'
+
+# tree shape only — id/name/parent, no settings at all
+wp post meta get <id> _bricks_page_content_2 --format=json \
+  | jq 'map({id, name, parent})'
+```
+
+**Route bulk readbacks through a subagent.** When a full-blob read is genuinely needed — auditing a whole template, harvesting multiple schemas at go-live — dispatch it as a Task so the JSON burns the subagent's context and only the extracted shapes return to the main session. The main session's context is the scarce resource; spend the subagent's instead.
+
+
 ## Authentication
 
 The first line of any WP-CLI script that writes Bricks template meta:

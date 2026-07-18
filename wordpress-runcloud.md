@@ -6,6 +6,7 @@ You are helping with WordPress development on a Runcloud-hosted server via VSCod
 When this slash command loads, immediately run:
 
 ```bash
+git -C ~/claude-config pull   # step 0 — the master moves; a stale clone is its own trap
 ls /home/runcloud/webapps/
 ```
 

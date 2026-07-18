@@ -12,6 +12,23 @@ This is the per-project working log. CC instantiates a copy of it at the start o
 
 Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to use" block once the file is instantiated. Mark unfilled sections `Not yet captured` rather than deleting them — an explicit gap is a signal.
 
+**At instantiation, also copy the hard-rules block below verbatim to the TOP of this project's `CLAUDE.md`.** It stays in CLAUDE.md, not here — CLAUDE.md content holds attention across a long session in a way the knowledgebase, read once at minute one, does not. Reference layer vs. enforcement layer (see `00`, the fourth layer).
+
+```markdown
+## Hard rules (enforcement layer — full versions live in the knowledgebase)
+
+1. **Golden rule:** never guess a Bricks schema. Not in the `02` library =
+   discover via readback of builder-saved output. A guessed key persists in
+   the DB and silently strips on next builder load.
+2. **Typed settings:** know the mechanism before applying a value. Discovery
+   and expression are different rules (`00`).
+3. **Readbacks are narrow:** `jq`-extract the shape you need; whole blobs go
+   through a subagent (`02`, discovery cost).
+4. **After any compaction:** stop. Re-run the read protocol before the next
+   write (`00`).
+5. **Session degrading:** `/clear` and re-prime. Do not push through.
+```
+
 ---
 
 ## Current Status

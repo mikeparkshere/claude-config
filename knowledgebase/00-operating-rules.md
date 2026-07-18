@@ -40,12 +40,25 @@ Three layers hold knowledge, each with a different scope and lifespan. Knowing w
 | **Auto-memory** | Claude Code's per-project memory | Fast-changing state: current build status, in-flight decisions, this week's client blockers, ephemeral todos | No — per-machine, per-path |
 | **Project files** | The project repo — `CLAUDE.md` and the project's `project-context.md` | Project canon: stack versions, file layout, decisions and their reasoning, completed and upcoming work, the "why and how we got here" narrative | Yes — travels with the repo |
 | **The knowledgebase** | `claude-config/knowledgebase/` — these six files | Portable stack knowledge: how the stack works, how Mike builds, gotchas, the build pipeline, the hosting layer. True on every project, every machine | Yes — the master in `claude-config` |
+| **Session context** | The running CC conversation | Everything read this session — the knowledgebase itself, once read, lives HERE, not in any persistent layer | No — and it leaks mid-session (see below) |
 
 The test: if a fact would still be true and useful when the repo is cloned on a different server six months from now, it belongs in a project file or the knowledgebase. If it is about *right now* — what is mid-build, what the client is blocking on this week — auto-memory is the right home.
 
 The relationship between the layers: `CLAUDE.md` is "what is" for a project. `project-context.md` is "why and how we got here" for that project. The knowledgebase is everything that is true *across* projects. A discovery during a build is triaged into one of these — a project-specific finding goes in `project-context.md`; a stack-wide gotcha goes in the project's copy of `03` and is harvested to the knowledgebase master at go-live; fast-changing state stays in auto-memory and is never committed.
 
 **Anti-pattern:** committing fast-changing state to a repo. Build status, today's blockers, "mid-refactor on X" — these create noisy history and go stale. They stay in auto-memory.
+
+### The fourth layer leaks — context is not a subscription
+
+The knowledgebase on disk does nothing. It only governs behavior while it sits in session context, and session context is the one layer that degrades *during* a session. Two mechanisms:
+
+**Compaction.** Long sessions auto-compact. The summary keeps "there is a golden rule" and loses the operational content — the discovery procedure, the schema library, the typed-settings distinction. From then on CC guesses with the confidence of something that remembers reading the rule. Compaction is invisible unless you treat it as a tripwire: **after any compaction event, re-run the read protocol before the next write.** No exceptions. A degraded session that keeps writing is more expensive than the re-read.
+
+**Dilution.** Even without compaction, an instruction read 100k tokens ago under an hour of tool output gets soft adherence. This is why the hard-rules block exists at the top of the project `CLAUDE.md` (see the `99` template) — CLAUDE.md content holds attention in a way a file read at minute one does not. The knowledgebase is the reference layer; the hard-rules block is the enforcement layer.
+
+**When a session goes sideways, `/clear` and re-prime.** Do not push a degraded session to finish the template. Re-priming costs twenty seconds; fighting a session that has lost the canon costs the afternoon.
+
+> **(2026-07-18.)** First staging session of a new build on real content: mistakes left and right, golden rule not followed, the simplest template taking forever — with the knowledgebase current on the server and the project CLAUDE.md present and correct. On disk was never the question. Local sessions never hit the ceiling because local blobs are skeletons; staging blobs are tens of thousands of tokens each, and the golden rule's own readbacks are what flooded the context that held it.
 
 ---
 
@@ -56,6 +69,8 @@ At the start of any build session:
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
 2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
 3. **Check the project phase.** Open the project's `project-context.md` and read the Current Status / phase field. Local vs Staging tells you how close to launch the project is. It is informational, not a hard mode switch — it tells you how freely you can experiment. A project in Local is fine for discovery work; a project in Staging is closer to launch, so weigh changes accordingly.
+
+4. **Re-entry.** This protocol is not start-of-session only. It re-runs after any compaction event and after any mid-session `/clear` — a compacted or cleared session is a new session wearing the old one's scrollback. Steps 1–3 in full, no abbreviating on the grounds that "we read it earlier." Earlier is gone; that is what compaction means.
 
 The point of reading `00`/`01`/`02` fully is that there is no separate training step. The canon is the training.
 
@@ -105,6 +120,8 @@ Then triage explicitly, per the memory model and the write protocol below:
 - Fast-changing in-flight state → auto-memory, not a committed file.
 
 The closer is where the workflow compounds. The write protocol below says *what* earns a place and *where* it goes; the closer is *when* it happens.
+
+The closer is also the exit ramp. At 80% the session is not just due for preservation — it is close to compaction, and compaction evicts the canon along with the discoveries. Once the closer has run and the files are written, do not keep building: `/clear`, then run the opener. Closer → clear → opener is one motion. A session that preserves its learning and then keeps working in a full context has saved the discoveries and sacrificed the golden rule.
 
 ---
 
