@@ -4,7 +4,7 @@ This is the layer *underneath* everything else in this repo. The knowledgebase, 
 
 Run these steps once per new server, in order. After the first session, none of this recurs — step 0 in the slash commands keeps the clone current forever.
 
-**Scope:** this covers the CC layer only. It assumes RunCloud has already provisioned the box (stack, firewall, the `runcloud` user) and that provider-native image backups are enabled — that's Layer 1 of the backup model. Layer 2 (restic/rclone to B2/R2, RunCloud external storage) has its own setup; see `wordpress-runcloud-backup.md`.
+**Scope:** this covers the CC layer only. It assumes RunCloud has already provisioned the box (stack, firewall, the `runcloud` user) and that provider-native snapshots are enabled. There is no fleet-standard offsite backup layer, and setting one up is not part of this checklist. Finishing these steps makes a box CC-ready, not backed up.
 
 ---
 
@@ -71,7 +71,6 @@ The playbooks at the repo root are the slash commands. CC reads them from `~/.cl
 ```bash
 mkdir -p ~/.claude/commands
 ln -sf ~/claude-config/wordpress-runcloud.md ~/.claude/commands/wordpress-runcloud.md
-ln -sf ~/claude-config/wordpress-runcloud-backup.md ~/.claude/commands/wordpress-runcloud-backup.md
 ln -sf ~/claude-config/wordpress-audit.md ~/.claude/commands/wordpress-audit.md
 ```
 
