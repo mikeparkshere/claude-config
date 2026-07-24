@@ -23,18 +23,35 @@ The public key goes onto the server via the RunCloud dashboard (server → SSH k
 
 Verify: `ssh {alias}` from the Mac drops you at a `runcloud@` prompt with no password.
 
-Keys are configured per environment (established during the April 2026 8-environment rollout). {CONFIRM: deployed via RunCloud dashboard, or copied manually?}
+Keys are configured per environment (established during the April 2026 8-environment rollout), always via the dashboard route above. `authorized_keys` is never hand-edited.
 
 ## 2. GitHub authentication
 
-The clone uses the SSH remote (`git@github.com:mikeparkshere/claude-config.git`), and CC needs `gh` for autonomous repo work. On the server:
+Two separate things. This checklist historically covered only the second, which is a gap: a box can pass `gh auth status` and still fail `git pull`, and `git pull` is step 0 of every slash command.
+
+**2a. The server's own SSH key, registered on your GitHub account.** This is what `git clone` and `git pull` use.
 
 ```bash
-gh auth login    # GitHub CLI — follow the device-code flow
+ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -C "{alias}"
+cat ~/.ssh/id_ed25519.pub    # add at GitHub → Settings → SSH and GPG keys
+```
+
+Verify:
+
+```bash
+ssh -T git@github.com
+```
+
+Success looks like `Hi mikeparkshere! You've successfully authenticated, but GitHub does not provide shell access.` and a **non-zero exit** — GitHub grants no shell, so the greeting is the success signal, not the exit code. Being greeted by *account* name confirms an account-level key rather than a per-repo deploy key.
+
+**2b. The `gh` CLI.** Separate, and **not** required for git. CC needs it for autonomous repo work (creating repos, PRs). Required on every box — any server may eventually host a new project.
+
+```bash
+gh auth login    # device-code flow
 gh auth status   # verify
 ```
 
-{CONFIRM: does `gh auth login` handle git-over-SSH too (it can configure git credentials), or does each server's SSH key get added to the GitHub account separately? jbm003 pushes over SSH successfully, so one of these is true.}
+Confirmed independent 2026-07-24: devmpdesign authenticates to GitHub over SSH and fetches cleanly with **no `gh` installed at all**. Never read `gh auth status` as evidence that git will work, or the reverse.
 
 ## 3. Clone the repo
 
@@ -46,12 +63,19 @@ Home directory of the `runcloud` user, always — every playbook and slash comma
 
 ## 4. Install Claude Code
 
+Native installer. No Node.js prerequisite — the binary is self-contained — and it auto-updates in the background.
+
 ```bash
-{CONFIRM: exact install command used on the fleet — npm global? native installer? Node version prerequisite?}
+curl -fsSL https://claude.ai/install.sh | bash
 claude --version
+claude doctor      # reports install type and auto-update status
 ```
 
-Record the version. Version skew across the fleet muddies debugging — when a server misbehaves, "same CC version as the Mac?" is an early question (learned 2026-07-18, the jbm003 staging investigation).
+The binary lands at `~/.local/bin/claude`, symlinked to `~/.local/share/claude/versions/<version>`. If `claude` is not found afterward, `~/.local/bin` is missing from PATH — check with a **login** shell, since a non-login shell won't have it.
+
+npm global installs are the legacy path (Anthropic deprecated them January 2026) and are not used here — `/usr/lib/node_modules` was empty on every box checked. The system `node` version is irrelevant to Claude Code itself; it matters only for skill scripts that shell out to it.
+
+**On version skew:** auto-update converges the fleet without anyone managing it — jbm003 and devmpdesign both sat at 2.1.218 on 2026-07-24. Still note the version when a box misbehaves; "same CC version as the Mac?" remains an early question (learned 2026-07-18, the jbm003 staging investigation).
 
 ## 5. Wire the global CLAUDE.md
 
@@ -62,7 +86,7 @@ mkdir -p ~/.claude
 ln -sf ~/claude-config/global-CLAUDE.md ~/.claude/CLAUDE.md
 ```
 
-{CONFIRM: symlink is the assumed convention here — if the existing fleet uses copies, either standardize on symlinks or document the copy-on-pull step, because a stale copy is the same trap as a stale clone.}
+Confirmed symlink, not a copy, on jbm003 and devmpdesign (2026-07-24). A copy would be the same trap as a stale clone.
 
 ## 6. Wire the slash commands
 
@@ -76,15 +100,15 @@ ln -sf ~/claude-config/wordpress-audit.md ~/.claude/commands/wordpress-audit.md
 
 Symlinks are the confirmed fleet convention — the April 2026 rollout converted all local command copies to symlinks pointing at the repo, precisely so `git pull` is the only sync step.
 
-{CONFIRM: which playbooks are wired as commands on servers — all of them, or just the runcloud set? `wordpress-local.md` presumably stays Mac-only.}
+Confirmed 2026-07-24: the runcloud set only. `flatsite.md`, `bricks-css-sweep.md`, `wordpress-local.md` and `business-manager-role-playbook.md` are wired on no server. `wordpress-local.md` is Mac-only by design (LocalWP paths). The other three are candidates that have simply never been deployed — wire them deliberately if you want them, rather than assuming they are already live.
 
-## 7. Vendored WP skills — NOT YET DEPLOYED
+## 7. Vendored WP skills
 
 Four skills were selected from an external WordPress agent skills repo (reviewed in claude.ai for workflow relevance): wp-performance, wp-plugin-development, wp-rest-api, wp-wpcli-and-ops.
 
-**Status as of 2026-07-18: selected but never installed.** They exist on no server and not in this repo — the evaluation happened, the deployment didn't. Discovered while writing this checklist, which is the checklist doing its job.
+**Vendored into this repo 2026-07-18** and deployed to jbm003 the same day. **Not yet on every box** — devmpdesign had no `~/.claude/skills/` directory at all when checked on 2026-07-24, so treat this step as outstanding on any server you have not verified. Check with `ls -la ~/.claude/skills/` before assuming.
 
-When deploying, use the same pattern as everything else: vendor the four skill directories into `skills/` in this repo, then symlink on each box:
+The skills are already vendored into `skills/` in this repo. To deploy on a box, symlink them:
 
 ```bash
 mkdir -p ~/.claude/skills
@@ -114,12 +138,15 @@ Transfer the token by `scp` from the Mac — never paste it through a chat sessi
 
 ```bash
 ssh {alias}                                  # from Mac: no-password login
+ssh -T git@github.com                        # greets by account name (non-zero exit is normal)
 git -C ~/claude-config pull                  # "Already up to date"
 ls -la ~/.claude/CLAUDE.md                   # symlink → ~/claude-config/global-CLAUDE.md
-ls ~/.claude/commands/                       # the wired playbooks
+ls -la ~/.claude/commands/                   # the wired playbooks, no broken links
+ls -la ~/.claude/skills/                     # the four vendored skills
 gh auth status                               # authenticated
-claude --version                             # matches the fleet
+claude --version                             # native install, auto-updated
 cat ~/.runcloud/token | head -c 8            # token present (first chars only)
+find ~/.claude -xtype l                      # prints nothing if no symlink is dangling
 ```
 
 Then the real test: start CC, run `/wordpress-runcloud`, and watch step 0 pull cleanly. If the slash command loads and the webapp listing appears, the box is fleet-standard. First project on the box follows the kickoff protocol in `00` — unharvested-sibling check before the snapshot copy, as always.
