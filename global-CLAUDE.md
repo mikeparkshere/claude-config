@@ -33,5 +33,5 @@ New webapp → add `DISABLE_WP_CRON` + a crontab line in the matching tier.
 
 ## Project conventions
 Three-tier classification: Tier 1 active builds, Tier 2 live Claude-assisted, Tier 3 legacy.
-CLAUDE.md is source of truth — syncs to Notion automatically.
+CLAUDE.md is the source of truth. CC pushes it to Notion **on request** — after a closer, or every few sessions — and the sync is **one-way**. Notion is a published view for reading and sharing; never edit it directly, since an edit there is lost at the next push.
 Slash commands in claude-config repo: /wordpress-audit, /wordpress-runcloud.

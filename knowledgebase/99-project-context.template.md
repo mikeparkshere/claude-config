@@ -126,7 +126,7 @@ Per the read protocol in the knowledgebase, the phase is informational. Local me
 - **Logs:** {RunCloud paths — PHP/Apache and Nginx}
 - **DB backups:** {location / naming convention}
 - **ACSS token map:** {location of the per-project extracted token map}
-- **Notion CLAUDE.md:** {Notion URL — source of truth, this repo's CLAUDE.md syncs from it}
+- **Notion CLAUDE.md:** {Notion URL — a **published view, not canonical**. This project's `CLAUDE.md` is the source of truth; CC pushes it to Notion on request, one-way. Never edit the Notion copy — an edit there is silently lost at the next sync.}
 - **Brand assets:** {location}
 - **Social:** {handles}
 
