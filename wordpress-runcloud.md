@@ -6,7 +6,7 @@ You are helping with WordPress development on a Runcloud-hosted server via VSCod
 When this slash command loads, immediately run:
 
 ```bash
-git -C ~/claude-config pull   # step 0 — the master moves; a stale clone is its own trap
+git -C ~/claude-config pull --ff-only   # step 0 — the master moves; a stale clone is its own trap
 ls /home/runcloud/webapps/
 ```
 
@@ -106,7 +106,7 @@ tail -50 /home/runcloud/logs/apache2/[APP_NAME]_error.log
 - **ACF Pro** for all custom fields — ALWAYS use `acf_add_local_field_group()` for field registration, never UI-only
 - **Bricks Builder** for page building with dynamic data from helper functions
 - **ACF Local JSON** enabled for field sync and version control
-- **ACSS v3.3.6** is the CSS framework — never work around it or replace it
+- **ACSS v3** is the CSS framework — never work around it or replace it
 - All custom post types, taxonomies, ACF fields, and options pages go in the **project core plugin**
 - WPCodeBox snippets approved on staging must be migrated to the core plugin before go-live
 
@@ -328,31 +328,7 @@ add_action( 'acf/include_fields', function() {
 
 ## Audit Mode
 
-When this is an existing site audit session, operate as a **detective — read and document only**.
-Do not modify any files without explicit instruction.
-
-```bash
-# Inventory: active plugins
-wp plugin list --status=active --format=table
-
-# Inventory: custom post types
-wp post-type list --format=table
-
-# Inventory: WPCodeBox snippets
-wp post list --post_type=wpcodebox --format=table
-
-# Inventory: ACF field groups (UI-registered)
-wp post list --post_type=acf-field-group --format=table
-
-# Scan functions.php for custom code
-cat wp-content/themes/bricks-child/functions.php
-
-# Search for custom functions across theme files
-grep -r "function " wp-content/themes/ --include="*.php" -l
-
-# Export ACF field groups to acf-json
-wp acf export --all
-```
+Auditing an existing site is its own command: **`/wordpress-audit`**. It layers on top of this session — webapp root, WP-CLI access and CLAUDE.md context carry over, so do not re-run the webapp selection step. Run it rather than improvising an inventory here.
 
 ---
 
@@ -364,14 +340,3 @@ wp acf export --all
 - Apply capability checks where needed
 - No logic in `functions.php` — child theme stays lean
 - No custom code outside the core plugin on production
-
----
-
-## Best Practices
-
-- Always work on staging before touching live
-- Back up the database before schema changes: `wp db export backup.sql`
-- Check error logs after every change
-- Test ACF field updates on a few posts before running bulk operations
-- Use WP-CLI for all bulk operations
-- WPCodeBox snippets must be migrated to the core plugin before go-live
