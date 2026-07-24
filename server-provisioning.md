@@ -46,10 +46,27 @@ Success looks like `Hi mikeparkshere! You've successfully authenticated, but Git
 
 **2b. The `gh` CLI.** Separate, and **not** required for git. CC needs it for autonomous repo work (creating repos, PRs). Required on every box — any server may eventually host a new project.
 
+Install is a user-local binary drop from the official release tarball. Check the current release at `https://github.com/cli/cli/releases`, then substitute it below:
+
 ```bash
-gh auth login    # device-code flow
+cd /tmp
+curl -fsSLO https://github.com/cli/cli/releases/download/v<VERSION>/gh_<VERSION>_linux_amd64.tar.gz
+tar xzf gh_<VERSION>_linux_amd64.tar.gz
+mkdir -p ~/.local/bin
+cp gh_<VERSION>_linux_amd64/bin/gh ~/.local/bin/gh
+chmod +x ~/.local/bin/gh
+rm -rf /tmp/gh_<VERSION>_linux_amd64*
+gh --version
+```
+
+Take the current release rather than matching another box — see the drift note below. Then authenticate:
+
+```bash
+gh auth login    # device-code flow; you complete it in a browser
 gh auth status   # verify
 ```
+
+**Two things about this install method.** It is **not** forced by a lack of sudo — the `runcloud` user has passwordless sudo (verified on devmpdesign, 2026-07-24), so GitHub's apt repo is available if ever wanted. The binary drop is simply what the fleet already runs. And unlike `claude`, a dropped binary **never auto-updates**, so `gh` versions drift (jbm003 on 2.93.0, devmpdesign on 2.96.0 as of 2026-07-24). That is accepted rather than a defect: `gh`'s repo and PR surface is stable across minor versions, and pinning a fleet-wide version that nothing maintains is false consistency. If drift ever does bite, the apt repo is the fix.
 
 Confirmed independent 2026-07-24: devmpdesign authenticates to GitHub over SSH and fetches cleanly with **no `gh` installed at all**. Never read `gh auth status` as evidence that git will work, or the reverse.
 
@@ -146,7 +163,9 @@ ls -la ~/.claude/skills/                     # the four vendored skills
 gh auth status                               # authenticated
 claude --version                             # native install, auto-updated
 cat ~/.runcloud/token | head -c 8            # token present (first chars only)
-find ~/.claude -xtype l                      # prints nothing if no symlink is dangling
+find ~/.claude -xtype l -not -path '*/debug/*'   # prints nothing if no symlink is dangling
 ```
+
+`~/.claude/debug/latest` is excluded deliberately: it is a CC-internal symlink that dangles routinely between sessions on any box where `claude` has run, so an unfiltered `find` never comes back clean and the check becomes noise.
 
 Then the real test: start CC, run `/wordpress-runcloud`, and watch step 0 pull cleanly. If the slash command loads and the webapp listing appears, the box is fleet-standard. First project on the box follows the kickoff protocol in `00` — unharvested-sibling check before the snapshot copy, as always.
