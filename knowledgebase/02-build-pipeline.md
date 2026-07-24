@@ -547,3 +547,5 @@ An incomplete library is expected. When you need one, discover it via the golden
 ## CSS handoff
 
 All section CSS belongs in the core functionality plugin or the child theme `style.css`, per the styling-layers order in `01` — not left as per-page Bricks custom CSS. Bricks inline CSS is not cached, not minified, and duplicated across every page that uses it. The handoff happens at pre-launch as a separate sweep, not during the build.
+
+The sweep is implemented as `bricks-css-sweep.md` at the repo root: a per-page operation run at the Staging → Live boundary, once the page is visually locked and client-approved. It extracts page- and element-level custom CSS into the core plugin, then empties the Bricks fields. Do not run it during active development.

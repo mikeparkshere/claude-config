@@ -1298,6 +1298,15 @@ a:any-link:hover { text-decoration: underline; }
 **Fix:** Drop the transform; use `top: 50%` plus flex/grid centering on the parent.
 **First seen:** V1 baseline, 2026-05-24.
 
+### Stretched-link cards break three silent ways — specificity, `clip-path`, absolute positioning
+**Symptom / When:** A clickable-card pattern (ACSS `.clickable-parent`, or a hand-rolled stretched `::after`) renders correctly but the card is not clickable — or only a 1×1 pixel of it is.
+**Why:** Three independent mechanisms, all silent:
+1. **Specificity** — ACSS ships `.clickable-parent:not(a) { position: static }` at `(0,1,1)`, which beats a plain `.card { position: relative }` at `(0,1,0)`. With no positioning context the stretched pseudo has nothing to stretch to.
+2. **`clip-path` on the anchor** — a visually-hidden anchor using `clip-path: inset(50%)` clips its own pseudo-elements. The `::after` renders into an invisible box regardless of how it is positioned.
+3. **`position: absolute` on the anchor** — makes the anchor its own containing block, so the absolute `::after` sizes against the 1×1 anchor rather than the card.
+**Fix:** Prefer the visible-anchor pattern — wrap the primary content in a real `<a>`, keep secondary links as siblings of it. No pseudo-element, no utility, no specificity fight. Where `.clickable-parent` is genuinely wanted (card has no inner links), use the compound selector `.card.clickable-parent { position: relative }` to reach `(0,2,0)`, and keep both `clip-path` and `position: absolute` off the anchor. Convention and markup live in `01` (clickable card and focus patterns); this entry is the incident record behind that rule.
+**First seen:** ext-mem video site build, 2026-04 — three separate stretched-link failures in one session. Harvested from `archive/claude-code-bricks-playbook.md` §5.3 at archive time, 2026-07-24.
+
 ### `<details>` content can't be force-shown on desktop (Chrome `::details-content` content-visibility)
 **Symptom / When:** A `<details>`/`<summary>` used as a responsive menu (collapsed on mobile, "always open" on desktop via CSS) renders the content HIDDEN on desktop — the CSS override to keep it open has no effect, so a desktop sidebar collapses to nothing.
 **Why:** Recent Chrome hides closed-`<details>` content via a `::details-content` pseudo with `content-visibility:hidden`, not a simple `display:none` on the child. Overriding the child's `display` doesn't un-hide it, and `::details-content` support is too new/uneven to rely on.
