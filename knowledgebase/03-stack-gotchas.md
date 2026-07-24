@@ -38,6 +38,202 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ---
 
+## Index
+
+135 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+
+**Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
+
+Regenerate after every harvest, from the repo root:
+
+```bash
+awk '/^# === PROJECT/{exit} /^## /{s=$0; sub(/^## /,"",s); skip=(s ~ /^How this file works/ || s ~ /^Index/); if(!skip) print "\n**" s "**\n"} /^### /{if(!skip){t=$0; sub(/^### /,"",t); print "- " t}}' knowledgebase/03-stack-gotchas.md
+```
+
+Group labels below are bold rather than headings on purpose — `###` here would collide with the entry headings the generator reads.
+
+**WordPress + Bricks Builder**
+
+- Doubled-class selectors beat Bricks inline CSS cascade
+- Bricks element IDs must be 6-char alphanumeric, never all-numeric
+- `_cssId` is the stable hook for PHP filters, not Bricks' internal element id
+- Re-sign Bricks code elements after any DB-side edit
+- Bricks code elements store CSS in `settings.cssCode`, not `settings.code`
+- `update_post_meta` silently fails on `_bricks_page_*_2` keys from WP-CLI
+- Bricks Element Manager — a disabled element renders as NOTHING, even when it's in the template data
+- Bricks Query Filter elements need a manual reindex AND a cron tick after programmatic creation
+- Bricks term dynamic data tag is `{term_url}`, not `{term_link}`
+- Bricks filter-radio / filter-checkbox default to vertical column — set `displayMode: 'button'` for horizontal pills
+- Bricks archive template `archiveType: postType / post` never matches for built-in `post`
+- Bricks filter active state — color must be set on `.brx-option-text`, not the `<label>`
+- Bricks per-post CSS cache hides DB-side global-class edits until regen
+- `rm -f post-*.min.css` does NOT auto-regenerate — frontend silently degrades
+- Bricks button utility classes (`btn--outline`, `btn--primary`) are Bricks-injected, not user-defined
+- Bricks `bricks/allowed_html_tags` filter for custom elements
+- Bricks emits skip-links automatically via the `bricks_body` action
+- Bricks — typed `_border` setting uses a flat width/style/color shape, not per-side nested objects
+- Bricks — typed-setting breakpoint suffixes go on the OUTER key, not as a sibling inside a nested dict
+- Bricks — `_widthMax: '100%'` is special-cased to suppress horizontal scrollbars
+- Bricks — author rules with equal specificity lose to `@layer bricks` framework rules
+- Bricks — `*{border-color}` plus a default 1px border on native inputs = "ghost" borders on every form
+- Bricks — where CSS actually lives: global-class CSS is INLINE, element-typed CSS is in `post-{id}.min.css`
+- Bricks emits a Global Class's CSS ONLY when an element on that page references it
+- Bricks External-Files CSS mode (`cssLoading='file'`) won't externalize global-class CSS via CLI `regenerate_css_files()`
+- Bricks `_typography.font-family` quotes the value — use `custom_font_<id>`, not a CSS string
+- Bricks image element with `tag=figure` collapses to content size — `:where(.brxe-image).tag` forces `width:auto; height:fit-content`
+- Bricks `_aspectRatio` dual-routes to the inner img — it can't drive the figure's box when the image element IS the figure
+- Wrapper-block-as-figure inherits UA `figure { margin: 1em 40px }` — Bricks zeros it only for `figure.brxe-image`
+- Bricks "invalid post type" on Edit with Bricks = stale rewrite rules (not a Bricks setting)
+- Bricks 2.3.x `bricks/dynamic_data/render_tag` passes `$tag` as a parsed-tag ARRAY, not always a string
+- A custom dynamic tag used in an element `_conditions` resolves via `render_content`, NOT `render_tag` — register BOTH
+- Bricks `logoHeight` (and any number-unit control) silently rejects `clamp()`
+- Bricks button/link with a dynamic-data href needs `link.type: "meta"` — `"external"` emits NO href at all
+- Native `{post_url}` resolves to the queried object (not the loop item) in LINK contexts inside a custom-query loop
+- Bricks custom query returning bare IDs (`'fields'=>'ids'`) does NOT establish per-item post context
+- Bricks custom-query `posts_per_page` arrives at `settings['query']['posts_per_page']`, not `settings['posts_per_page']`
+- Bricks archive template conditions use `archivePostTypes` / `archiveTerms` — NOT `postType` / `taxonomy`
+- Bricks scores competing header/footer/template conditions — a specific post-ID condition (8) beats `main: any`
+- Bricks per-page footer/header disable key is `footerDisabled` / `headerDisabled`
+- Writing Bricks content to a page in `wordpress` editor mode renders nothing — flip `_bricks_editor_mode`
+- Bricks element tree written via WP-CLI needs populated `children` arrays — `parent` alone renders empty shells
+- Bricks `_cssGlobalClasses` must reference class IDs, not names — name refs persist but emit no class attribute
+- Bricks image element with a dynamic source needs the tag to return an ARRAY `[$id]` in image context
+- Bricks image element: the stored `id`/`url` is a BUILDER PREVIEW, not a frontend fallback
+- Bricks DOES resolve dynamic data inside custom `_attributes` — and a loop-aware tag resolves per-item there (use a delimiter, not JSON)
+- Bricks `_conditions` on an ACF `true_false` read the RAW value — `empty` / `empty_not` work
+- ACF `true_false` rendered into a Bricks custom `_attributes` value outputs `"True"` / `"False"`, not `"1"` / `"0"`
+- Markup generated by a custom dynamic tag CANNOT be styled by Bricks global classes — its CSS must live in the child theme
+- Editing `bricks_global_classes` via WP-CLI while a Bricks builder tab is open gets silently reverted
+- Deleting a global class in the Bricks Style Manager leaves DANGLING refs in element `_cssGlobalClasses`
+- Bricks ships a default `blockquote` style (4px left border + Georgia) that hits any `customTag: "blockquote"`
+- `display:flex` breaks an inline comma-separated `{post_terms_*}` list — it eats the space after the comma
+- Bricks auto-adds `aria-current="page"` to a link whose href EXACTLY matches the current URL — drive active states from it
+- Bricks form `fromName` / `fromEmail` / `emailTo` / `emailSubject` are read ONLY by the Email action
+- Bricks — seed utility global-class "anchors" from a plugin so child-theme classes show in the picker
+- Bricks — flex/gap control KEYS depend on the ELEMENT TYPE: `_direction`/`_columnGap`/`_rowGap` on layout elements, `_flexDirection`/`_gap` on everything else
+- Bricks — an empty `text-basic` renders nothing; use `block`/`div` for decorative empties
+- Bricks — the `html` element is the ungated raw-markup injector; reserve it for genuinely non-native markup
+- Bricks — flex/grid + gap that arranges BEM children belongs on the Container, not the single-child Section
+- Bricks — header/footer TEMPLATE content lives in `_bricks_page_header_2` / `_bricks_page_footer_2`, not `_bricks_page_content_2`
+
+**BricksExtras**
+
+- BricksExtras element `name` strips hyphens from the file basename
+- BricksExtras elements are gated behind a per-element admin enable flag
+- BricksExtras Offcanvas Nestable — `clickTrigger` is the master selector for burger-toggle behavior
+- ProSlider list semantics (BricksExtras)
+- BricksExtras ProAccordion has a hardcoded `:where()` gray header background
+- BricksExtras ProAccordion emits no `aria-expanded` / `aria-controls` in SSR markup
+
+**Frontend Toolkit (animations)**
+
+- Frontend Toolkit must skip the builder iframe, not just the builder main frame
+- Frontend Toolkit `staggerObserver` does not pick up AJAX-injected children inside an already-fired stagger parent
+- Frontend Toolkit — never put `.anim-*` on a content wrapper taller than the viewport
+
+**ACSS**
+
+- ACSS settings — write via `Database_Settings::save_settings()`, never direct option writes
+- ACSS heading sizes (`h1-max` / `h1-min`) don't reach `--h1` — override in the child theme
+- ACSS `option-<slot>-clr` toggles gate whether a color slot compiles at all
+- A column "stack" class (`_direction:column` + `_rowGap`) is byte-equivalent to the ACSS `.gap--N` utility
+- `_inner` is dead — the ACSS Container replaces it
+- ACSS — "Remove Deactivated Classes" toggle is the master ACSS→Bricks sync switch (misnamed)
+- ACSS — `clamp()` values in an `@supports` block override the rem fallbacks in `:root`
+- ACSS — spacing/text scale stops at `xs`; using `2xs` silently falls back to an invalid var
+- ACSS — `automatic-bricks.css` enqueues AFTER the child theme; override ACSS tokens via `:root`, not selectors
+- ACSS — button bg-context wrappers override variant classes via specificity
+- ACSS — "light"/"dark" variants of a NEAR-BLACK base resolve to LIGHT colors
+- ACSS — changing a base color hex in the Dashboard can wipe variation overrides on that family
+- ACSS — `:where(section…)` makes any hand-rendered `<section>` flex-column-centred; `section > div` forces its children to column
+- ACSS palette shades are dashboard-derived — a WP-CLI base-colour write leaves the ramp stale
+- ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file
+- ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it
+- ACSS type: per-level Font Size Override hits a non-geometric brand scale exactly
+
+**ACF**
+
+- ACF Pro — `default_value` seeds the form only, not `get_field()` reads
+- ACF — `true_false` opt-out fields: legacy posts have NO meta row, so `value='1'` excludes them
+- ACF — `acf/prepare_field`: `$field['name']` is the PREFIXED input name; match on `_name`
+- ACF — `acf_form()` front-end survival kit
+- ACF field removal — `get_field()` stops working but the raw post meta survives
+- ACF `url` field type rejects relative paths and query strings
+- Bricks ACF query loop: `objectType: acf_<field>`; repeater subfields are `{acf_<repeater>_<subfield>}`
+- ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
+
+**WordPress core — CPTs, rewrites, canonical**
+
+- A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
+- A term archive whose slug matches a CPT single 301s to that single (`redirect_canonical` collision)
+
+**Rank Math + Bricks**
+
+- Rank Math `%excerpt%` description template produces junk on Bricks-built Pages
+- Enabling a Rank Math module via the `rank_math_modules` option does NOT create its DB tables
+- Bricks `bricks_template` CPT is publicly indexable AND in the Rank Math sitemap by default
+- Rank Math — SEO scores are computed CLIENT-SIDE; the DB value goes stale and NULL ≠ unoptimized
+- Rank Math — `og:type` defaults to `article` on EVERY non-homepage page, including archives
+- Disabling Rank Math's Schema (Rich Snippets) module removes ALL its JSON-LD — including the default @graph
+- Rank Math routes a CPT *named* `author` through its built-in Author sitemap provider
+
+**Mailster**
+
+- Mailster — custom dynamic tags use `{tag:option}` syntax and resolve at SEND time, not in the editor
+
+**WooCommerce**
+
+- Bricks — `{woo_product_price}` outputs `price_html` and renders as HTML in a Basic Text element
+- Bricks — the WooCommerce integration sheet loads AFTER the child theme and restyles Woo surfaces
+- WooCommerce — Cart/Checkout pages default to BLOCKS, which bypass classic template overrides
+- WooCommerce — "Coming Soon" (Launch Your Store) gates STORE pages to non-managers; looks like a broken page
+- Verifying gated/cart-dependent Woo pages — the WC cart session can't be held over curl; render via `do_shortcode`
+- WooCommerce — the cart's sparse 6-column table needs `table-layout: fixed`, not auto
+- WooCommerce — Woo overrides `wp_mail_from`, so transactional mail can fail DMARC even when plugin mail passes
+- WooCommerce — brand transactional emails via SETTINGS, not template overrides (esp. with `email_improvements` ON)
+- WooCommerce — admin-created customers get WP's PLAIN email, not the branded WC welcome
+- WooCommerce Subscriptions — create subscription products from WP-CLI
+- WooCommerce Subscriptions — manual gateways (COD) are hidden on subscription carts until "Accept Manual Renewals" is on
+- WooCommerce Subscriptions — the staging-site lock silently SKIPS all automatic renewals after a Local→production migration
+- WooCommerce Subscriptions — admin-created ("manual") orders NEVER spawn a subscription, even for subscription products
+
+**WS Form**
+
+- WS Form's PHP API needs `wp_set_current_user(1)` from WP-CLI — reads included
+- WS Form `WS_Form_Field::db_create()` needs an EMPTY label or the field gets ZERO meta
+- WS Form — choices live in `data_grid_checkbox`/`data_grid_radio`; the export JSON is the importable artifact
+- WS Form — skin it by overriding root `--wsf-form-*` vars, never by writing rules against `.wsf-field` / `.wsf-label`
+- WS Form — per-field-type CSS loads AFTER the theme; the native checkbox IS the styled box (sibling of the label, no wrap mode)
+- WS Form CAPTCHA (Turnstile/reCAPTCHA) keys live in the global `ws_form` option, not the field meta
+
+**Roles & Capabilities**
+
+- Bricks builder access is admin-only by default — custom roles get NO builder access unless explicitly granted
+- Walling Rank Math to admins — deny `rank_math_*` caps; the editor role ships with the metabox cap
+
+**CSS general**
+
+- Author `a { ... }` rules silently lose to the UA stylesheet's `a:link`
+- Stacking-context bugs from `transform: translateY(-50%)`
+- Stretched-link cards break three silent ways — specificity, `clip-path`, absolute positioning
+- `<details>` content can't be force-shown on desktop (Chrome `::details-content` content-visibility)
+
+**Fonts**
+
+- Variable-font prep for Bricks: TTF→WOFF2 (keep axes), subset, and the opsz-instance trap
+
+**WP-CLI**
+
+- WP-CLI — inline `wp eval` fatals silently on `"{$arr[barekey]}"` in PHP 8
+- WP-CLI — `is_ssl()` is false, so WooCommerce reports gateways "unavailable" and strips the Payment Methods nav
+- Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
+
+**Diagnostic patterns**
+
+- Diagnostic JS via a Bricks code element
+
+---
+
 # === ESTABLISHED — "we know" ===
 
 ## WordPress + Bricks Builder
