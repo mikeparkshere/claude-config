@@ -312,7 +312,27 @@ For anything else (`dl`, `dt`, `dd`): `"tag": "custom"` plus `"customTag": "dl"`
 }
 ```
 
-Nested array shape: the outer array is AND groups, inner arrays are OR rules within a group. For a simple "hide if field empty": one outer array, one inner rule.
+Nested array shape: **the outer array is a list of condition SETS, and the logic BETWEEN sets is OR. Rules INSIDE a set are ANDed together.** For a simple "hide if field empty": one set, one rule.
+
+```php
+// OR — render if ANY network is set (one rule per set)
+'_conditions' => [
+    [ [ 'id'=>'cnd001', 'key'=>'dynamic_data', 'dynamic_data'=>'{tag_a}', 'compare'=>'empty_not' ] ],
+    [ [ 'id'=>'cnd002', 'key'=>'dynamic_data', 'dynamic_data'=>'{tag_b}', 'compare'=>'empty_not' ] ],
+],
+
+// AND — render only if BOTH are set (both rules in one set)
+'_conditions' => [
+    [
+        [ 'id'=>'cnd001', 'key'=>'dynamic_data', 'dynamic_data'=>'{tag_a}', 'compare'=>'empty_not' ],
+        [ 'id'=>'cnd002', 'key'=>'dynamic_data', 'dynamic_data'=>'{tag_b}', 'compare'=>'empty_not' ],
+    ],
+],
+```
+
+Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()` — "Loop over condition sets (logic between sets: OR)" wrapping "Loop over conditions inside a set (logic inside a set: AND)". A set short-circuits to false on its first failing rule.
+
+**Correction, Clemente 2026-07-25.** This entry previously said the opposite ("outer array is AND groups, inner arrays are OR rules within a group"). Writing an intended OR as three rules in one set silently hid the element: two of the three dynamic tags were empty, the AND failed, and the element vanished with no error. The one-set-one-rule advice for the common hide-when-empty case was correct and unchanged by this — which is why the error survived so long. Verified against `conditions.php` and confirmed empirically on both branches (one network set → renders; all networks empty → hidden).
 
 ## Global Class shape
 
