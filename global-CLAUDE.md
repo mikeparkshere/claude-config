@@ -13,9 +13,11 @@ WS Forms Pro, RankMath Pro, Perfmatters. Custom plugins, no logic in functions.p
 Servers: DigitalOcean managed via RunCloud. Dev via VSCode Remote-SSH.
 
 ## RunCloud API
-Token: `cat ~/.runcloud/token`
+Token: `~/.runcloud-token` (mode 600) — a shell `export` file, **not** a bare token, so source it
+rather than `cat` it: `set -a; . ~/.runcloud-token; set +a` → `$RUNCLOUD_API_TOKEN`. Never echo the value.
+Workspace-level token (scope = every server in the workspace, not just the local box).
 Base: `https://manage.runcloud.io/api/v3`
-Auth: `Authorization: Bearer <token>`
+Auth: `Authorization: Bearer $RUNCLOUD_API_TOKEN`
 Use the API first for any RunCloud task. SSH only for files or things the API doesn't expose.
 
 ## Cron (server jbm001, all 10 webapps)
