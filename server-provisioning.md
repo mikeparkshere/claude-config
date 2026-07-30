@@ -88,7 +88,20 @@ claude --version
 claude doctor      # reports install type and auto-update status
 ```
 
-The binary lands at `~/.local/bin/claude`, symlinked to `~/.local/share/claude/versions/<version>`. If `claude` is not found afterward, `~/.local/bin` is missing from PATH — check with a **login** shell, since a non-login shell won't have it.
+The binary lands at `~/.local/bin/claude`, symlinked to `~/.local/share/claude/versions/<version>`. If `claude` is not found afterward, `~/.local/bin` is missing from PATH.
+
+**PATH in non-login shells.** Ubuntu puts the `~/.local/bin` line in `~/.profile`, which only login shells read. Two things then break: `ssh {alias} 'claude --version'` (a non-interactive remote command) and anything CC shells out to. `~/.bashrc` looks like the fix, but Ubuntu's stock `~/.bashrc` bails on line 6 with `case $- in *i*) ;; *) return;; esac`, so a line appended to the bottom never runs non-interactively. The line has to go **above** that bail:
+
+```bash
+grep -q 'claude-config PATH' ~/.bashrc || \
+  sed -i '1i export PATH="$HOME/.local/bin:$PATH"  # claude-config PATH' ~/.bashrc
+```
+
+Verify from the Mac, not from a shell on the box — an interactive session is the one case that already worked:
+
+```bash
+ssh {alias} 'claude --version; gh --version'
+```
 
 npm global installs are the legacy path (Anthropic deprecated them January 2026) and are not used here — `/usr/lib/node_modules` was empty on every box checked. The system `node` version is irrelevant to Claude Code itself; it matters only for skill scripts that shell out to it.
 
@@ -117,22 +130,33 @@ ln -sf ~/claude-config/wordpress-audit.md ~/.claude/commands/wordpress-audit.md
 
 Symlinks are the confirmed fleet convention — the April 2026 rollout converted all local command copies to symlinks pointing at the repo, precisely so `git pull` is the only sync step.
 
-Confirmed 2026-07-24: the runcloud set only. `flatsite.md`, `bricks-css-sweep.md`, `wordpress-local.md` and `business-manager-role-playbook.md` are wired on no server. `wordpress-local.md` is Mac-only by design (LocalWP paths). The other three are candidates that have simply never been deployed — wire them deliberately if you want them, rather than assuming they are already live.
+The runcloud set above is the fleet floor — every box gets it. Beyond that the fleet has **roles, not just drift**. Some boxes carry `flatsite.md` plus Cloudflare / PageSpeed / Google credentials; the Bricks build boxes carry neither and do not need either. A box missing `flatsite.md` is not an incomplete box, it is a box that does not do flatsite work.
 
-## 7. Vendored WP skills
+So: audit the floor, report the role layer. Never "fix" a role difference by wiring a playbook onto a box whose job doesn't call for it — that spreads credential surface for nothing.
 
-Four skills were selected from an external WordPress agent skills repo (reviewed in claude.ai for workflow relevance): wp-performance, wp-plugin-development, wp-rest-api, wp-wpcli-and-ops.
+`wordpress-local.md` is Mac-only by design (LocalWP paths). `bricks-css-sweep.md` and `business-manager-role-playbook.md` are wired on no server as of 2026-07-24 — candidates that have never been deployed, not gaps.
 
-**Vendored into this repo 2026-07-18** and deployed to jbm003 the same day. **Not yet on every box** — devmpdesign had no `~/.claude/skills/` directory at all when checked on 2026-07-24, so treat this step as outstanding on any server you have not verified. Check with `ls -la ~/.claude/skills/` before assuming.
+## 7. Skills
 
-The skills are already vendored into `skills/` in this repo. To deploy on a box, symlink them:
+Five skills live in `skills/`. Four are vendored from an external WordPress agent skills repo (reviewed in claude.ai for workflow relevance): wp-performance, wp-plugin-development, wp-rest-api, wp-wpcli-and-ops. The fifth, `mpd-bricks-stack`, is first-party — authored here, not vendored, and outside the upstream-drift reasoning below.
+
+**Vendored into this repo 2026-07-18** and deployed to jbm003 the same day. devmpdesign had no `~/.claude/skills/` directory when first checked on 2026-07-24 and was wired the same evening. Confirmed complete on jbm003, devmpdesign and mpd2026 as of 2026-07-30 — five links each. Still treat this step as outstanding on any server you have not verified: `mkdir -p` is required, and without it the `ln` below fails outright rather than degrading.
+
+To deploy on a box, symlink all five:
 
 ```bash
 mkdir -p ~/.claude/skills
-ln -sf ~/claude-config/skills/wp-performance ~/.claude/skills/wp-performance
-ln -sf ~/claude-config/skills/wp-plugin-development ~/.claude/skills/wp-plugin-development
-ln -sf ~/claude-config/skills/wp-rest-api ~/.claude/skills/wp-rest-api
-ln -sf ~/claude-config/skills/wp-wpcli-and-ops ~/.claude/skills/wp-wpcli-and-ops
+for s in wp-performance wp-plugin-development wp-rest-api wp-wpcli-and-ops mpd-bricks-stack; do
+  ln -sfn ~/claude-config/skills/"$s" ~/.claude/skills/"$s"
+done
+```
+
+**`-n` is load-bearing.** These targets are directories. If `~/.claude/skills/wp-performance` already exists as a symlink to a directory, plain `ln -sf` dereferences it and creates the new link *inside* it — `~/claude-config/skills/wp-performance/wp-performance`, a self-referential link written into the repo working tree. It doesn't error, it doesn't dangle, and `find -xtype l` won't catch it because it resolves fine. It shows up as untracked repo content on the next `git status`. `ln -sfn` replaces the link instead of following it, which makes this block safe to re-run.
+
+If a box has had `ln -sf` run twice, clean up with:
+
+```bash
+find ~/claude-config/skills -mindepth 2 -maxdepth 2 -type l -delete
 ```
 
 Vendoring (copying into this repo) beats cloning the upstream repo per-server: the upstream was already pruned 17→4, upstream drift is unwanted, and step 0 then keeps the skills current fleet-wide for free.
@@ -141,31 +165,56 @@ Vendoring (copying into this repo) beats cloning the upstream repo per-server: t
 
 ## 8. RunCloud API token
 
-The global CLAUDE.md tells CC to prefer the API over SSH for RunCloud tasks. That requires the token on the box:
+The global CLAUDE.md tells CC to prefer the API over SSH for RunCloud tasks. That requires the token on the box.
+
+The fleet convention is a single file at `~/.runcloud-token` (not a `~/.runcloud/` directory) holding one shell-sourceable line:
+
+```
+export RUNCLOUD_API_TOKEN=<token>
+```
 
 ```bash
-mkdir -p ~/.runcloud
-# place the token so that `cat ~/.runcloud/token` returns it
-chmod 600 ~/.runcloud/token
+chmod 600 ~/.runcloud-token
+set -a; . ~/.runcloud-token; set +a
 ```
+
+Because it is an `export` line, it is sourced rather than `cat`-ed — `cat ~/.runcloud-token` returns the assignment, not a bare token, and anything expecting a bare token will silently send the string `export`. Never echo the value, not even truncated; verify presence by grepping for the variable name (step 9).
+
+**The token is workspace-scoped**, not per-box. It reaches every server in the RunCloud workspace, not just the machine it sits on. Placement is per-box for convenience; blast radius is not. That is the reason for mode 600 and for the `scp`-only transfer rule below.
 
 Transfer the token by `scp` from the Mac — never paste it through a chat session or commit it anywhere in this repo.
 
+Canonical statement of this convention lives in `global-CLAUDE.md` under `## RunCloud API`. If the two ever disagree, that file wins and this one is stale.
+
 ## 9. Verification — the box is ready when all of these pass
+
+**The floor — must pass on every box:**
 
 ```bash
 ssh {alias}                                  # from Mac: no-password login
 ssh -T git@github.com                        # greets by account name (non-zero exit is normal)
-git -C ~/claude-config pull                  # "Already up to date"
+git -C ~/claude-config pull --ff-only        # "Already up to date"
 ls -la ~/.claude/CLAUDE.md                   # symlink → ~/claude-config/global-CLAUDE.md
-ls -la ~/.claude/commands/                   # the wired playbooks, no broken links
-ls -la ~/.claude/skills/                     # the four vendored skills
+ls -la ~/.claude/commands/                   # wordpress-runcloud.md, wordpress-audit.md
+ls -la ~/.claude/skills/                     # all five skills, all symlinks
 gh auth status                               # authenticated
 claude --version                             # native install, auto-updated
-cat ~/.runcloud/token | head -c 8            # token present (first chars only)
-find ~/.claude -xtype l -not -path '*/debug/*'   # prints nothing if no symlink is dangling
+grep -q RUNCLOUD_API_TOKEN ~/.runcloud-token && echo token-present
+stat -c '%a' ~/.runcloud-token               # 600
+ssh {alias} 'claude --version; gh --version' # from Mac: PATH survives a non-login shell
+find ~/.claude -xtype l -not -path '*/debug/*'          # dangling links; prints nothing
+find ~/claude-config/skills -mindepth 2 -maxdepth 2 -type l   # ln -sf nesting; prints nothing
 ```
 
 `~/.claude/debug/latest` is excluded deliberately: it is a CC-internal symlink that dangles routinely between sessions on any box where `claude` has run, so an unfiltered `find` never comes back clean and the check becomes noise.
+
+**The role layer — report, don't remediate:**
+
+```bash
+ls ~/.claude/commands/flatsite.md 2>/dev/null       # flatsite boxes only
+ls ~/.cloudflare* ~/.pagespeed* ~/.google* 2>/dev/null   # credentialed boxes only
+```
+
+Absence here is a role fact, not a finding. Record which boxes are which; do not converge them.
 
 Then the real test: start CC, run `/wordpress-runcloud`, and watch step 0 pull cleanly. If the slash command loads and the webapp listing appears, the box is fleet-standard. First project on the box follows the kickoff protocol in `00` — unharvested-sibling check before the snapshot copy, as always.
