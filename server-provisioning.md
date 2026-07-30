@@ -167,24 +167,32 @@ Vendoring (copying into this repo) beats cloning the upstream repo per-server: t
 
 The global CLAUDE.md tells CC to prefer the API over SSH for RunCloud tasks. That requires the token on the box.
 
-The fleet convention is a single file at `~/.runcloud-token` (not a `~/.runcloud/` directory) holding one shell-sourceable line:
+**There is no single fleet convention. Resolve the path per box; do not assume.** Surveyed across all nine servers 2026-07-30:
 
-```
-export RUNCLOUD_API_TOKEN=<token>
-```
+| layout | boxes |
+|---|---|
+| `~/.runcloud/token` — bare JWT, mode 600 | jbm001, jbm002, jbm003, parkshere2022, vlta0225, mpd2025_01, devmpdesign, client-spade (8) |
+| `~/.runcloud-token` — `export RUNCLOUD_API_TOKEN=` line, mode 600 | mpd2026 (1) |
+
+The bare-JWT layout is the fleet reality. The export form exists on one box, provisioned 2026-07-28. A survey of one box was mistaken for doctrine and written into `global-CLAUDE.md` (`fd68161`) and then into this file (`8ed2ac1`); both were wrong for eight of nine servers. **Convergence is deferred, not decided** — pick a direction in a session dedicated to it, not mid-rollout.
+
+Read it, don't source it:
 
 ```bash
-chmod 600 ~/.runcloud-token
-set -a; . ~/.runcloud-token; set +a
+T=$(tr -d '\n' < ~/.runcloud/token)      # 8 boxes
+# or, where the export form is present:
+set -a; . ~/.runcloud-token; set +a; T="$RUNCLOUD_API_TOKEN"   # mpd2026
 ```
 
-Because it is an `export` line, it is sourced rather than `cat`-ed — `cat ~/.runcloud-token` returns the assignment, not a bare token, and anything expecting a bare token will silently send the string `export`. Never echo the value, not even truncated; verify presence by grepping for the variable name (step 9).
+`cat` on the export file returns the assignment, not a bare token, and anything expecting a bare token silently sends the string `export`. Reading into `$T` fails loudly on a missing file; `source` fails **silently** and leaves whatever was already in the environment — see below.
 
-**The token is workspace-scoped**, not per-box. It reaches every server in the RunCloud workspace, not just the machine it sits on. Placement is per-box for convenience; blast radius is not. That is the reason for mode 600 and for the `scp`-only transfer rule below.
+⚠️ **Never trust a pre-exported `$RUNCLOUD_API_TOKEN`.** jbm003 sources `~/.runcloud-api.env` from `~/.bashrc` line 122, which populates the variable with a stale value in **interactive shells only**. A non-interactive probe returns unset, so the poisoning is invisible to `ssh box 'echo $RUNCLOUD_API_TOKEN'` and live in every CC session. `~/.runcloud-api.env` also exists on jbm001 (299 B, `export` form, not sourced anywhere) and on jbm003 (626 B, comment header) — two different files sharing a name. Always resolve from the file on disk.
 
-Transfer the token by `scp` from the Mac — never paste it through a chat session or commit it anywhere in this repo.
+**A single 401 is not proof of expiry.** Both a valid and a stale token are ~235-char JWTs, so length distinguishes nothing. Before asking Michael to rotate: `sha256sum` each copy present on the box, and `curl` each against the API. A 401 from a stale environment copy while the file on disk is valid is the expected failure here, not an exception.
 
-Canonical statement of this convention lives in `global-CLAUDE.md` under `## RunCloud API`. If the two ever disagree, that file wins and this one is stale.
+At least three distinct token values are in play by size — 235 B (jbm group + parkshere2022), 227 B (vlta0225, mpd2025_01, devmpdesign), 236 B (client-spade). mpd2026's 264 B export file wraps a 235 B token, matching the jbm group. Whether these are workspace-scoped or per-server is unresolved; the earlier "workspace-level, reaches every server" claim is unverified and should not be relied on.
+
+Transfer the token by `scp` from the Mac — never paste it through a chat session, never echo the value, and never commit it anywhere in this repo.
 
 ## 9. Verification — the box is ready when all of these pass
 
@@ -199,8 +207,8 @@ ls -la ~/.claude/commands/                   # wordpress-runcloud.md, wordpress-
 ls -la ~/.claude/skills/                     # all five skills, all symlinks
 gh auth status                               # authenticated
 claude --version                             # native install, auto-updated
-grep -q RUNCLOUD_API_TOKEN ~/.runcloud-token && echo token-present
-stat -c '%a' ~/.runcloud-token               # 600
+ls -l ~/.runcloud/token ~/.runcloud-token 2>/dev/null   # exactly one should exist; mode 600
+stat -c '%a %s %n' ~/.runcloud/token 2>/dev/null        # 600, ~227-236 bytes
 ssh {alias} 'claude --version; gh --version' # from Mac: PATH survives a non-login shell
 find ~/.claude -xtype l -not -path '*/debug/*'          # dangling links; prints nothing
 find ~/claude-config/skills -mindepth 2 -maxdepth 2 -type l   # ln -sf nesting; prints nothing
@@ -213,6 +221,7 @@ find ~/claude-config/skills -mindepth 2 -maxdepth 2 -type l   # ln -sf nesting; 
 ```bash
 ls ~/.claude/commands/flatsite.md 2>/dev/null       # flatsite boxes only
 ls ~/.cloudflare* ~/.pagespeed* ~/.google* 2>/dev/null   # credentialed boxes only
+grep -n runcloud ~/.bashrc ~/.profile 2>/dev/null   # stale-token sourcing; jbm003 line 122
 ```
 
 Absence here is a role fact, not a finding. Record which boxes are which; do not converge them.
