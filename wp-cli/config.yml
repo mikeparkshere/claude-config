@@ -1,0 +1,17 @@
+# Global WP-CLI config.
+#
+# Canonical copy lives here in claude-config; ~/.wp-cli/config.yml is a symlink
+# to this file, so the standard location still works and there is no second copy
+# to drift.
+#
+# local-socket.php makes `wp` work inside Local (by Flywheel) sites, which run
+# MySQL on a per-site unix socket that a Homebrew `wp` knows nothing about.
+# No-op outside a Local site.
+#
+# The path below must be ABSOLUTE. WP-CLI resolves a relative `require` against
+# the current working directory, not against this file, so `local-socket.php`
+# alone breaks the moment you run wp from anywhere else. It fails loudly
+# ("Required file ... doesn't exist"), not silently — but it does fail.
+# Update this path if the home directory or username ever changes.
+require:
+  - /Users/parkshere/claude-config/wp-cli/local-socket.php
