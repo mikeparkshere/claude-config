@@ -123,6 +123,23 @@ The closer is where the workflow compounds. The write protocol below says *what*
 
 The closer is also the exit ramp. At 80% the session is not just due for preservation — it is close to compaction, and compaction evicts the canon along with the discoveries. Once the closer has run and the files are written, do not keep building: `/clear`, then run the opener. Closer → clear → opener is one motion. A session that preserves its learning and then keeps working in a full context has saved the discoveries and sacrificed the golden rule.
 
+### When the closer never ran — reconstructing a dead session
+
+Sometimes a session ends without its closer: it is killed, the box runs out of memory, the connection drops. The next session opens onto work that was done but not written down, and the honest starting question is not "what should I do now" but **"what actually happened, and how much of it was saved?"**
+
+That question is answerable. Four independent sources, none of which depend on the dead session having cooperated:
+
+- **The prior transcript.** Sessions are journalled to `~/.claude/projects/<project-slug>/<session-id>.jsonl`, newest by mtime. It survives the kill, and it is the only source that records *intent* — what was asked, what was concluded, and what the session was in the middle of when it stopped.
+- **Filesystem mtimes.** Plugin and theme directories, config files, and the docs themselves timestamp what was touched and when. `stat -c '%y %n'` across a directory reconstructs the order of operations even when nothing logged it.
+- **The error log.** In-place update windows leave a distinctive signature — missing `vendor/autoload.php`, "class not found", `filemtime()` stat failures — bracketing the exact minutes a directory was being rewritten.
+- **The artifacts themselves.** Read the file the session was supposed to write and check its mtime against the transcript's last entry. A doc written *before* the kill is intact work, not lost work.
+
+**Cross-check them before concluding anything.** They disambiguate each other: a fatal in the log plus a matching directory mtime is a routine update window; the same fatal with no mtime nearby is a live problem. And check whether the dead session was mid-correction — a session that dies is disproportionately likely to have been in the middle of fixing something, because whatever killed it was often the same pressure that produced the error.
+
+**Then verify the saved work rather than trusting it.** A file written before the kill is present, which is not the same as correct.
+
+> **(NLTA, 2026-08-05.)** An update session was killed by memory pressure. The owner's assumption was that nothing had been written. In fact the project `CLAUDE.md` had been saved seven minutes before the kill and was complete and accurate — but the transcript showed the session's final act was an unfinished self-correction, which was the one thing genuinely lost. Reconstructing from mtimes and the error log also surfaced a whole earlier batch of work the session had never documented. The assumption was wrong in both directions at once: more had been saved than expected, and more had been done than was saved.
+
 ---
 
 ## Write protocol
@@ -214,6 +231,29 @@ There are three surfaces for build work. They are complementary, not interchange
 When a WP-CLI edit stalls — Bricks stripping writes, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
 
 The paste-into-Bricks-UI step from the older wireframe workflow is the thing the pipeline is built to eliminate. Default to the WP-CLI build path.
+
+---
+
+## Evidence discipline — a silent result is not a clean result
+
+A command that returns nothing has two readings, and they are opposites:
+
+1. **It ran and found nothing.** The absence is the finding.
+2. **It never ran.** The absence is an artifact of the failure.
+
+Reading 2 looks exactly like reading 1 in the scrollback, and it is the more dangerous of the two, because it converts *no evidence* into *evidence of none* — and that conclusion then gets written into a file that outlives the session. `grep` finding no matches and `grep` being killed by the OOM reaper both print nothing and both exit without fuss.
+
+**The rule: before an empty result becomes a claim, prove the command completed.** Cheap ways, in rough order of preference:
+
+- **Check the exit status**, not just the output. A killed process exits 137 (SIGKILL) or 143 (SIGTERM); `grep` finding nothing exits 1. These are distinguishable.
+- **Make the command say something even when it finds nothing** — count lines, echo the input size, print a sentinel. A run that prints `0` proves it ran; a run that prints nothing proves nothing.
+- **Test the harness on a case you know matches.** If the positive control comes back empty too, the command is broken, not the corpus.
+
+This is the same failure shape as the `wp eval` fatal in `03` (a PHP fatal inside `eval`'d code swallows the output and the writes don't land) — different cause, identical trap. When you catch yourself about to write "there are zero X in the whole Y", that sentence is load-bearing and needs an exit status behind it.
+
+The corollary is about tone, not tooling: **when a prior conclusion turns out to rest on a command that failed, the conclusion is unverified, not merely unlucky.** It may still be true — re-run and find out — but it does not get to keep its confidence in the meantime.
+
+> **(NLTA, 2026-08-05 — first recorded.)** A session searching an error log for one plugin's fatals had its `grep` killed by memory pressure. The empty output was read as clean and the finding "zero references in the whole log" was written into the project `CLAUDE.md`. The session noticed the kill and started to re-run the search — and was itself killed before finishing. The re-run, done the next session, found 23 matching lines. Every one turned out to predate the window in question, so the conclusion held and nothing shipped wrong; the point is that it held **by luck**, and for a day the file carried a claim whose evidence had never existed.
 
 ---
 

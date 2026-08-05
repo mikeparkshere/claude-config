@@ -99,6 +99,31 @@ tail -f /home/runcloud/logs/nginx/[APP_NAME]_error.log
 tail -50 /home/runcloud/logs/apache2/[APP_NAME]_error.log
 ```
 
+### ⚠️ Scope every search to the current log file
+
+That directory holds **rotated** logs alongside the live ones, and they are not small — individual `.log-YYYYMMDD` and `_access.log` files reach hundreds of megabytes. A shared box runs many webapps against finite RAM, so a wildcard search across the directory is a real way to get a command OOM-killed:
+
+```bash
+# DON'T — unbounded, spans every rotated log for every app on the box
+grep -r "pattern" /home/runcloud/logs/apache2/
+
+# DO — one app, current log, and check the size first
+cd /home/runcloud/logs/apache2/
+stat -c '%s %n' [APP_NAME]_error.log
+export LC_ALL=C            # byte-wise matching, materially faster on large files
+grep -ac "pattern" [APP_NAME]_error.log; echo "exit=$?"
+```
+
+Use `-a` (the logs contain binary-looking bytes and `grep` will otherwise report "binary file matches" and print nothing useful), and prefer `-c` first — a count proves the search ran and tells you whether the full output is worth asking for.
+
+**Check the exit status.** A killed `grep` and a `grep` with no matches both print nothing; `137` means the kernel killed it, `1` means it genuinely found nothing. Reporting the second when it was really the first is how a false "the log is clean" gets written into a project file — see `knowledgebase/00-operating-rules.md` → *Evidence discipline*.
+
+To narrow by time before searching content, anchor on the log's date prefix rather than scanning the whole file:
+
+```bash
+grep -a '^\[Wed Aug 05 1[0-9]' [APP_NAME]_error.log | grep -ac "pattern"
+```
+
 ---
 
 ## Development Preferences
