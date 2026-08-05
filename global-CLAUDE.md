@@ -7,10 +7,23 @@ Default to doing the task rather than asking permission for routine choices.
 Skip generic caveats ("be sure to test", "make a backup first"). I know.
 Flag genuine risk; otherwise proceed.
 
+## Scope — which of the below applies where
+This file has two layers, and they travel differently.
+**Stack layer** (Stack, and the build conventions in `mpd-bricks-stack`) — portable. Applies to any
+project on this stack, whoever hosts it.
+**Ops layer** (RunCloud API, Cron, `wordpress-runcloud`) — **specific to the RunCloud-managed
+DigitalOcean fleet.** On a bare, client-owned, or otherwise non-RunCloud box these are *inapplicable*,
+not conventions to be satisfied — there is no panel, no RunCloud API, no fleet cron pattern to match.
+The Cron section in particular describes `jbm001`'s workload, not a rule for every WordPress install.
+⚠️ Added 2026-08-04 after the ops layer was read as universal on a bare dedicated box (Nametank /
+ded3732) and a cron mandate was invented that never existed. When a house convention seems to apply
+to an unfamiliar environment, establish which layer it belongs to first.
+
 ## Stack
 WordPress, Bricks Builder, ACSS v3, ACF Pro (registered via PHP, never UI), 
 WS Forms Pro, RankMath Pro, Perfmatters. Custom plugins, no logic in functions.php.
-Servers: DigitalOcean managed via RunCloud. Dev via VSCode Remote-SSH.
+Servers: DigitalOcean managed via RunCloud — **the default, not the only case**; client-owned and bare
+boxes happen, and the Ops layer above does not follow onto them. Dev via VSCode Remote-SSH.
 
 ## RunCloud API
 Token: `~/.runcloud/token` (mode 600) — a **bare JWT**: no `export`, no trailing newline. `cat` it into a
