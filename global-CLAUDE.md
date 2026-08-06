@@ -31,7 +31,8 @@ boxes happen, and the Ops layer above does not follow onto them. Dev via VSCode 
 `~/.runcloud-token` (the `export RUNCLOUD_API_TOKEN=` form) on mpd2026 only, provisioned 2026-07-28.
 A survey of that one box was mistaken for doctrine and written here in `fd68161`; it was wrong for
 eight of nine servers. **Convergence is deferred, not decided** — pick a direction in a session
-dedicated to it, not mid-rollout. Per-box table + full rationale: `server-provisioning.md` step 8,
+dedicated to it, not mid-rollout. Per-box table + full rationale: `server-provisioning.md` step 8
+(**private repo** `mikeparkshere/server-provisioning` — it is a fleet map, so it is not in this public repo),
 which is authoritative for the layout; keep this section in step with it.
 
 Read it, don't source it — and never echo the value:
