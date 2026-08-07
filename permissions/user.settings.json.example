@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "auto",
+    "deny": [
+      "Read(~/.ssh/id_*)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf /home)",
+      "Bash(rm -rf /home/*/webapps)"
+    ]
+  },
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "REPLACE: describe the fleet in prose. Which hosts, which panel API, which git org, which backup buckets are routine internal infrastructure rather than exfiltration targets.",
+      "REPLACE: name the working paths, e.g. web roots and where site code lives.",
+      "REPLACE: state that WP-CLI against a local site database is routine build work, not a production migration."
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Never echo, print, or write a panel API token value into the transcript, a file, or a commit.",
+      "Never call the hosting panel API with DELETE or any other destructive method.",
+      "Never run a database import or a Duplicator restore without naming the target site first."
+    ]
+  }
+}

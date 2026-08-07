@@ -17,6 +17,12 @@ Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to us
 ```markdown
 ## Hard rules (enforcement layer — full versions live in the knowledgebase)
 
+0. **PHASE: {DEV | STAGING | LIVE}{ | +TXN}.** Read this back at session start
+   before touching anything (`00`, read protocol step 3). DEV: reproducible,
+   sprint. STAGING: irreplaceable client state exists and the client may be
+   looking — stop before the database, plugin/theme deletion, or wp-config.
+   LIVE: start in plan mode, agree the work, then execute. No readable phase
+   means LIVE.
 1. **Golden rule:** never guess a Bricks schema. Not in the `02` library =
    discover via readback of builder-saved output. A guessed key persists in
    the DB and silently strips on next builder load.
@@ -33,9 +39,11 @@ Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to us
 
 ## Current Status
 
-**Phase: {Local | Staging}.** {One paragraph: where the project is — install location, URL, what is built, what is live on staging.}
+**Phase: {DEV | STAGING | LIVE}{+TXN}.** {One paragraph: where the project is — install location, URL, what is built, what is live.}
 
-Per the read protocol in the knowledgebase, the phase is informational. Local means discovery and experimentation are low-stakes. Staging means the project is close to launch — weigh changes accordingly.
+Per the read protocol in `00`, the phase is a **contract, not a note**, and the canonical copy is hard rule 0 at the top of this project's `CLAUDE.md`. This entry is the narrative version; if the two disagree, rule 0 wins and the disagreement gets reported, not silently reconciled. The enforcement layer is `.claude/settings.json` in the project root, installed by `bin/set-phase.sh`.
+
+DEV ends at whichever comes first: real data loading in, or the first client review. Both are the same event — something arrives that the build pipeline cannot regenerate. STAGING runs from there to cutover, which is most of the project's life. `+TXN` marks a site taking payments; it is a permanent property, not a phase, and it composes with all three.
 
 **Stack versions:** WordPress {x}, Bricks {x}, ACSS {x}, {core plugin} v{x}, {child theme} v{x}.
 

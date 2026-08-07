@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "plan",
+    "ask": [
+      "Bash(wp db import *)",
+      "Bash(wp db clean *)",
+      "Bash(wp db query *)",
+      "Bash(wp search-replace *)",
+      "Bash(wp site *)",
+      "Bash(wp plugin *)",
+      "Bash(wp theme *)",
+      "Bash(wp core *)",
+      "Bash(wp rewrite *)",
+      "Bash(wp cron event delete *)",
+      "Bash(mysql *)",
+      "Bash(crontab *)",
+      "Bash(systemctl *)",
+      "Bash(certbot *)",
+      "Edit(**/wp-config.php)",
+      "Edit(**/.htaccess)"
+    ],
+    "deny": [
+      "Bash(wp db drop *)",
+      "Bash(wp db reset *)",
+      "Bash(wp site empty *)",
+      "Bash(wp option update *)",
+      "Bash(wp option delete *)",
+      "Bash(wp user *)",
+      "Bash(wp post delete *)",
+      "Bash(wp wc *)",
+      "Bash(wp action-scheduler *)"
+    ]
+  }
+}

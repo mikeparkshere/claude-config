@@ -68,11 +68,55 @@ At the start of any build session:
 
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
 2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. `03` opens with an **Index** of every entry title — scan that first, then grep the file for the exact title you need. Never read `03` whole: at ~24,000 words it triggers the compaction described above, evicting the very canon that sent you to it. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
-3. **Check the project phase.** Open the project's `project-context.md` and read the Current Status / phase field. Local vs Staging tells you how close to launch the project is. It is informational, not a hard mode switch — it tells you how freely you can experiment. A project in Local is fine for discovery work; a project in Staging is closer to launch, so weigh changes accordingly.
+3. **Read back the project phase.** Phase is not informational and it is not a note. It is the contract that governs how freely you act for the rest of the session, and like a Bricks schema it is discovered, never assumed.
 
-4. **Re-entry.** This protocol is not start-of-session only. It re-runs after any compaction event and after any mid-session `/clear` — a compacted or cleared session is a new session wearing the old one's scrollback. Steps 1–3 in full, no abbreviating on the grounds that "we read it earlier." Earlier is gone; that is what compaction means.
+   Read it from hard rule 0 at the top of the project's `CLAUDE.md` (`grep -m1 '^0\. \*\*PHASE:' CLAUDE.md`). Cross-check `project-context.md` Current Status and the presence of `.claude/settings.json`. Then state the readback before touching anything:
+
+   ```
+   Phase: STAGING · CLAUDE.md rule 0, confirmed by .claude/settings.json
+   Mode:  auto, with ask rules on destructive WP-CLI
+   Contract: I build and edit without asking. I stop before anything that
+             touches the database, deletes plugins or themes, or changes
+             wp-config. The client may be looking at this URL.
+   Confirm or correct.
+   ```
+
+   **If the sources disagree, stop and say which says what.** A phase line reading STAGING with no `.claude/settings.json` on disk means the enforcement layer was never installed, or was installed and lost. That is a drift report, not a thing to resolve silently by picking one.
+
+   **Fail closed. No readable phase means LIVE.** The pre-AI fleet has no `CLAUDE.md` and never will, and those sites carry the most risk per action precisely because there is no project canon to read. An unmarked project is treated as production and the readback says so.
+
+   The three phases, and what actually separates them — not where the code runs, but what a mistake costs and who pays:
+
+   | Phase | What is here | Cost of a bad command |
+   |---|---|---|
+   | **DEV** | Everything is reproducible. Placeholder content, schemas from `02`, templates rebuildable by re-running the same commands. Local install or dev server — the environment is not the axis. | Time you already spent. Yours. |
+   | **STAGING** | Irreplaceable state has arrived: client-entered content, revised copy, hand-tuned builder output that exists nowhere as code. And a second observer who can load the URL unannounced. | The client's time and their confidence. |
+   | **LIVE** | All of the above plus traffic, rankings, and third parties. | The client's revenue. |
+
+   DEV ends at whichever comes first: real data loading in, or the first client review. Both are the same event — something enters the project that the build pipeline cannot regenerate. STAGING is therefore the long middle, most of a project's life, and its brake is deliberately light so it is never worth routing around.
+
+   **`+TXN` is a modifier, not a phase.** A site taking payments is transactional in staging and in production alike; the property is permanent while the phase moves. Write `LIVE+TXN` or `STAGING+TXN`. It composes with the phase, it does not replace it.
+
+   **Phase lives in project files, never in auto-memory.** Auto-memory is per-machine and per-path (see the memory model), and the same project is worked from the Mac and from the box. A phase that lives only in one machine's memory is not a contract.
+
+4. **Re-entry.** This protocol is not start-of-session only. It re-runs after any compaction event and after any mid-session `/clear` — a compacted or cleared session is a new session wearing the old one's scrollback. Steps 1–3 in full, no abbreviating on the grounds that "we read it earlier." Earlier is gone; that is what compaction means. **Step 3 re-runs with the rest, and the readback is restated aloud.** This is what makes the phase gate survive compaction — and it is also why a phase promoted only in conversation is worthless: the classifier re-reads a spoken boundary from the transcript on every check, so compaction eats it, re-entry reads the unchanged file, and the session quietly resumes at the old phase with nobody notified. Promote on disk, in the same turn you say it out loud.
 
 The point of reading `00`/`01`/`02` fully is that there is no separate training step. The canon is the training.
+
+---
+
+## Changing phase mid-session
+
+The two directions are not symmetric, and must not be made symmetric for convenience.
+
+**Promoting tightens (DEV → STAGING → LIVE).** Michael says it, and it takes effect on the next tool call: auto mode's classifier treats a boundary stated in conversation as a block signal and holds it until it is lifted. For an instant hard stop, `Shift+Tab` into plan mode. But spoken is only half the move, because a spoken boundary lives in the fourth layer and evaporates with it. Both halves, same turn:
+
+1. State the boundary back and honor it immediately.
+2. Write it down: hard rule 0 in `CLAUDE.md`, the matching `.claude/settings.json`, and `/permissions` to add the ask rules live so this session is covered too and not only the next one.
+
+`bin/set-phase.sh --set STAGING` does step 2 in one call.
+
+**Demoting loosens (STAGING → DEV), and is never done on a spoken cue.** Editing the file is the mechanism, deliberately. A verbal instruction that removes a brake is exactly the input a long, half-compacted session should not accept, and the thirty seconds it costs is the feature. If Michael asks for a demotion in conversation, say what the file currently reads and ask him to change it.
 
 ---
 
