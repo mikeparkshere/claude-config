@@ -59,6 +59,21 @@ Keep `"$defaults"` at the head of every `autoMode` array. Each array *replaces* 
 unless `$defaults` is present, so a `soft_deny` without it silently discards the built-in blocks
 including `curl | bash` and force-push. Verify with `claude auto-mode config` after any edit.
 
+## Exit codes
+
+`set-phase.sh` in report mode exits **4** when it finds drift, so it works as a pre-flight
+check rather than something you have to grep stdout for:
+
+```bash
+# every marked project on a box, drift only
+find /home/runcloud/webapps -maxdepth 2 -name CLAUDE.md -printf '%h\n' | while read -r d; do
+  ~/claude-config/bin/set-phase.sh --dir "$d" >/dev/null 2>&1 || echo "DRIFT: $d"
+done
+```
+
+`0` clean · `1` missing file or bad template · `2` bad arguments · `3` demotion refused ·
+`4` drift.
+
 ## Backing it out
 
 Nothing here touches a site, database, content, or server config. The gate only restricts what

@@ -11,6 +11,9 @@
 #   0. **PHASE: STAGING.** ...
 # Valid: DEV | STAGING | LIVE, each optionally suffixed +TXN.
 # No readable phase means LIVE. Fail closed, always.
+#
+# Exit codes: 0 clean · 1 missing file or bad template · 2 bad arguments
+#             3 demotion refused · 4 drift detected (report mode only)
 
 set -euo pipefail
 
@@ -37,6 +40,15 @@ read_phase() {
   [ -f "$CLAUDE_MD" ] || { echo ""; return; }
   grep -m1 -oE '^0\. \*\*PHASE: (DEV|STAGING|LIVE)(\+TXN)?\.' "$CLAUDE_MD" 2>/dev/null \
     | sed -E 's/^0\. \*\*PHASE: //; s/\.$//' || echo ""
+}
+
+# Distinguishes the three ways a phase can be unreadable. All fail closed to LIVE,
+# but they send you looking in different places, so the report says which.
+phase_status() {
+  [ -f "$CLAUDE_MD" ] || { echo "NOFILE"; return; }
+  grep -qE '^0\. \*\*PHASE:' "$CLAUDE_MD" 2>/dev/null || { echo "NORULE"; return; }
+  [ -n "$(read_phase)" ] || { echo "BADPHASE"; return; }
+  echo "OK"
 }
 
 src_for() {
@@ -119,26 +131,44 @@ case "$MODE" in
     echo "note     hard rule 0 in CLAUDE.md is left in place; it is inert on its own"
     ;;
   install)
-    P="$(read_phase)"; [ -n "$P" ] || P="LIVE (unmarked, failing closed)"
-    install_settings "${P%% *}"
-    ;;
-  report)
     P="$(read_phase)"
     if [ -z "$P" ]; then
-      echo "Phase:    LIVE  (no hard rule 0 found — failing closed)"
-    else
-      echo "Phase:    $P  (CLAUDE.md rule 0)"
+      echo "no readable phase ($(phase_status)) — installing the LIVE tier, failing closed"
+      P="LIVE"
     fi
+    install_settings "$P"
+    ;;
+  report)
+    ST="$(phase_status)"; P="$(read_phase)"; DRIFT=0
+    case "$ST" in
+      OK)       echo "Phase:    $P  (CLAUDE.md rule 0)" ;;
+      NOFILE)   echo "Phase:    LIVE  (no CLAUDE.md — unmarked project, failing closed)" ;;
+      NORULE)   echo "Phase:    LIVE  (CLAUDE.md present, no hard rule 0 — failing closed)" ;;
+      BADPHASE) echo "Phase:    LIVE  (rule 0 unreadable — failing closed)"
+                echo "          found: $(grep -m1 -E '^0\. \*\*PHASE:' "$CLAUDE_MD" | cut -c1-72)"
+                echo "          valid: DEV | STAGING | LIVE, each optionally +TXN" ;;
+    esac
     EXP="$(src_for "${P:-LIVE}")"
     if [ -n "$EXP" ] && [ -f "$SETTINGS" ]; then
-      if cmp -s "$EXP" "$SETTINGS"; then echo "Gate:     .claude/settings.json matches $(basename "$EXP")"
-      else echo "Gate:     DRIFT — .claude/settings.json differs from $(basename "$EXP")"; fi
+      if cmp -s "$EXP" "$SETTINGS"; then
+        echo "Gate:     .claude/settings.json matches $(basename "$EXP")"
+      else
+        echo "Gate:     DRIFT — .claude/settings.json differs from $(basename "$EXP")"; DRIFT=1
+      fi
     elif [ -n "$EXP" ]; then
-      echo "Gate:     DRIFT — phase expects $(basename "$EXP") but no .claude/settings.json on disk"
+      if [ "$ST" = "OK" ]; then
+        echo "Gate:     DRIFT — rule 0 says $P but no .claude/settings.json on disk"
+        echo "          the install was skipped or lost. --install fixes it."
+      else
+        echo "Gate:     DRIFT — unmarked project with no gate installed"
+        echo "          add rule 0 from the 99 template, or --install to fit the LIVE tier."
+      fi
+      DRIFT=1
     elif [ -f "$SETTINGS" ]; then
-      echo "Gate:     DRIFT — phase is DEV but a project settings file is present"
+      echo "Gate:     DRIFT — phase is DEV but a project settings file is present"; DRIFT=1
     else
       echo "Gate:     none required (DEV)"
     fi
+    [ "$DRIFT" -eq 0 ] || exit 4
     ;;
 esac
