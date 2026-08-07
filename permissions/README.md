@@ -29,7 +29,8 @@ workspace trust dialog. Only `allow` rules and `additionalDirectories` require t
 | Phase | File | Effect |
 |---|---|---|
 | `DEV` | *(none)* | Inherits auto. Sprints. `set-phase.sh` removes any stale file. |
-| `STAGING` / `STAGING+TXN` | `staging.settings.json` | Auto mode, `ask` on twelve destructive WP-CLI forms. |
+| `STAGING` | `staging.settings.json` | Auto mode, `ask` on twelve destructive WP-CLI forms. |
+| `STAGING+TXN` | `staging-txn.settings.json` | As STAGING, plus `deny` on Woo, Action Scheduler and manual cron runs. A staging site pointed at a live gateway can email real customers and fire real webhooks; the scheduler is the thing that does it. |
 | `LIVE` | `live.settings.json` | Starts in **plan mode**. Broad `ask`, `deny` on the three irreversible DB commands. |
 | `LIVE+TXN` | `live-txn.settings.json` | As LIVE, plus `deny` on options, users, posts, Woo and Action Scheduler. |
 

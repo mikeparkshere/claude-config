@@ -54,7 +54,8 @@ phase_status() {
 src_for() {
   case "$1" in
     DEV)                 echo "" ;;
-    STAGING|STAGING+TXN) echo "$REPO/permissions/staging.settings.json" ;;
+    STAGING)             echo "$REPO/permissions/staging.settings.json" ;;
+    STAGING+TXN)         echo "$REPO/permissions/staging-txn.settings.json" ;;
     LIVE)                echo "$REPO/permissions/live.settings.json" ;;
     LIVE+TXN)            echo "$REPO/permissions/live-txn.settings.json" ;;
     *)                   echo "$REPO/permissions/live.settings.json" ;;
@@ -165,7 +166,9 @@ case "$MODE" in
       fi
       DRIFT=1
     elif [ -f "$SETTINGS" ]; then
-      echo "Gate:     DRIFT — phase is DEV but a project settings file is present"; DRIFT=1
+      echo "Gate:     DRIFT — phase is DEV but a project settings file is present"
+      echo "          --install removes it. DEV inherits the user-level baseline."
+      DRIFT=1
     else
       echo "Gate:     none required (DEV)"
     fi
