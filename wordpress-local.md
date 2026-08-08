@@ -1,9 +1,53 @@
+# WordPress on LocalWP
+
+## Step 0 — sync the knowledgebase
+
+    git -C ~/claude-config pull --ff-only
+
+If this fails, stop and report it before doing anything else. A stale knowledgebase produces confident work against rules that have since changed.
+
+## Step 1 — verify the shell
+
+    which php
+
+If the output contains `lightning-services`, this is Local's Site Shell. Continue.
+
+If it returns `/opt/homebrew/bin/php`, `/usr/bin/php`, or anything else, STOP. Do not continue, do not run any `wp` command, and do not install or invoke a different WP-CLI. Say:
+
+> "This session is not in Local's Site Shell — `php` resolves to [path]. WP-CLI here cannot reach the site's database. Open the site in the Local app, click Open Site Shell, run `cd ../..`, and start Claude Code again."
+
+Then wait.
+
+There is a WP-CLI at `/opt/homebrew/bin/wp` on this machine. It runs under Homebrew's PHP and has no route to Local's MySQL socket. It will not fail loudly — it will return empty or misleading results that look like WordPress problems. Never use it for a Local site.
+
+---
+
+## Step 2 — read the knowledgebase
+
+Before answering anything, planning anything, or running any command, list the knowledgebase:
+
+    ls ~/claude-config/knowledgebase/
+
+Read every numbered file it contains, 00 through 04, in order, honoring whatever read protocol 00 defines for each tier.
+
+Then read the project CLAUDE.md if one exists, at the project root or at app/public/wp-content/.
+
+The knowledgebase is the operating authority for this session. Where anything below in this file disagrees with it, the knowledgebase wins.
+
+If context is compacted, or if /clear is used at any point, re-read all of these files before continuing. A session that has lost the knowledgebase will keep working and will sound confident while doing it.
+
+---
+
+## Environment
+
 I'm working on a WordPress site using Local (by Flywheel). The environment is fully configured with WP-CLI available.
 
 CRITICAL - CURRENT SETUP:
 - You are at the PROJECT ROOT: not in the WordPress directory
 - WordPress installation is in: ./app/public/
-- PHP error logs are in: ./logs/php/error.log
+- PHP error logs are in: ./logs/php/error.log — **created lazily, on the first PHP error.** A site
+  that has never errored has no such file. See "Reading the logs" below before concluding anything
+  from an empty grep.
 - To run WP-CLI commands, you MUST EITHER:
   a) cd app/public && wp [command]
   b) Use: (cd app/public && wp [command])
@@ -20,9 +64,11 @@ DIRECTORY STRUCTURE:
 │       ├── wp-config.php
 │       └── ...
 ├── logs/
-│   ├── nginx/
+│   ├── nginx/           # or apache/ — depends on the site's web server
+│   │   └── error.log
 │   └── php/
-│       └── error.log    # PHP errors
+│       ├── php-fpm.log  # always present (FPM start/stop notices)
+│       └── error.log    # PHP errors — ONLY EXISTS ONCE SOMETHING HAS ERRORED
 └── conf/    # Local configuration
 
 WORKING WITH WP-CLI FROM PROJECT ROOT:
@@ -31,8 +77,28 @@ Since we're at project root, use subshell for WP-CLI:
 - (cd app/public && wp cache flush)
 - (cd app/public && wp db query "SELECT * FROM wp_options LIMIT 5")
 
+READING THE LOGS:
+`logs/php/error.log` is created on the first PHP error, so on a clean or freshly-blueprinted site it
+is simply absent. This matters because **`grep` against a path that does not exist prints nothing and
+so does `grep` against a log with no matches** — one means "I could not look", the other means "I
+looked and it is clean", and they are indistinguishable in the scrollback. Establish which you have
+before reporting "no errors":
+
+```bash
+# list what this site actually has, rather than assuming
+find logs -type f ! -name '.DS_Store'
+
+# then read, with existence proven and a count that prints even at zero
+L=logs/php/error.log
+[ -f "$L" ] && { echo "$(wc -l < "$L") lines"; grep -icE 'PHP (Fatal|Parse|Warning)' "$L"; } \
+             || echo "no error.log — nothing has errored yet on this site"
+```
+
+Web-server logs live under `logs/nginx/` **or** `logs/apache/` depending on the site; `apache/` sites
+also carry a `site-error.log`. Do not hardcode either — `find` first.
+
 EXAMPLES:
-# Check logs from project root
+# Check logs from project root (see the caveat above)
 cat logs/php/error.log
 
 # Run WP-CLI from project root
@@ -103,7 +169,7 @@ COMMON WORKFLOWS:
 - WooCommerce customizations: Custom code with hooks/filters
 
 ACF FIELD GROUP TEMPLATE:
-When creating ACF field groups, use this template in functions.php or a custom plugin:
+When creating ACF field groups, use this template in the Site Functionality plugin (inc/acf-fields.php or inc/options-fields.php):
 
 ```php
 add_action( 'acf/include_fields', function() {
