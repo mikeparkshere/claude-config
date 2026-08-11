@@ -61,12 +61,16 @@ html.js-anim .anim-scale-up    { transform: scale(.8); }
 html.js-anim .anim-blur-in     { transform: translateY(12px); filter: blur(8px); }
 
 /* --------------------------------------------------------------------------
-   Revealed state
-   Ungated on purpose: with no gate nothing was hidden, so these are no-ops.
+   Revealed state — MUST carry the same `html.js-anim` prefix as the hidden
+   state. The gate adds `html` + `.js-anim` to the hidden rule, taking it from
+   (0,1,0) to (0,2,1); leaving these at (0,2,0) makes the HIDDEN rule win, so
+   `.anim-visible` does nothing and the content hides the moment the gate class
+   lands and never comes back. Gated, these are (0,3,1) and win correctly.
+   If you ever change the scoping on one block, change it on both.
    `will-change: auto` releases the compositor hint once the element has
    arrived — the original left it promoted for the life of the page.
    -------------------------------------------------------------------------- */
-:is(
+html.js-anim :is(
 	.anim-fade-up,
 	.anim-fade-down,
 	.anim-slide-left,
@@ -76,20 +80,20 @@ html.js-anim .anim-blur-in     { transform: translateY(12px); filter: blur(8px);
 	transform: translateY(0) translateX(0);
 }
 
-.anim-fade-in.anim-visible { opacity: 1; }
+html.js-anim .anim-fade-in.anim-visible { opacity: 1; }
 
-:is(.anim-scale-in, .anim-scale-up).anim-visible {
+html.js-anim :is(.anim-scale-in, .anim-scale-up).anim-visible {
 	opacity: 1;
 	transform: scale(1);
 }
 
-.anim-blur-in.anim-visible {
+html.js-anim .anim-blur-in.anim-visible {
 	opacity: 1;
 	transform: translateY(0);
 	filter: blur(0);
 }
 
-.anim-visible { will-change: auto; }
+html.js-anim .anim-visible { will-change: auto; }
 
 /* --------------------------------------------------------------------------
    Stagger
