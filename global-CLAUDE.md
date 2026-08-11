@@ -73,6 +73,23 @@ Use the API first for any RunCloud task. SSH only for files or things the API do
 `/rewrite`, `/rewrites`) all 404, and `/webapps/{w}/settings` answers `OPTIONS` with `GET,HEAD` — it is
 read-only despite a body that lists `disableFunctions`, `memoryLimit`, `openBasedir` and the security
 toggles as if they were writable.
+✅ **But READ it — that body carries the PHP-FPM process-manager config, and it is the fastest way to
+diagnose 502/504s on any box.** `GET /webapps/{w}/settings` returns `processManager`,
+`processManagerStartServers`, `processManagerMinSpareServers`, `processManagerMaxSpareServers`,
+**`processManagerMaxChildren`**, `processManagerMaxRequests` and `memoryLimit`. The pool conf itself
+lives in `/etc/php8*rc/fpm.d/`, which is **root-only and unreadable as `runcloud`** — so without this
+endpoint FPM tuning looks un-inspectable from a normal session. It isn't.
+**RunCloud's stock default is `dynamic` / maxChildren 5 / start 1 / minSpare 1 / maxSpare 1 on every
+webapp**, and it is easy to never notice it has not been tuned. Found 2026-08-11: a box where every
+webapp still carried that default, ~64 MB measured per worker, and the **five-worker ceiling** was the
+best explanation for months of intermittent 504s across several sites — while the box had most of its
+RAM free the entire time. **Worker starvation reads exactly like RAM starvation and takes the opposite
+fix; check `maxChildren` before ever recommending a resize.** `maxSpare: 1` compounds it — FPM keeps one
+idle worker, so every burst starts cold. Note the failure tracks *concurrency*, not request volume: a
+tight burst exhausts a 5-worker pool while many times that number spread over hours does nothing, so a
+volume-vs-errors correlation will look like noise and can wrongly exonerate the pool.
+Confirm with FPM's own `server reached pm.max_children setting` log line (root-only). Changing the
+values is panel-only — webapp → Settings; the form mirrors these field names one-to-one.
 ⚠️ **Before booking panel time for a server-level directive, check the webapp's `stack`.** A `hybrid`
 webapp is nginx → Apache → FPM and **honours `.htaccess`**, so Apache directives work with no root, no
 sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
