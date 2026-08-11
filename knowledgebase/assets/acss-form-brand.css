@@ -70,8 +70,17 @@
 
 	--f-light-btn-text-color:       var(--white);
 	--f-light-btn-text-color-hover: var(--white);
-	/* Button background and hover already default to --primary /
-	   --primary-hover; the required marker already defaults to --action. */
+
+	/* The primary button's BORDER is a separate token from its fill, and
+	   --btn-border-width is 2px by default — so changing only the background
+	   leaves a 2px ring in the old colour. Pin them together, in every state.
+	   (ACSS couples border to background for the secondary / next / prev /
+	   save / reset / clear roles. Primary is the one it decouples.) */
+	--f-light-btn-background:         var(--primary);
+	--f-light-btn-border-color:       var(--primary);
+	--f-light-btn-background-hover:   var(--primary-hover);
+	--f-light-btn-border-color-hover: var(--primary-hover);
+	/* The required marker already defaults to --action. */
 
 	/* --- DARK: forms on a dark section -------------------------------- */
 	/* ACSS's dark default fills the input with --neutral-dark. Against a deep
@@ -103,11 +112,17 @@
 	/* Submit on a dark section: the button's own text can pass 4.5:1 while its
 	   FILL fails 3:1 against the section behind it — the boundary is a separate
 	   check and is the one people miss. Inverting (light fill, dark label) is
-	   usually the cleanest fix. */
-	--f-dark-btn-background:       var(--white);
-	--f-dark-btn-text-color:       var(--secondary);
-	--f-dark-btn-background-hover: var(--base-ultra-light);
-	--f-dark-btn-text-color-hover: var(--secondary);
+	   usually the cleanest fix.
+
+	   And measure the BORDER, not the fill — at 2px it is the outermost edge,
+	   so it is what actually meets the section. Recolouring the fill alone
+	   leaves the old border colour doing the boundary check for you. */
+	--f-dark-btn-background:         var(--white);
+	--f-dark-btn-border-color:       var(--white);
+	--f-dark-btn-text-color:         var(--secondary);
+	--f-dark-btn-background-hover:   var(--base-ultra-light);
+	--f-dark-btn-border-color-hover: var(--base-ultra-light);
+	--f-dark-btn-text-color-hover:   var(--secondary);
 }
 
 /* The one surface ACSS's form layer does not reach is font family — it sets
@@ -127,9 +142,13 @@
 
      1. Input border vs BOTH surfaces it touches — its own fill and the page
         behind it. 3:1, SC 1.4.11. ACSS's light default fails this on white.
-     2. Submit FILL vs the section behind it, as well as its text. 3:1 and
-        4.5:1 are separate checks; a button can pass the second and fail the
-        first, which is what happens to a mid-brand-blue button on navy.
+     2. Submit BORDER vs the section behind it, as well as its text. Measure
+        the border, not the fill: it defaults to 2px and is the outermost
+        edge, so it is what meets the section. It is also a separate token
+        from the background, so a recoloured button keeps its old ring and
+        the boundary check silently reverts. 3:1 and 4.5:1 are separate
+        checks — a button can pass its text and fail its edge, which is what
+        happens to a mid-brand-blue button on navy.
      3. Focus ring vs every surface a form sits on. ACSS's dark default is the
         light-surface brand colour and commonly fails on a dark band.
      4. Required marker on a dark surface — same failure, same cause.
