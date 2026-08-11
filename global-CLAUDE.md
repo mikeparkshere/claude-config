@@ -55,12 +55,34 @@ distinguishes nothing. Before asking Michael to rotate: `sha256sum` each copy pr
 `curl` each against the API. A 401 from a stale environment copy while the file on disk is valid is the
 expected failure here, not an exception — that is exactly the jbm003 result on 2026-08-04 (disk token
 `200`, env-file token `401`). Normal state, not a fault.
-Whether tokens are workspace-scoped or per-server is **unresolved** — the earlier "workspace-level,
-reaches every server" claim is unverified; don't rely on it. Treat blast radius as unknown: mode 600,
-`scp` from the Mac only, never pasted through a chat session, never committed.
+**But tokens do expire, and then the 401 is real.** 2026-08-11: a box's `~/.runcloud/token` returned 401,
+and it was the *only* copy present — the two alternate paths absent, `~/.env` carrying none — so no
+stale-copy explanation was available. Rotated at manage.runcloud.io → Settings → API Key; the
+replacement verified `200`. The rule above is unchanged: enumerate every copy *first*. It is the
+**absence** of a second copy that makes a single 401 conclusive, not the 401 itself.
+**Token scope is workspace-level — resolved 2026-08-11.** A token read from one box's
+`~/.runcloud/token` returned **every server in the workspace**, not just its own. The earlier
+"workspace-level, reaches every server" claim was right and is now verified rather than assumed.
+**Blast radius is fleet-wide** — one leaked token is every server, not one box: mode 600, `scp` from the
+Mac only, never pasted through a chat session, never committed.
 Base: `https://manage.runcloud.io/api/v3`
 Auth: `Authorization: Bearer $T` (the token you resolved from a file above — not the exported var)
 Use the API first for any RunCloud task. SSH only for files or things the API doesn't expose.
+**The API cannot set nginx config** — probed 2026-08-11, nine plausible paths (`/settings/nginx`,
+`/nginx`, `/nginxconfig`, `/nginx-config`, `/settings/nginx-config`, `/customconfig`, `/custom-config`,
+`/rewrite`, `/rewrites`) all 404, and `/webapps/{w}/settings` answers `OPTIONS` with `GET,HEAD` — it is
+read-only despite a body that lists `disableFunctions`, `memoryLimit`, `openBasedir` and the security
+toggles as if they were writable.
+⚠️ **Before booking panel time for a server-level directive, check the webapp's `stack`.** A `hybrid`
+webapp is nginx → Apache → FPM and **honours `.htaccess`**, so Apache directives work with no root, no
+sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
+miss because the boxes read as nginx-only. Prove it in a scratch dir before relying on it (drop a
+`<FilesMatch>` deny, curl the file, expect 200 → 403), put the block **after `# END WordPress`** on WP
+sites since WP overwrites its own markers, and verify with `?cb=$RANDOM` — `x-runcloud-cache` serves
+pre-change copies and will show a 200 over a rule that is already working, while Cloudflare reports
+`DYNAMIC` and looks innocent. A security rule "verified" without a cache-buster can be recorded as fixed
+over a still-live exposure. A belief that `.htaccess` was inert here had already cost one project a PHP
+redirect layer it never needed.
 
 ## Cron (server jbm001, all 11 webapps)
 WP-Cron disabled site-side (`DISABLE_WP_CRON=true` in every wp-config.php). Driven by the
