@@ -69,6 +69,14 @@
 	--f-light-input-text-color-hover:       var(--base);
 	--f-light-input-placeholder-color:       var(--neutral);
 	--f-light-input-placeholder-color-hover: var(--neutral);
+
+	/* ⚠️ ACSS renders ::placeholder at `opacity: 0.5`. Opacity is a separate
+	   property from colour, so the token you set composites against the field
+	   fill before anyone sees it — a mid neutral at 50% on white lands around
+	   2:1 while DevTools still reports the token value and every contrast sum
+	   done from that token says it passes. Take it to 1 and control legibility
+	   through the colour, which is the only value a contrast check can see. */
+	--f-light-input-placeholder-opacity: 1;
 	--f-light-label-text-color:         var(--base);
 	--f-light-legend-text-color:        var(--base);
 	--f-light-help-text-color:          var(--neutral);
@@ -104,6 +112,7 @@
 	--f-dark-input-text-color-hover:        var(--base);
 	--f-dark-input-placeholder-color:       var(--neutral);
 	--f-dark-input-placeholder-color-hover: var(--neutral);
+	--f-dark-input-placeholder-opacity:     1;   /* see the light block — 0.5 default */
 	--f-dark-input-border-color:            transparent;
 	--f-dark-input-border-color-hover:      transparent;
 
@@ -166,7 +175,15 @@
      5. Placeholder vs the field fill, in both contexts. It flips with the
         context class, so it needs checking twice.
      6. Label and help text vs the section surface, in both contexts.
-     7. Every check above, in the HOVER state as well as the base state.
+     7. OPACITY, before you trust any of the numbers above. A contrast sum
+        done from a colour token is only valid if that colour reaches the
+        screen undiluted. ACSS renders ::placeholder at opacity 0.5, which
+        composites it against the field fill and can turn a 5.4:1 token into
+        2.1:1 on screen. Nothing in DevTools' computed `color` shows this —
+        it reports the token. Grep the cascade for `opacity` on any element
+        you have colour-checked, and set it to 1 rather than compensating
+        with a darker token.
+     8. Every check above, in the HOVER state as well as the base state.
         Background, text, placeholder and border each have an independent
         `-hover` token, so a control can be compliant at rest and illegible
         on hover. Build the matrix — context × state × role — and resolve it
