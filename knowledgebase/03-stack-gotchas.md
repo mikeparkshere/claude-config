@@ -260,6 +260,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
 - `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 - `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
+- WP-CLI `--prompt` ECHOES the resolved command line, secret included, to stdout — use `wp eval` + file read for secrets
 
 **Diagnostic patterns**
 
@@ -1988,6 +1989,12 @@ Bricks' sanitizer still runs on the upload. To add the icon to a custom set, app
 **Why:** RunCloud's bundled wp-cli phar `EvalFile_Command` strips the opening tag and `eval()`s the source. Some file contents trip a silent bailout in that eval path (mechanism unconfirmed — the failing file had a large HTML nowdoc with UTF-8 en dashes and a ~300-line element-tree array; a sibling script of similar size/shape ran fine). Truncated versions of the same file DO report parse errors, so the eval path can error loudly — this failure mode is specifically silent.
 **Fix:** Run the identical file as `wp eval 'include "/path/to/build-x.php";'` — `include` compiles it as a normal PHP file and it executes correctly. Cheap habit: if an eval-file script produces no output where output is expected, don't debug the script first — rerun via include.
 **First seen:** Highland, 2026-07-11 — the Request-an-Estimate page build script; identical file ran perfectly via include on the first try.
+
+### WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
+**Symptom / When:** Feeding a password via `--prompt=admin_password < passfile` precisely to keep it off the command line — and wp-cli prints the fully resolved command (`--admin_password='…'` and all) to stdout, straight into logs and transcripts.
+**Why:** `--prompt` is an interactive convenience, not a secrecy feature; it reprints the command it assembled before running it.
+**Fix:** Keep secrets inside PHP where argv and stdout never see them: `wp eval 'wp_set_password(trim(file_get_contents("<mode-600 path>")), <user_id>);'`. Same pattern for any secret-bearing op — read from a restricted file inside the eval'd code. If a secret does get echoed, rotate it immediately; the echoed value is already in scrollback.
+**First seen:** 2026-08-11.
 
 
 ## Diagnostic patterns

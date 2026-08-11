@@ -66,12 +66,49 @@ Required: `provider`/`enableHttp`/`enableHsts`, plus `authorizationMethod` and `
 **Symptom / When:** You want to change `memory_limit` / `post_max_size` / `upload_max_filesize` / `processManager` / `openBasedir` / `disableFunctions` / timezone via the API, and nothing works.
 **Why:** `/webapps/{w}/settings`, `/settings/fpm`, `/settings/runtime`, `/settings/security` are all **GET-only** (verified via OPTIONS). `PATCH /settings/php` exists but changes only the PHP **version** — passing runtime values there returns the misleading "The selected PHP version is already active."
 **Fix:** Set them in the create payload, or change them in the RunCloud UI. There is no API path post-create. Plan the create payload accordingly — retrofitting means the UI.
-**First seen:** 2026-07-14.
+⚠️ **Reads must be server-scoped**: `GET /servers/{s}/webapps/{w}/settings`. The bare `/webapps/{w}/settings` form returns `{"message":"Not found"}` — which reads like the endpoint doesn't exist at all. (Same body is the FPM-tuning diagnostic: `processManagerMaxChildren` et al.)
+**First seen:** 2026-07-14; path scoping 2026-08-11.
 
 ### RunCloud API — `user` on create takes a numeric `system_user_id`; deleting a webapp CASCADES to its database
 **Symptom / When:** Two unrelated create/delete traps. (1) `"user": "runcloud"` on webapp create → `422 "Invalid system user id."` (2) `DELETE /servers/{s}/webapps/{w}` silently takes the associated MariaDB database with it — the DB 404s immediately after.
 **Fix:** (1) Pull the numeric ID by listing existing webapps on the destination server — they share a `server_user_id`. (2) Know the cascade before deleting; no separate DB DELETE is needed, and there's no confirmation that it's about to happen. DB *users* may persist — check `/databaseusers` if cleanup matters.
 **First seen:** 2026-07-14, verified across two migrations.
+
+### RunCloud API — webapp CREATE is a typed endpoint (`/webapps/custom`), not the collection route
+**Symptom / When:** `POST /servers/{s}/webapps` with a fully valid payload → "The POST method is not supported for this route. Supported methods: GET, HEAD."
+**Why:** Creation is typed per app kind: `POST /servers/{s}/webapps/custom` and `…/webapps/wordpress` both exist (OPTIONS answers `GET,HEAD,POST,DELETE`). The collection route is list-only.
+**Fix:** POST the create payload to `/webapps/custom`. The FPM process-manager fields (`processManager`, `processManagerMaxChildren`, `processManagerStartServers`, …) belong in this payload — creation is the only API moment they can ever be set (see the runtime-settings entry above). Verified: values apply exactly, including below-stock ones, and `ps`-visible worker counts match. Response carries `pullKey1/2`; the numeric suffix of `pullKey1` is the creation timestamp, handy for fleet-convention DB names.
+**First seen:** 2026-08-11.
+
+### RunCloud API — DB user grant is `POST /databases/{id}/grant` with `{"id": <dbUserId>}`
+**Symptom / When:** DB and DB user create fine via API, but attaching the user fails: `/attachuser`, `/users`, `/attach` all exist and answer GET — and reject POST.
+**Why:** GET-only routes here are decoys, not near-misses. The real route is `POST /servers/{s}/databases/{dbId}/grant`, and its body field is just `id` (the database-user id) — the descriptive guess `{"databaseUserId": …}` returns "The id field is required."
+**Fix:** `POST /databases {"name"}` → `POST /databaseusers {"username","password","verifyPassword"}` → `POST /databases/{dbId}/grant {"id": <userId>}`. Probe unknown routes with OPTIONS before guessing payloads.
+**First seen:** 2026-08-11.
+
+### RunCloud — a new webapp ships an `index.html` that SHADOWS your `index.php`
+**Symptom / When:** WordPress installed cleanly (wp-cli happy, `wp-login.php` reachable) but the front page serves RunCloud's "Welcome to RunCloud" placeholder.
+**Why:** Webapp creation drops a default `index.html` in the web root and the server prefers it over `index.php`. `wp core download` doesn't remove it, and both pages return 200, so status-code checks pass.
+**Fix:** Delete `index.html` after installing, then verify the rendered `<title>` over HTTP with a cache-buster — never the status code alone.
+**First seen:** 2026-08-11.
+
+### RunCloud hybrid — a staging basic-auth gate in `.htaccess`, and the two exemptions it MUST carry
+**Symptom / When:** A basic-auth-gated staging vhost; weeks later the LE cert fails to renew, and/or WP's pseudo-cron never fires — both silently.
+**Why:** Two *background* requests traverse the public edge and eat the 401 like any stranger: the ACME http-01 challenge (`/.well-known/acme-challenge/…`) at renewal time (~day 60), and WordPress's pseudo-cron loopback to `/wp-cron.php` — it resolves the site's public URL, so it leaves the box (through the CDN if proxied) and returns as an anonymous request.
+**Fix:** htpasswd ships at `/RunCloud/Packages/apache2-rc/bin/htpasswd` (`apache2-rc`, **not** `httpd-rc`; use `-B -i` for bcrypt read from stdin). Gate with exemptions:
+```apache
+SetEnvIf Request_URI "^/\.well-known/acme-challenge/" auth_exempt
+SetEnvIf Request_URI "^/wp-cron\.php$" auth_exempt
+AuthType Basic
+AuthName "Staging"
+AuthUserFile /home/<user>/.htpasswd-<app>
+<RequireAny>
+  Require env auth_exempt
+  Require valid-user
+</RequireAny>
+```
+Verify all four states with cache-busters: bare → 401, creds → 200, an ACME probe path → **404** (the origin answering; a 401 means the exemption failed), `/wp-cron.php` → 200. The same two exemptions apply to ANY edge gate — Cloudflare Access needs them as Bypass policies.
+**First seen:** 2026-08-11.
 
 ### RunCloud hybrid — PHP `error_log()` lands in the apache2 dir; there is NO app-local logs dir
 **Symptom / When:** You go looking for `webapps/<app>/logs/` and it doesn't exist. Docs (including older project notes) that reference one are simply wrong, so you conclude logging is broken.
