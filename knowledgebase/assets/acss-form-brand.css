@@ -24,13 +24,13 @@
    Form's stock skin. Every form needs one. Both classes are registered as
    Bricks global classes by the ACSS import, so they are already in the picker.
 
-   ⚠️ ACSS 3.3.6 BUG — five size tokens carry a BARE custom-property name as
-   their fallback instead of a var() call:
-       font-size: var(--f-input-size, --text-m)
-   With the token unset the declaration computes to an invalid value and is
-   dropped, so the control silently inherits its size rather than taking the
-   type scale. Set all five explicitly. Do not delete them assuming the
-   defaults work.
+   NOTE — five size tokens carry a malformed fallback, `font-size:
+   var(--f-input-size, --text-m)`, where the fallback is a bare custom-property
+   name rather than a var() call. It is LATENT, not live: ACSS declares all
+   five at :root in automatic.css, so the fallback branch is never reached.
+   Setting them below is belt-and-braces, not a fix. (A malformed fallback is
+   only a bug if the fallback is reachable — check for a declaration before
+   calling it one.)
 
    VERIFY VISUALLY. WS Form builds its fields client-side from a JSON blob, so
    curl returns an empty <form> and proves nothing about the rendered result.
