@@ -47,6 +47,34 @@ Templates in particular: give every styled element a template-specific class eve
 
 ---
 
+## Skinning third-party UI — bridge the token tier, never the component tier
+
+Before writing a single rule against a plugin's own classes, find out whether it exposes a **variable tier**. Modern form and UI plugins increasingly do, and the ones that do usually declare their internals at **zero specificity on purpose** — `:where(...)` — precisely so that author overrides win without a fight.
+
+Where a token tier exists, the convention is: **remap its roots to project tokens in one block, and let the plugin's own derivation repaint everything downstream.** Do not restyle its components.
+
+This is the same move as overriding an ACSS token rather than fighting an `automatic-bricks.css` rule (`03`): override what a rule *consumes*, not the rule. Here it is stronger still, because the plugin's component layer is usually generated — a colour ramp built with `color-mix()` off a handful of semantic roots. Change a root and every derived shade recomputes itself, because `var()` resolves against the element's computed value.
+
+**Find the tier before writing anything:**
+
+```bash
+curl -s <url> | grep -oE '\-\-<prefix>-[a-z0-9-]+\s*:' | sort -u
+# then read the compiled stylesheet to see WHICH selector declares them —
+# that tells you the specificity you have to beat, which is often zero
+```
+
+**Why component rules are the wrong layer**, even when they work: plugin stylesheets frequently enqueue *after* the theme, so equal specificity loses on source order and every override escalates. Hand-written component skins also accumulate dead selectors against class names that were guessed and never existed. A root remap is a dozen declarations that survive the plugin's own updates.
+
+**The two-context pattern.** A form or widget that appears on both light and dark sections needs a light default plus a dark override, opted into with a **generic wrapper class** (`wsform-dark`), never a project BEM class — scoping the bridge to one layout is what stops it being reusable. In the dark block, flip only what renders *outside* the control and pin the control's interior. Remapping the plugin's "base" colour wholesale is the classic error: base usually feeds the field text as well as the labels, so the input text goes light on a light fill and vanishes.
+
+**Guard the semantic tier.** A governance-minimal palette (above) enables only the colour slots the brand uses, so `--danger` / `--success` / `--warning` / `--info` may not exist on a given project. Reference them with a fallback — `var(--danger, #bb0000)` — or a bridge copied from a project with more slots enabled will emit dangling vars that fail silently.
+
+**Starting artifact:** `knowledgebase/assets/ws-form-bridge.css` — the WS Form bridge, with the two-context pattern, the token-fallback guards, and a contrast checklist worth running against any skinned UI. Copy it into the child theme and change only the token names. Extend it from a real build rather than writing blind: it covers the field types that have actually been verified, and choice/file/date fields have their own tiers and their own traps (`03`).
+
+Mechanism, incident and the real class names: `03` → *"WS Form — skin it by overriding root `--wsf-form-*` vars"*.
+
+---
+
 ## Layout structure
 
 Every section follows one nesting pattern:

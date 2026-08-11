@@ -1,0 +1,185 @@
+/* =========================================================================
+   WS Form → ACSS brand bridge
+   Starting artifact. Copy into the child theme `style.css` (or its own file)
+   and change only the token names on the right-hand side.
+
+   WHY THIS IS A BRIDGE AND NOT A SKIN
+   WS Form's Styler compiles ~800 component variables, all derived from about
+   ten semantic roots via var() and color-mix(). Every one of those component
+   declarations lives in a single `:where([data-wsf-style-id="N"])` block —
+   ZERO specificity, deliberately, so that author overrides win. A plain
+   `.wsf-form { }` at (0,1,0) beats all of them with no !important and no
+   source-order fight, even though WS Form's per-field-type stylesheets
+   enqueue after the theme.
+
+   So: remap the roots, let the derivation do the work, and reshade later by
+   editing your tokens. Do NOT write rules against `.wsf-field` / `.wsf-label`
+   — that fights a system built to be driven from the roots, and several of
+   the class names people reach for do not exist. Mechanism, incident and the
+   full list of real class names: `03` → "WS Form — skin it by overriding root
+   `--wsf-form-*` vars".
+
+   VERIFIED SCOPE
+   These declarations are verified against text, email, tel, textarea and
+   submit. Select, checkbox, radio, file and date pickers have their own
+   variable tiers and their own traps (`03`: the native checkbox IS the styled
+   box). Extend this file from a real build when a project needs them — do not
+   write them blind.
+
+   TOKEN ASSUMPTIONS
+   Only ACSS tokens present on any install are referenced unguarded:
+   --base, --white, --primary, --neutral, --radius, --btn-radius,
+   --text-m/-s/-l, --space-s, --heading-font-family, --text-font-family.
+   The semantic tier (--danger/--success/--warning/--info) is NOT guaranteed:
+   a governance-minimal palette enables only the slots the brand uses, and
+   referencing a slot that was never enabled produces a dangling var that
+   fails silently. Those four therefore carry WS Form's own defaults as
+   fallbacks. Replace a fallback with a bare token only once you have
+   confirmed the slot is enabled on that project.
+   ========================================================================= */
+
+/* === LIGHT — the default. Forms on white / paper / cream surfaces. ======= */
+.wsf-form {
+	/* --- the ten semantic roots ------------------------------------------ */
+	--wsf-form-color-base:          var(--base);    /* labels, help, legend, field text */
+	--wsf-form-color-base-contrast: var(--white);   /* field fill AND text on a filled button */
+	--wsf-form-color-primary:       var(--primary); /* submit fill, focus border */
+	--wsf-form-color-accent:        var(--primary); /* checked states */
+	--wsf-form-color-secondary:     var(--neutral);
+	--wsf-form-color-neutral:       var(--neutral); /* placeholders, disabled fills */
+
+	/* Semantic tier — see TOKEN ASSUMPTIONS. Fallbacks are WS Form's stock. */
+	--wsf-form-color-danger:  var(--danger,  #bb0000);
+	--wsf-form-color-success: var(--success, #2e8540);
+	--wsf-form-color-warning: var(--warning, #fdb81e);
+	--wsf-form-color-info:    var(--info,    #02bfe7);
+
+	/* --- type ------------------------------------------------------------ */
+	--wsf-form-font-family:     var(--text-font-family);
+	--wsf-form-font-size:       var(--text-m);
+	--wsf-form-font-size-small: var(--text-s);
+	--wsf-form-font-size-large: var(--text-l);
+	--wsf-form-grid-gap:        var(--space-s);
+
+	/* --- fields ---------------------------------------------------------- */
+	/* Border defaults to --wsf-form-color-base, i.e. body ink — far too heavy
+	   on an input. Whatever you choose must clear 3:1 (SC 1.4.11) against BOTH
+	   the field fill and the page behind it. A hairline/divider token is
+	   usually far too light: check it, do not assume. */
+	--wsf-field-border-color:       var(--neutral);
+	--wsf-field-border-radius:      var(--btn-radius);
+	--wsf-field-padding-vertical:   0.7rem;  /* lifts the control past 44px — SC 2.5.8 */
+	--wsf-field-padding-horizontal: 0.9rem;
+
+	/* FOCUS — pick ONE of the two blocks below. See the note at the foot of
+	   this file; this is the one unresolved fork between implementations. */
+
+	/* (a) Border-only. Use when ACSS's global focus system is configured, so
+	       that ACSS draws the ring and WS Form must not draw a second one. */
+	--wsf-field-box-shadow-width-focus: 0;
+	--wsf-field-border-color-focus:     var(--primary);
+
+	/* (b) WS Form draws the ring itself. Use when ACSS's focus system is not
+	       configured, or when WS Form suppresses the outline on inputs.
+	--wsf-field-box-shadow-width-focus: var(--focus-width, 3px);
+	--wsf-field-box-shadow-color-focus: var(--primary);
+	--wsf-field-border-color-focus:     var(--primary);
+	*/
+
+	--wsf-field-label-font-weight: 600;
+	--wsf-field-label-gap:         6px;
+
+	/* --- submit ---------------------------------------------------------- */
+	--wsf-field-button-font-family:   var(--heading-font-family);
+	--wsf-field-button-font-weight:   700;
+	--wsf-field-button-border-radius: var(--btn-radius);
+
+	/* Pin the hover rather than leaving it to color-mix's auto -dark-20, which
+	   lands near the brand hover but is not the locked value. */
+	--wsf-field-button-primary-color-background-hover: var(--primary-hover);
+	--wsf-field-button-primary-border-color-hover:     var(--primary-hover);
+
+	/* Width: WS Form ships 100%. Set `auto` if full-width submits are wrong
+	   for the project's general forms; the dark block below re-fills narrow
+	   columns.
+	--wsf-field-button-width: auto;
+	*/
+}
+
+/* The required asterisk has no variable — this is the one component rule the
+   bridge legitimately needs. */
+.wsf-form .wsf-required { color: var(--danger, #bb0000); }
+
+
+/* === DARK — forms on a dark section. Opt in per form. ====================
+   Add `wsform-dark` to the form's wrapper element (the Bricks shortcode /
+   WS Form element, or any ancestor). A generic hook, deliberately: scoping
+   this to a project BEM class couples the bridge to one layout.
+
+   The field itself stays a LIGHT surface on a dark section — that is the
+   point. So do not remap --wsf-form-color-base wholesale here: it feeds the
+   field text as well as the labels, and white field text on a white fill is
+   invisible. Flip the outward-facing text, and pin the field interior.
+   ======================================================================== */
+.wsform-dark .wsf-form {
+	/* outward-facing text, on the dark surface */
+	--wsf-field-label-color:           var(--white);
+	--wsf-field-help-color:            var(--white);
+	--wsf-field-fieldset-legend-color: var(--white);
+	--wsf-field-message-color:         var(--white);
+
+	/* field interior — pinned, so it survives any root remap above */
+	--wsf-field-color:              var(--base);
+	--wsf-field-color-background:   var(--white);
+	--wsf-field-color-placeholder:  var(--neutral);
+
+	/* Field border on a dark section: the light fill alone usually separates
+	   the control from the background well past 3:1, so a mid-tone border is
+	   decorative here and often FAILS 3:1 against the dark surface while
+	   passing against the fill. Measure both edges. `transparent` — letting
+	   the fill be the boundary — is frequently the right answer. */
+	--wsf-field-border-color: transparent;
+
+	/* The brand focus colour is usually tuned for light surfaces and fails on
+	   a dark one. Most brand guides specify white here; check the ratio. */
+	--focus-color: var(--white);
+
+	/* Submit: some brands change the button colour entirely on dark, not just
+	   its text. Both the fill and its text may need remapping — a fill that
+	   passes with white text on light can fail on dark, and vice versa.
+	--wsf-form-color-primary:                          var(--accent);
+	--wsf-field-button-primary-color:                  var(--primary);
+	--wsf-field-button-primary-color-hover:            var(--primary);
+	--wsf-field-button-primary-color-background:       var(--accent);
+	--wsf-field-button-primary-color-background-hover: var(--accent-hover);
+	--wsf-field-button-primary-border-color:           var(--accent);
+	--wsf-field-button-primary-border-color-hover:     var(--accent-hover);
+	*/
+
+	--wsf-field-button-width: 100%;  /* narrow columns — usually a footer */
+}
+
+
+/* =========================================================================
+   CONTRAST CHECKLIST — compute these, do not eyeball them.
+   The ratios are per-brand and do not travel; the list does. Every one of
+   these has failed on a real build.
+
+     1. Field border vs BOTH surfaces it touches — the fill and the page
+        behind it. 3:1, SC 1.4.11. This is the one that fails silently.
+     2. Focus ring vs every surface a form sits on, dark ones especially.
+        3:1. A brand focus colour tuned for white commonly fails on navy.
+     3. Placeholder vs field fill. It derives from `neutral`, NOT `base` —
+        map `neutral` to a hairline token and placeholders disappear.
+     4. Submit fill with its text, AND the hover state. The hover is the one
+        people forget; an auto-lightened hover can drop below 4.5:1 while
+        the base state passes.
+     5. Label / help text vs the section surface, in every context.
+
+   UNRESOLVED FORK — focus, blocks (a) vs (b) above.
+   One project suppresses WS Form's ring and lets ACSS draw the focus outline;
+   another lets WS Form draw a 3px ring. Both ship. Nobody has checked whether
+   the second double-rings, which turns on whether ACSS's :focus-visible
+   outline actually reaches an input WS Form may have set `outline: none` on.
+   Testable in a browser in about a minute. Resolve it and delete the loser.
+   ========================================================================= */
