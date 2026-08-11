@@ -57,6 +57,8 @@ Where ACSS covers it, **brand through `--f-*` and put the context class on the w
 
 ⚠️ **A form wrapper with neither context class gets none of it** and renders the plugin's stock skin. Every form needs one.
 
+⚠️ **The context class describes the FORM, not the section behind it.** `.form--dark` means a dark form — dark fills, light text. A white-fielded form sitting on a navy band is still a *light* form and takes `.form--light`, with only the label/legend/help text — which render outside the field, on the dark surface — overridden. Choose by the class's own defaults, not by the background: pick the opposite and you spend the build overriding them back one token at a time, since every state (background, text, placeholder, border, and their hover twins) is an independent token that surfaces separately. That reads as the framework fighting you and is not.
+
 **2. Only where ACSS does not cover it, bridge the plugin's token tier.** Find out whether the plugin exposes variables of its own before writing a single rule against its classes. Modern UI plugins increasingly do, and the ones that do usually declare their internals at **zero specificity on purpose** — `:where(...)` — precisely so author overrides win without a fight.
 
 ```bash

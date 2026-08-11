@@ -99,51 +99,46 @@
 	--f-light-btn-border-color-hover: var(--primary-hover);
 	/* The required marker already defaults to --action. */
 
-	/* --- DARK: forms on a dark section -------------------------------- */
-	/* ACSS's dark default fills the input with --neutral-dark. Against a deep
-	   brand navy that can land near 1.3:1 — the field all but vanishes. A
-	   light fill inverts it and makes the fill itself the boundary, at which
-	   point the border is redundant and the text must flip back to dark.
-	   Measure before choosing; on a lighter dark surface the default may be
-	   fine and this whole block unnecessary. */
-	--f-dark-input-background:              var(--white);
-	--f-dark-input-color-background-hover:  var(--white);
-	--f-dark-input-text-color:              var(--base);
-	--f-dark-input-text-color-hover:        var(--base);
-	--f-dark-input-placeholder-color:       var(--neutral);
-	--f-dark-input-placeholder-color-hover: var(--neutral);
-	--f-dark-input-placeholder-opacity:     1;   /* see the light block — 0.5 default */
-	--f-dark-input-border-color:            transparent;
-	--f-dark-input-border-color-hover:      transparent;
-
-	--f-dark-label-text-color:  var(--white);
-	--f-dark-legend-text-color: var(--white);
-	/* --f-dark-help-text-color left at ACSS's --neutral-light: it usually
-	   passes on a dark surface, and help reading a shade quieter than the
-	   label is correct. Check it rather than overriding reflexively. */
-
-	/* Both dark defaults are brand colours chosen for LIGHT surfaces — focus
-	   falls back to --primary and the required marker to --action, and both
-	   routinely fail 3:1 against a deep navy. Most brand guides specify white
-	   on dark; confirm against yours. */
-	--f-dark-focus-color:    var(--white);
-	--f-dark-required-color: var(--white);
-
-	/* Submit on a dark section: the button's own text can pass 4.5:1 while its
-	   FILL fails 3:1 against the section behind it — the boundary is a separate
-	   check and is the one people miss. Inverting (light fill, dark label) is
-	   usually the cleanest fix.
-
-	   And measure the BORDER, not the fill — at 2px it is the outermost edge,
-	   so it is what actually meets the section. Recolouring the fill alone
-	   leaves the old border colour doing the boundary check for you. */
-	--f-dark-btn-background:         var(--white);
-	--f-dark-btn-border-color:       var(--white);
-	--f-dark-btn-text-color:         var(--secondary);
-	--f-dark-btn-background-hover:   var(--base-ultra-light);
-	--f-dark-btn-border-color-hover: var(--base-ultra-light);
-	--f-dark-btn-text-color-hover:   var(--secondary);
 }
+
+/* === A LIGHT FORM ON A DARK SECTION =====================================
+   ⚠️ THE CONTEXT CLASS DESCRIBES THE FORM, NOT THE SECTION BEHIND IT.
+   `.form--dark` means a DARK form — dark fills, light text. A white-fielded
+   form sitting on a navy band is still a LIGHT form: it takes `.form--light`.
+
+   Get this backwards and you spend the build overriding ACSS's dark defaults
+   back to light one token at a time — fill, then hover fill, then placeholder,
+   then hover placeholder, then border, then the button — each surfacing
+   separately, because every state is its own token. That is not the framework
+   being awkward. It is a class being asked to render its own opposite.
+
+   With the right class the field needs nothing at all: `.form--light` already
+   gives a light fill with dark text and a dark placeholder. Only what renders
+   OUTSIDE the field, directly on the dark section, has to change. Put these on
+   your own wrapper class, applied alongside `form--light`: */
+.form-on-dark {
+	--f-light-label-text-color:  var(--white);
+	--f-light-legend-text-color: var(--white);
+	--f-light-help-text-color:   var(--white);
+
+	/* The submit too: a mid brand colour picked against a light page will
+	   usually fail 3:1 against a dark section even while its own label passes
+	   4.5:1 — the fill and the label are separate checks. Border tracks fill;
+	   it is a separate token, 2px, and the outermost edge. */
+	--f-light-btn-background:         var(--tint-on-dark);
+	--f-light-btn-border-color:       var(--tint-on-dark);
+	--f-light-btn-text-color:         var(--dark-surface);
+	--f-light-btn-background-hover:   var(--white);
+	--f-light-btn-border-color-hover: var(--white);
+	--f-light-btn-text-color-hover:   var(--dark-surface);
+}
+
+/* `.form--dark` is for a genuinely dark form — dark fill, light text on it. If
+   that is the design, brand the --f-dark-* tier the same way, remembering that
+   its focus colour and required marker default to light-surface brand colours
+   and routinely fail 3:1 on a deep background. Just do not reach for the class
+   because the section is dark. */
+
 
 /* The one surface ACSS's form layer does not reach is font family — it sets
    font-family only on radio and checkbox labels, so WS Form's own family
