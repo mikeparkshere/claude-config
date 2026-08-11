@@ -55,11 +55,20 @@
 	/* ACSS defaults the border to --neutral-light. Check it: on white that is
 	   commonly around 1.4:1 and fails SC 1.4.11's 3:1 for a control boundary.
 	   The mid neutral usually clears it comfortably. */
-	--f-light-input-border-color:       var(--neutral);
-	--f-light-input-border-color-hover: var(--neutral);
-	--f-light-input-text-color:         var(--base);
-	--f-light-input-text-color-hover:   var(--base);
-	--f-light-input-placeholder-color:  var(--neutral);
+	/* ⚠️ EVERY STATE IS ITS OWN TOKEN, AND THEY DEFAULT INDEPENDENTLY.
+	   Background, text, placeholder and border each have a `-hover` twin that
+	   falls back to an ACSS default chosen for a different surface. Set a base
+	   and skip its twin and the control changes out from under its own colours
+	   on hover — which is how you get text on a background nobody checked it
+	   against. Pin the whole set, both states. */
+	--f-light-input-background:             var(--white);
+	--f-light-input-color-background-hover: var(--white);
+	--f-light-input-border-color:           var(--neutral);
+	--f-light-input-border-color-hover:     var(--neutral);
+	--f-light-input-text-color:             var(--base);
+	--f-light-input-text-color-hover:       var(--base);
+	--f-light-input-placeholder-color:       var(--neutral);
+	--f-light-input-placeholder-color-hover: var(--neutral);
 	--f-light-label-text-color:         var(--base);
 	--f-light-legend-text-color:        var(--base);
 	--f-light-help-text-color:          var(--neutral);
@@ -89,12 +98,14 @@
 	   point the border is redundant and the text must flip back to dark.
 	   Measure before choosing; on a lighter dark surface the default may be
 	   fine and this whole block unnecessary. */
-	--f-dark-input-background:         var(--white);
-	--f-dark-input-text-color:         var(--base);
-	--f-dark-input-text-color-hover:   var(--base);
-	--f-dark-input-placeholder-color:  var(--neutral);
-	--f-dark-input-border-color:       transparent;
-	--f-dark-input-border-color-hover: transparent;
+	--f-dark-input-background:              var(--white);
+	--f-dark-input-color-background-hover:  var(--white);
+	--f-dark-input-text-color:              var(--base);
+	--f-dark-input-text-color-hover:        var(--base);
+	--f-dark-input-placeholder-color:       var(--neutral);
+	--f-dark-input-placeholder-color-hover: var(--neutral);
+	--f-dark-input-border-color:            transparent;
+	--f-dark-input-border-color-hover:      transparent;
 
 	--f-dark-label-text-color:  var(--white);
 	--f-dark-legend-text-color: var(--white);
@@ -155,4 +166,9 @@
      5. Placeholder vs the field fill, in both contexts. It flips with the
         context class, so it needs checking twice.
      6. Label and help text vs the section surface, in both contexts.
+     7. Every check above, in the HOVER state as well as the base state.
+        Background, text, placeholder and border each have an independent
+        `-hover` token, so a control can be compliant at rest and illegible
+        on hover. Build the matrix — context × state × role — and resolve it
+        from the SERVED stylesheet, not from what you think you set.
    ========================================================================= */
