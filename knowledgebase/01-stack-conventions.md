@@ -81,6 +81,22 @@ Mechanism, incident and the real class names: `03` → *"WS Form — skin it by 
 
 ---
 
+## Motion — the animation toolkit
+
+Scroll reveal on this stack is the in-house toolkit, **not** Bricks' or Advanced Themer's animation systems: ~8 KB, dependency-free, and the same polish without the weight. Files and the full guide: `knowledgebase/assets/animations/`.
+
+**Copy from the knowledgebase, never from another project.** The framework circulated for months in a pre-hardening state — its own review had listed the fixes and they were never folded back — so each project that copied a sibling inherited the same defects. The hardened build is the one in `assets/`.
+
+**The builder guard is two-tier and the tiers are not interchangeable.** General child-theme CSS skips only the builder *panel* (`! bricks_is_builder_main()`), because brand tokens and signature devices need to render in the canvas. The animation layer skips *every* builder context, because its hidden state is `opacity: 0` and would blank the canvas. Collapsing them either way breaks something: tighten the first and the canvas loses its tokens; loosen the second and it goes blank.
+
+**Anything whose resting state is invisible needs a fail-safe gate.** The hidden state is scoped under a class set by an inline `<head>` script, so no-JS means nothing is hidden. This generalises past animation: any technique that hides content and reveals it with script must fail open, or a script failure becomes invisible content for users and crawlers alike.
+
+**Anything applied by JS needs an RUCSS exclusion.** Used-CSS tooling cannot see a class that only ever appears at runtime, strips the rule, and leaves the content hidden for good. Same failure as the gate, arriving from the other direction.
+
+**Restraint is the brand.** One reveal per section; stagger for card grids; never on header, nav, sticky elements, footer utility rows, form fields or anything above the fold. Roll out template-by-template so a vocabulary mistake surfaces on one page.
+
+---
+
 ## Layout structure
 
 Every section follows one nesting pattern:

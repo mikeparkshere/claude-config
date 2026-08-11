@@ -1,0 +1,164 @@
+/* ==========================================================================
+   Animation Toolkit — scroll reveal
+   Hardened + tokenised from the MPD framework (the MPD framework folder).
+
+   FAIL-SAFE GATE. Every hidden state is scoped under `html.js-anim`, a class
+   set by an inline <head> script before first paint. No JS — because it
+   failed, was deferred badly, or an optimiser stripped it — means no class,
+   which means nothing is ever hidden. The unhardened framework set
+   `opacity: 0` unconditionally, so a JS failure made the content invisible to
+   users and crawlers permanently.
+
+   BUILDER. This file is not enqueued inside Bricks at all (see functions.php),
+   so `opacity: 0` can never blank the canvas.
+
+   TUNING. Retune motion through the tokens below rather than editing rules.
+   The modifier classes set the same tokens, which is why none of them need
+   `!important` — the original fought its own base rule with six of them.
+
+   ⚠️ RUCSS. These rules are applied by JS, so Remove-Unused-CSS treats them as
+   unused and strips them, leaving content permanently hidden. Exclude this
+   file when Perfmatters is switched on at launch.
+   ========================================================================== */
+
+:root {
+	--anim-duration:     .6s;
+	--anim-delay:        0ms;
+	--anim-easing:       cubic-bezier(.25, .46, .45, .94);
+	--anim-travel:       28px;   /* fade-up / fade-down */
+	--anim-travel-x:     40px;   /* slide-left / slide-right */
+	--anim-stagger-step: 80ms;
+}
+
+/* --------------------------------------------------------------------------
+   Base hidden state — gated
+   -------------------------------------------------------------------------- */
+html.js-anim :is(
+	.anim-fade-up,
+	.anim-fade-in,
+	.anim-fade-down,
+	.anim-slide-left,
+	.anim-slide-right,
+	.anim-scale-in,
+	.anim-scale-up,
+	.anim-blur-in
+) {
+	opacity: 0;
+	transition-property: opacity, transform, filter;
+	transition-duration: var(--anim-duration);
+	transition-delay: var(--anim-delay);
+	transition-timing-function: var(--anim-easing);
+	will-change: opacity, transform;
+}
+
+html.js-anim .anim-fade-up     { transform: translateY(var(--anim-travel)); }
+html.js-anim .anim-fade-in     { transform: none; }
+html.js-anim .anim-fade-down   { transform: translateY(calc(var(--anim-travel) * -1)); }
+html.js-anim .anim-slide-left  { transform: translateX(var(--anim-travel-x)); }
+html.js-anim .anim-slide-right { transform: translateX(calc(var(--anim-travel-x) * -1)); }
+html.js-anim .anim-scale-in    { transform: scale(.92); }
+html.js-anim .anim-scale-up    { transform: scale(.8); }
+html.js-anim .anim-blur-in     { transform: translateY(12px); filter: blur(8px); }
+
+/* --------------------------------------------------------------------------
+   Revealed state
+   Ungated on purpose: with no gate nothing was hidden, so these are no-ops.
+   `will-change: auto` releases the compositor hint once the element has
+   arrived — the original left it promoted for the life of the page.
+   -------------------------------------------------------------------------- */
+:is(
+	.anim-fade-up,
+	.anim-fade-down,
+	.anim-slide-left,
+	.anim-slide-right
+).anim-visible {
+	opacity: 1;
+	transform: translateY(0) translateX(0);
+}
+
+.anim-fade-in.anim-visible { opacity: 1; }
+
+:is(.anim-scale-in, .anim-scale-up).anim-visible {
+	opacity: 1;
+	transform: scale(1);
+}
+
+.anim-blur-in.anim-visible {
+	opacity: 1;
+	transform: translateY(0);
+	filter: blur(0);
+}
+
+.anim-visible { will-change: auto; }
+
+/* --------------------------------------------------------------------------
+   Stagger
+   One set of rules for all three speeds: the container sets the step token.
+   The original repeated 36 near-identical declarations to say this.
+   -------------------------------------------------------------------------- */
+.anim-stagger-tight { --anim-stagger-step: 50ms; }
+.anim-stagger-wide  { --anim-stagger-step: 120ms; }
+
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(1)  { --anim-delay: 0ms; }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(2)  { --anim-delay: calc(var(--anim-stagger-step) * 1); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(3)  { --anim-delay: calc(var(--anim-stagger-step) * 2); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(4)  { --anim-delay: calc(var(--anim-stagger-step) * 3); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(5)  { --anim-delay: calc(var(--anim-stagger-step) * 4); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(6)  { --anim-delay: calc(var(--anim-stagger-step) * 5); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(7)  { --anim-delay: calc(var(--anim-stagger-step) * 6); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(8)  { --anim-delay: calc(var(--anim-stagger-step) * 7); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(9)  { --anim-delay: calc(var(--anim-stagger-step) * 8); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(10) { --anim-delay: calc(var(--anim-stagger-step) * 9); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(11) { --anim-delay: calc(var(--anim-stagger-step) * 10); }
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(12) { --anim-delay: calc(var(--anim-stagger-step) * 11); }
+
+/* --------------------------------------------------------------------------
+   Modifiers
+   All set tokens rather than properties, so no `!important` is needed. The
+   duration and easing modifiers sit at (0,1,0) on the same element as the base
+   rule and simply retarget the variable it reads.
+
+   The delay modifiers are doubled (`.anim-delay-1.anim-delay-1`, specificity
+   (0,2,0)) so an explicit delay still beats a stagger container's computed
+   one, which is (0,2,0) via `> :nth-child()`. Same outcome the original got
+   with `!important`, without poisoning the property for later overrides.
+   -------------------------------------------------------------------------- */
+.anim-fast { --anim-duration: .3s; }
+.anim-slow { --anim-duration: .8s; }
+
+.anim-delay-1.anim-delay-1 { --anim-delay: 100ms; }
+.anim-delay-2.anim-delay-2 { --anim-delay: 200ms; }
+.anim-delay-3.anim-delay-3 { --anim-delay: 300ms; }
+.anim-delay-4.anim-delay-4 { --anim-delay: 400ms; }
+.anim-delay-5.anim-delay-5 { --anim-delay: 500ms; }
+
+.anim-ease-smooth { --anim-easing: cubic-bezier(.16, 1, .3, 1); }
+.anim-ease-spring { --anim-easing: cubic-bezier(.34, 1.56, .64, 1); }
+.anim-ease-bounce { --anim-easing: cubic-bezier(.68, -.55, .27, 1.55); }
+
+/* --------------------------------------------------------------------------
+   Reduced motion — everything arrives instantly, nothing moves.
+   Belt and braces: the JS also skips the observers and reveals immediately.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+	html.js-anim :is(
+		.anim-fade-up,
+		.anim-fade-in,
+		.anim-fade-down,
+		.anim-slide-left,
+		.anim-slide-right,
+		.anim-scale-in,
+		.anim-scale-up,
+		.anim-blur-in
+	) {
+		opacity: 1;
+		transform: none;
+		filter: none;
+		transition: none;
+		will-change: auto;
+	}
+
+	:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > * {
+		--anim-delay: 0ms;
+	}
+}
