@@ -25,7 +25,28 @@ This is the same stack shipped on KSCBS (`kscbs-functionality` core plugin). It'
 | Core plugin | Project has a dedicated functionality plugin (`<prefix>-functionality`) with `inc/` includes — never functions.php |
 | Blog | Standard `post` type; client manages posts |
 
-If the site has **no blog**, drop the `post`/`upload_files`/`manage_categories` caps and the related dashboard cards.
+If the site has **no blog**, drop the `post`/`upload_files`/`manage_categories` caps and the related dashboard cards — **but check the CPTs first.**
+
+⚠️ **A CPT registered `capability_type => 'post'` (the WordPress default) makes the blog caps load-bearing.** Such a CPT gets no capability set of its own; it *maps onto* the post caps. So `edit_posts`/`publish_posts` grant **the CPT**, not a blog, and the presence or absence of a blog is irrelevant to whether they are needed. Following the "no blog → drop the caps" line literally on a brochure site whose content is a CPT ships a client login that can edit **nothing** — which is most brochure sites on this stack. Check before pruning:
+
+```bash
+wp eval 'foreach (["project"] as $t){ $o=get_post_type_object($t);
+  printf("%s capability_type=%s\n", $t, is_array($o->capability_type)?implode("/",$o->capability_type):$o->capability_type); }'
+```
+
+If any CPT maps onto the post caps, **keep the caps and hide the empty Posts/Comments menus instead** (plus an `admin_init` redirect so the bare `edit.php` URL can't be reached directly):
+
+```php
+add_action( 'admin_menu', function () {
+    if ( ! prefix_is_business_manager() ) return;
+    remove_menu_page( 'edit.php' );          // empty Posts menu
+    remove_menu_page( 'edit-comments.php' );
+}, 9999 );
+```
+
+Related: **do not reach for `manage_categories` to let the client assign terms.** `current_user_can('assign_terms')` is a false negative — `assign_terms` is a meta capability that each taxonomy maps to a real one (by default `edit_posts`), while manage/edit/delete map to `manage_categories`. Granting it hands over term *deletion*. Resolve through the taxonomy object instead: `current_user_can( get_taxonomy('t')->cap->assign_terms )`.
+
+*Amended at the Highland harvest, 2026-08-11 — Highland has 0 posts and no posts page, but `project` is `capability_type => 'post'`, so the original instruction would have shipped a client login with no editable content. Found 2026-08-04 during that build and flagged rather than edited mid-build.*
 
 ---
 

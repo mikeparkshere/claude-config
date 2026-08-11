@@ -114,19 +114,31 @@ Required: `provider`/`enableHttp`/`enableHsts`, plus `authorizationMethod` and `
 **Fix:** Confirm Universal SSL is **Active** (dashboard → SSL/TLS → Edge Certificates) before flipping to proxied, or canary on `www` first. **Correct sequence with origin-cert-via-LE:** point apex **grey** → issue LE at the origin → confirm origin https → *only then* flip to orange + SSL Full (strict). Verify the proxied result with `--resolve` to a CF anycast IP (`server: cloudflare` + `cf-ray` present).
 **First seen:** TAB, 2026-06-27 — held the orange flip until Universal SSL was dashboard-confirmed; the scoped token couldn't read cert_packs.
 
+### Cloudflare injects a managed `robots.txt` that blocks every AI crawler — default-ON for new zones
+**Symptom / When:** Post-migration, `robots.txt` contains a `# BEGIN Cloudflare Managed content` block with `Content-Signal: search=yes,ai-train=no,use=reference` and a flat `Disallow: /` for `ClaudeBot`, `GPTBot`, `Google-Extended`, `Applebot-Extended`, `CCBot`, `Bytespider`, `Amazonbot` and `meta-externalagent` — none of which anyone configured. It is prepended **above** the SEO plugin's own rules.
+**Why:** It is a Cloudflare zone-level default on newly created zones, injected at the edge. Nothing in WordPress produces it and nothing in WordPress can remove it. **Ordinary search is unaffected** — `Googlebot` is a separate agent and stays allowed, and `Google-Extended` governs only AI training/grounding — so this is not an SEO regression. It matters when the site deliberately publishes structured data (`FAQPage`, `Service`, `LocalBusiness`) *for* answer engines, which is now the main reason to publish FAQ schema at all since FAQ rich results were restricted to government/health sites in 2023.
+**Fix:** Confirm it is edge-side, not origin-side, with a byte diff — this takes one command and rules out the whole WordPress layer:
+```bash
+curl -s --resolve dom:443:<ORIGIN_IP>     https://dom/robots.txt | wc -c   # e.g. 133
+curl -s --resolve dom:443:<CF_ANYCAST_IP> https://dom/robots.txt | wc -c   # e.g. 1969
+```
+Then disable it in the **Cloudflare dashboard** (it has shipped under both *Security → Settings* and *AI Crawl Control*; the label moves). ⚠️ **A DNS+ZoneSettings-scoped token cannot reach the control** — `/bot_management`, `/managed_headers` and `/rulesets` all return **403**, while `/managed_robots_txt`, `/ai_crawl_control` and `/content_signals` return **400 "could not route"** (they do not exist under those names), and it is absent from all 56 zone settings. Do not burn time probing for an endpoint; it is a dashboard toggle or a broader token. Verify after: the edge byte count should drop to match origin exactly, with no `BEGIN Cloudflare Managed content` marker.
+**First seen:** Highland, 2026-08-04 — found during the post-cutover verification sweep. Directly contradicted the documented reason for publishing `FAQPage` on that build. Disabled; edge went 1969 → 133 bytes, byte-identical to origin.
+
+
 ## Cutover
 
-### Verifying a cutover *from the origin box itself* — the box's own DNS cache still points at the OLD origin
-**Symptom / When:** Post-cutover, `curl https://thedomain/` **from the migrated box** returns the OLD site (stale content, old headers), while real users and `dig @8.8.8.8` show the new origin. Leads to hours chasing a phantom "stale cache" (FastCGI? Cloudflare?) that does not exist.
-**Why:** During cutover the box queried the apex while it still pointed at the old IP, and cached that (systemd-resolved / the record's TTL). Bare `curl` from the box keeps hitting the old origin until the cache expires. **Nothing to do with any page cache** — which is exactly why it burns so much time.
+### Verifying a cutover *from ANY box that resolved the domain before the flip* — its DNS cache still points at the OLD origin
+**Symptom / When:** Post-cutover, `curl https://thedomain/` returns the OLD site (stale content, old headers), while real users and `dig @8.8.8.8` show the new origin. Leads to hours chasing a phantom "stale cache" (FastCGI? Cloudflare?) that does not exist. **This fires from any box that resolved the domain before the flip — not only the migrated origin box.** That includes the staging/admin box you are running the cutover *from*, which is not the new origin at all.
+**Why:** During cutover the box queried the apex while it still pointed at the old IP, and cached that (systemd-resolved / the record's TTL). Bare `curl` from that box keeps hitting the old origin until the cache expires. **Nothing to do with any page cache** — which is exactly why it burns so much time. ⚠️ Do not read this as "I'm not on the origin box, so bare curl is safe here" — the mechanism is the resolver, and it is indifferent to which box you are on.
 **Fix:** Never trust bare `curl` from the box during a cutover.
 ```bash
 curl --resolve domain:443:<NEW_ORIGIN_IP> https://domain/   # the new origin directly
 curl --resolve domain:443:<CF_ANYCAST_IP> https://domain/   # the public/edge path
 getent hosts domain                                          # what the box actually resolves
 ```
-`resolvectl flush-caches` clears it, but `--resolve` is the reliable habit. Note the inverse also matters post-launch: once the cache clears, bare curl becomes trustworthy again — re-verify rather than carrying the workaround forever.
-**First seen:** TAB, 2026-06-27 — a long false-alarm "RunCloud/Cloudflare is serving a stale homepage" investigation; the box's resolver simply still pointed the apex at the old box.
+`resolvectl flush-caches` clears it, but `--resolve` is the reliable habit — use it for **every** cutover verification regardless of which box you are on. Note the inverse also matters post-launch: once the cache clears, bare curl becomes trustworthy again — re-verify rather than carrying the workaround forever.
+**First seen:** TAB, 2026-06-27 — a long false-alarm "RunCloud/Cloudflare is serving a stale homepage" investigation; the box's resolver simply still pointed the apex at the old box. **Highland, 2026-08-04** — same trap from a *third* box: immediately after the flip, a bare `curl` from jbm003 (staging, neither old nor new origin) returned `server: Squarespace` with the departing host's July LE cert while the edge was already serving the new site correctly. Believing it would have triggered a rollback of a cutover that had already succeeded. Folded at the Highland harvest with the framing broadened from "the origin box" to "any box".
 
 ### Verify a served static asset via its `?ver=` URL — the BARE file URL is served from a stale static cache
 **Symptom / When:** You edit the child theme `style.css`, `curl` the plain file URL to verify, and get the OLD content — even though the on-disk file is correct and the page itself shows the new styling.
@@ -138,6 +150,41 @@ getent hosts domain                                          # what the box actu
 **Symptom / When:** Post-migration, automatic subscription renewals are created but never charged; the gateway is never called.
 **Why / Fix:** WCS's duplicate-site guard still points at the pre-migration URL, so production is treated as a clone. Full mechanism, the CLI fix and the verification step: `03` → **WooCommerce** → "the staging-site lock silently SKIPS all automatic renewals after a Local→production migration". **Belongs on the deploy checklist for any migration carrying subscriptions.**
 **First seen:** VMG, 2026-06-07 — cross-referenced here at the 2026-07-15 harvest because the trigger is the cutover, while the mechanism is WCS's.
+
+### `google-site-verification` TXT records must be carried into the new DNS zone — and they may not be Search Console at all
+**Symptom / When:** Planning a platform migration (Squarespace/Wix/Shopify → WordPress) where DNS moves to a new provider. The apex carries one or more `google-site-verification=…` TXT records, often several, and often nobody at the client remembers creating them. The temptation is to drop them and "start fresh".
+**Why:** Two separate things get conflated. (1) `google-site-verification` is **not Search Console-exclusive** — the same record type backs Google Workspace, Google Ads, Merchant Center, and can back a Business Profile. A client who "doesn't know what Search Console is" may still have a record that is load-bearing for their email or their GBP. (2) The *history* argument for keeping them is **false**: Google collects Search Console data whether or not anyone has verified, and verifying a property surfaces up to **16 months** of backfilled performance data. Un-verifying revokes a *person's access*; it does not delete Google's data.
+**Fix:** Copy every existing TXT record into the new zone verbatim at cutover — three strings cost nothing, and a blind deletion during the riskiest hour of a migration is expensive to diagnose. Then verify your **own** new `sc-domain:` Domain property (covers http/https and www/non-www in one), add the client as an owner so it is their asset, and only then identify the legacy records from *inside* Search Console (Settings → Users and permissions) before pruning. A DNS record alone tells you nothing about what it belongs to or who holds it.
+```bash
+dig +short TXT example.com | grep google-site-verification
+```
+**First seen:** Highland, 2026-08-04 — three verification records on the apex, client unfamiliar with Search Console, and no way to attribute them from DNS. An earlier note in this project's docs claimed dropping them would destroy the site's search history; that was wrong and was corrected on the spot.
+
+
+### A crawl only finds what is still linked — platform sitemaps under-report, and legacy URLs need analytics
+**Symptom / When:** Building the 301 map for a migration. You pull the old site's `sitemap.xml`, get a handful of URLs, and assume that is the site. Post-launch, 404s appear for pages nobody knew existed.
+**Why:** Hosted-platform sitemaps list current, published, navigation-reachable pages. They omit orphaned pages, old campaign landing pages, and anything unlinked but still indexed — precisely the URLs that carry inbound links and still receive traffic. A crawl inherits the same blind spot: it can only follow links that exist today.
+**Fix:** Three sources, not one. (1) The platform sitemap. (2) A depth-limited crawl from the homepage to catch what the sitemap omits. (3) **Search Console / analytics top-pages export**, which is the only source that surfaces URLs nothing links to any more. Do (3) *before* DNS moves, while access still exists. Also check which paths the new CMS already canonicalises — WordPress 301s a missing trailing slash natively, so `/about` → `/about/` needs no rule, and writing one only masks a future slug change.
+**First seen:** Highland, 2026-08-04 — the Squarespace `sitemap.xml` listed 4 URLs; a crawl found 6; only 3 needed rules, because WordPress already handled the slash-only differences. Analytics-sourced legacy URLs were flagged as the remaining gap.
+
+
+### The departing host's HSTS header dictates your cutover order — check it BEFORE planning one
+**Symptom / When:** Planning a platform migration where the new origin has no TLS certificate yet. The obvious order is: flip DNS → run Let's Encrypt HTTP-01 → done, accepting "a few minutes of 404s". In practice returning visitors get a **full-page certificate interstitial** for the whole window, and there is no http fallback to soften it.
+**Why:** Three facts compound. (1) **LE HTTP-01 cannot validate until DNS already points at the new box**, so the cert can never be pre-issued on that method — DNS genuinely must move first. (2) A RunCloud webapp with no SSL has **no HTTPS vhost**, so every `https://` request falls through to the catch-all (which answers **200** with "Website Unavailable" under a mismatched cert — see the RunCloud entry above). (3) The departing host is very likely sending **HSTS**: Squarespace sends `max-age=15552000` (180 days), so every browser that visited in the last six months is pinned to HTTPS-only and **will refuse to fall back to http**. Every indexed URL is an https URL too. So the "soft" window is actually a hard failure for exactly the people most likely to visit.
+**Fix:** Check first, then choose the order:
+```bash
+curl -sI https://the-old-domain.com/ | grep -i strict-transport-security
+```
+If HSTS is present (assume it is), go **proxy-first** and the gap disappears entirely:
+1. Zone SSL → **Flexible** *first*, while records are still grey — it is a no-op until something proxies, and setting it after you proxy means a window where CF speaks HTTPS to a certless origin and serves the catch-all.
+2. Flip the A record **and enable the proxy in the same change**. Visitors ride the CDN's own edge cert, which satisfies HSTS; the CDN reaches the origin over plain HTTP, which works from the start.
+3. Issue LE at the origin — **the ACME challenge still validates through the proxy**, provided `always_use_https` is OFF so the http challenge is not redirected.
+4. Origin cert live and verified → zone SSL → **Full (strict)** → *then* `siteurl`/`home` → `https://`. Flipping those while still on Flexible is the classic redirect loop.
+5. `always_use_https` → on, so the http→https hop terminates at the edge.
+**Reduce the apex to ONE record before flipping**, then PATCH that record in place — an atomic switch, rather than deleting three records and creating a fourth while resolvers round-robin across a mixed old/new set. The old host keeps serving on its remaining IP throughout.
+**Set both records to TTL 60 well ahead of the cutover.** It makes propagation ~1 minute and, more importantly, makes rollback ~1 minute — which is what actually bounds your worst case.
+**First seen:** Highland, 2026-08-04 — Squarespace → RunCloud/jbm001. Proxy-first was chosen after finding the 180-day HSTS; the cert then issued in **30 seconds**, but the decision was correct regardless, because the downside was a cert interstitial and not a 404. Zero user-visible interruption; verified at every step.
+
 
 ## RunCache (RunCloud Hub successor)
 

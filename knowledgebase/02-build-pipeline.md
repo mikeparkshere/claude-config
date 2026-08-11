@@ -555,10 +555,104 @@ Element type is `xproslider`. Each slide block (typically `block` with `tag: "li
 
 `arrows: true` (boolean) is silently dropped. `listTag: 'ul'` + a slide with `tag:'li'` gives proper list semantics.
 
+## Bricks native Form element — auth action settings (verified — Highland, 2026-08-04, Bricks 2.3.10)
+
+Read back from working login / lost-password / reset-password forms. The action set lives in **`actions` (plural array)** — not `action`. Field bindings are by **field id**, not name:
+
+```php
+// LOGIN
+'actions'          => [ 'login', 'redirect' ],
+'loginName'        => 'e5b556',   // <- ids from settings.fields[].id
+'loginPassword'    => 'ba4114',
+'loginRemember'    => 'grxbiw',
+'redirectAdminUrl' => true,       // present = redirect to wp-admin
+
+// LOST PASSWORD
+'actions'                   => [ 'lost-password' ],   // note the hyphen
+'lostPasswordEmailUsername' => 'e5b556',
+
+// RESET PASSWORD
+'actions'          => [ 'reset-password', 'redirect' ],
+'resetPasswordNew' => 'e5b556',
+'redirect'         => '{site_login}',   // dynamic tags ARE rendered here
+```
+
+- `redirect` + `redirectAdminUrl` are **not** mutually exclusive — the admin branch overwrites the rendered redirect and re-wraps the *raw* string. To use a dynamic redirect, `redirectAdminUrl` must be **unset**, not `false` (the code tests `isset()`). Full mechanism in `03`.
+- The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions`.
+- `?redirect_to=` is honoured **only** when no redirect action is configured.
+
+## BricksExtras Pro OffCanvas + Burger Trigger (verified — Highland, 2026-07-02, BE 1.6.9)
+
+```php
+'name' => 'xoffcanvasnestable', // one nestable child block = panel content
+'settings' => [
+  'direction'            => 'x-offcanvas_right',      // x-offcanvas_{left|right|top|bottom}
+  'offcanvas_width'      => ['top'=>'400','right'=>'400','bottom'=>'400','left'=>'400'],
+  'aria_label'           => 'Mobile menu',            // default "Offcanvas"; role default dialog
+  'auto_aria_control'    => 'true',                   // writes aria-controls onto triggers
+  'sync_burger_triggers' => 'true',                   // burger inside the panel = close button
+  'clickTrigger'         => '.brxe-xburgertrigger',   // selector; matches ALL burgers (open + close)
+  'backdrop_color'       => ['raw'=>'var(--black-trans-50)'],
+  'backdrop_to_close'    => true,
+  'esc_to_close'         => 'true',   // DEFAULTS OFF — set explicitly
+  'trapFocus'            => 'true',   // exists (undocumented in BE docs); DEFAULTS OFF
+  'preventScroll'        => 'true',   // DEFAULTS OFF; returnFocus defaults ON
+  'reduce_motion'        => 'notransition', // fade | slide | notransition
+],
+// Burger: 'name' => 'xburgertrigger', 'settings' => [ 'aria_label' => 'Open main menu' ]
+```
+
+⚠️ **The three a11y flags default OFF.** Set `esc_to_close` / `trapFocus` / `preventScroll` explicitly on every build. Renders `.x-offcanvas_backdrop` + `.x-offcanvas_inner` (role=dialog, `inert` when closed); config lands in `data-x-offcanvas` JSON — verify via curl. BE base CSS gives the inner 300px width + 30px padding; zero it on your own class. Burger renders a real `<button>` with aria wired at runtime by JS (curl won't show it).
+
+## BricksExtras Before/After Image (verified — Highland, 2026-07-11, BE 1.6.9)
+
+```php
+'name' => 'xbeforeafterimage',
+'settings' => [ 'maybeLabels' => true ],  // 'start' => 50, 'direction' => horizontal|vertical — defaults fine
+// EXACTLY two children, each a `block` with the hidden BE class; each holds one `image`:
+// block:  '_hidden' => ['_cssClasses' => 'x-before-after-image_block']
+// image:  'image' => ['useDynamicData' => '{acf_before_image}', 'size' => 'medium'],
+//         'caption' => 'none', '_hidden' => ['_cssClasses' => 'x-before-after-image_image']
+```
+
+- **Child order is semantic:** child 1 = *before* (absolutely positioned, clip-path from left), child 2 = *after* (static, defines flow height). BE CSS keys off `:nth-of-type()`.
+- Works inside a query loop with dynamic images — verified over 8 iterations.
+- Labels ship unpositioned; their controls are element-level BE CSS → the CLI-regen gap (`03`). Bridge on your own global class.
+- **Height chain for an aspect-pinned wrapper:** `.wrapper .brxe-xbeforeafterimage, .wrapper .x-before-after_container, .wrapper .x-before-after-image_block { height:100% }` + `img { width/height:100%; object-fit:cover }`.
+- Front-end JS bails inside the builder iframe — **blank in canvas is expected**.
+
+## BricksExtras Pro Slider Gallery (verified — Highland, 2026-07-03, BE 1.6.9)
+
+Child of a `galleryMode` Pro Slider; renders the `ul.splide__list` itself (BE's "place outside the Pro Slider" doc text is a copy-paste error — it goes INSIDE).
+
+```php
+'name' => 'xproslidergallery',
+'settings' => [
+  'items' => [ 'images' => [ ['id'=>73,'full'=>'<full-url>','url'=>'<sized-url>'] ], 'size' => 'medium' ],
+  'objectFit'       => 'cover',
+  'lazyLoadSupport' => 'none',      // none | splide (default) | bricks
+  'maybeSRCSET'     => 'enable',    // disable (default) | enable
+],
+```
+
+⚠️ **Above the fold, `lazyLoadSupport` must be `'none'`** — the `splide` default ships a placeholder data-URI `src` and makes the LCP element a 0×0 SVG. And `maybeSRCSET` defaults to *disabled*, so without it you ship the full-size original. On the parent `xproslider`: `rewind => true` is REQUIRED for fade+autoplay to cycle back, and `arrows` is a **string** `'true'`/`'false'` while `pagination` is a real boolean.
+
+## Bricks custom fonts — `bricks_font_faces` meta shape (verified — Highland, 2026-06-13)
+
+Each custom font is a **`bricks_fonts`** post (plural post type); faces live in post meta `bricks_font_faces`, keyed by weight. Normal weights use an INTEGER key; **italics use a STRING key `"<weight>italic"`**:
+
+```php
+get_post_meta( $font_id, 'bricks_font_faces', true ) === [
+  500         => [ 0 => [ 'woff2' => 14 ] ],   // normal weight  → upright file
+  '500italic' => [ 0 => [ 'woff2' => 16 ] ],   // italic → separate italic file
+];
+```
+
+A single **variable** woff2 can back multiple discrete weight faces, but any weight you don't declare falls back to the nearest declared one — declare every weight the brand uses. Italics need a genuinely separate italic-axis file. Unlike `_bricks_page_*_2`, this key is **not** write-gated: a plain `update_post_meta` sticks.
+
 ## Schemas not yet captured
 
 - `_border` image/gradient backgrounds (`_background` beyond a flat color).
-- Bricks native form element settings.
 
 An incomplete library is expected. When you need one, discover it via the golden rule and append it here for the harvest.
 

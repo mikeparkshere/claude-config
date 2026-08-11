@@ -198,6 +198,174 @@ Bricks dynamic tags use **underscore**, not colon: `{acf_video_duration}`, not `
 
 ---
 
+## 4b. Schemas verified on Highland (Bricks 2.3.6, 2026-06-14 — footer build)
+
+Mined by reading back the live Header template, then used to build the Footer. All survived render; confirm survival on next builder open.
+
+### Element-array structure (per element in `_bricks_page_{content,header,footer}_2`)
+```php
+[ 'id' => '6char', 'name' => 'section', 'parent' => 0 /* or parent id */,
+  'children' => [ 'childid', ... ], 'settings' => [ ... ], 'label' => 'Human label' ]
+```
+Top-level elements have `parent => 0`. `children` is an ordered array of child ids; **both** the child's `parent` and the parent's `children` must be set. IDs are 6-char alphanumeric, never all-numeric.
+
+### Element types confirmed in this install
+`section` (settings `tag:"div"`), `container` (the ACSS centered/max-width wrapper — just `name:"container"`, no flag needed), `block` (generic; default div, or `tag:"nav"|"ul"|...`, or `tag:"custom"` + `customTag:"footer"`), `div` (used for links: `tag:"a"` + `link`), `text-basic` (`tag` + `text`, supports dynamic tags in `text`), `svg`.
+
+### svg element — two sources
+```php
+// custom icon set (e.g. the "MPD" set: bricks_icon_sets / bricks_custom_icons options)
+'settings' => [ 'source' => 'iconSet', 'iconSet' => [
+    'library' => 'custom_set_468irzn12', // = "custom_" . setId
+    'svg' => [ 'id' => 34, 'icon_id' => 'icon_6pdd2o24s', 'url' => '.../device-mobile-light.svg' ] ] ]
+// arbitrary media SVG attachment (used for the logo)
+'settings' => [ 'source' => 'file', 'file' => [ 'id' => 45, 'url' => '.../logo.svg' ] ]
+```
+Both render the SVG **inline** (`<svg class="brxe-svg" …>`), not as a `<img>`/file URL — so grep rendered output for `brxe-svg`, not the filename.
+
+### Dynamic tags DO resolve inside link URLs (refines §5.4)
+The §5.4 caution is about raw *query* fields. The **Link control's URL field resolves dynamic tags**: `'link' => ['type' => 'external', 'url' => '{highland_phone_link}']` rendered `href="tel:3303383577"`; same for `{highland_email_link}` (mailto) and `{acf_facebook_url}`. Confirmed.
+
+### Typed global-class settings shapes (the maintainable alt to `_cssCustom`)
+Read back from the header's global classes. Value shapes:
+```php
+'_background' => [ 'color' => [ 'id' => 'acss_import_secondary', 'raw' => 'var(--secondary)' ] ],
+'_padding'    => [ 'top' => 'var(--space-m)', 'right' => '0', 'bottom' => '8', 'left' => '0' ], // px = bare number
+'_margin'     => [ /* same shape as _padding */ ],
+'_typography' => [ 'font-size' => 'var(--text-s)', 'font-weight' => '600', 'font-style' => 'normal',
+                   'letter-spacing' => '...', 'text-transform' => 'uppercase', 'line-height' => '...',
+                   'color' => [ 'id' => 'acss_import_base', 'raw' => 'var(--base)' ] ], // map keyed by CSS prop
+'_display' => 'flex', '_direction' => 'row', '_justifyContent' => 'space-between', '_alignItems' => 'center',
+'_gap' => 'var(--space-m)', '_columnGap' => 'var(--space-xs)', '_rowGap' => '...',  // gap requires _display flex
+'_widthMax' => '34ch',  // number+unit string
+'_border' => [ 'width' => ['left'=>'1'], 'style' => 'solid', 'color' => ['raw'=>'var(--neutral-trans-10)'] ],
+```
+**Breakpoint variants are key-suffixed:** `'_justifyContent:mobile_landscape' => 'center'`, `'_display:tablet_portrait' => 'none'`, `'_typography:hover' => [...]`.
+
+**Typed is the default — `_cssCustom` is the exception (do NOT default to it).** Earlier in this build I wrongly reasoned "I can't verify typed survives the builder, so use `_cssCustom`." That's the most-violated-rule trap (`00`/`01`). The correct method when a typed shape is unknown is the **golden rule via read-back of EMITTED CSS**: set the typed key on a class → `\Bricks\Assets_Files::regenerate_css_files()` → curl the page and grep the rendered rule. If it emits the property, the shape is right (and a real control key survives the builder). This is fully doable headlessly — no excuse to default to `_cssCustom`.
+
+**More verified typed shapes (confirmed by read-back, footer build):**
+```php
+// grid (string values + breakpoint suffix all emit)
+'_display' => 'grid', '_gridTemplateColumns' => 'var(--grid-3)', '_gridGap' => 'var(--space-l)',
+'_gridTemplateColumns:tablet_portrait' => '1fr', '_gridGap:tablet_portrait' => 'var(--space-xl)',
+'_rowGap' => 'var(--space-s)', '_columnGap' => '0.6em',   // gap keys: STRING values, take var() — both emit
+'width' => '180px',  // svg/img element direct key (also height, fill:{id,raw}) — from a builder-made class
+'_typography' => [ 'font-size'=>'var(--text-m)', 'line-height'=>'1.55', 'letter-spacing'=>'0.16em',
+                   'text-transform'=>'uppercase', 'font-family'=>'Montserrat', 'color'=>['raw'=>'var(--x)'] ],
+```
+Typed global-class settings emit as **Bricks-generated** CSS (`.cls {background-color: …; padding-top: …}`), not a `_cssCustom` blob — that's the win: visible/editable in the panel.
+
+**Gotchas found:**
+- `_gap` did **not** emit (neither a `'var(--space-s)'` string nor a `{number,unit}` object). Use `_rowGap` / `_columnGap` (string values) instead — those emit and take `var()`.
+- The typography **font-family control quotes its value**: `'font-family'=>'var(--heading-font-family)'` emits `font-family:"var(--heading-font-family)"` (broken — quoted var). Pass the **registered font NAME** instead (`'font-family'=>'Montserrat'`) → `font-family:"Montserrat"` (valid, matches the Bricks custom font).
+- `text-decoration` has **no** typed control (absent from the typography control) — this is a genuine `_cssCustom` case (e.g. underlined links).
+- Buttons: don't hand-build (typed or `_cssCustom`) — attach the ACSS button global classes (`acss_import_btn--primary` + literal `btn` via `_cssClasses`) per `01`. The base `.btn` selector isn't locatable in the front-end ACSS CSS, so confirm the rendered button in the builder (live preview is the right surface for it).
+- Renaming a global class in the builder DOES update its `_cssCustom` literal selector (`.site-footer` → `.footer`) — not stale after rename.
+- Structural-only wrappers correctly have `settings => []` (empty is a valid signal; no class CSS needed).
+
+### Header/Footer template creation
+```php
+$tid = wp_insert_post([ 'post_type'=>'bricks_template', 'post_title'=>'Footer', 'post_status'=>'publish' ]);
+update_post_meta($tid, '_bricks_template_type', 'footer');           // or 'header'
+update_post_meta($tid, '_bricks_editor_mode', 'bricks');
+update_post_meta($tid, '_bricks_template_settings',
+    [ 'templateConditions' => [ [ 'id'=>'6char', 'main'=>'any' ] ] ]); // 'any' = apply site-wide
+update_post_meta($tid, '_bricks_page_footer_2', $elements);          // gated key → wp_set_current_user(1) first
+```
+ACSS button classes import as global classes `acss_import_btn--primary` / `--outline` / `--m` etc. (the base `.btn` selector wasn't locatable in the front-end ACSS CSS headlessly). `_cssClasses` (string) is the literal extra-class field if needed alongside `_cssGlobalClasses` (ids).
+
+---
+
+## 4c. Schemas verified on Highland homepage build (Bricks 2.3.6, 2026-06-16)
+
+Full 8-section homepage (#18) built direct via WP-CLI from a token-pure ACSS mockup. Every shape below verified by read-back of EMITTED CSS / rendered HTML (golden rule), typed-first.
+
+### Element types + tags
+- `text-basic` native `tag` options: `div, p, span, figcaption, address, figure, custom` (+ `customTag` when `tag:'custom'`). So `blockquote`/`cite`/`h3` → `tag:'custom'` + `customTag:'blockquote'`. Verified `<blockquote>`, `<figcaption>`, `<figure>` render correctly.
+- `block`/`div` both take `tag` (incl. `figure`, `li`, `article`, `a`) and `tag:'custom'`+`customTag`. Convention (Mike): `div` for `li` and semantic wrappers; `block` for `ul`/`figure`.
+- The `heading` element **preserves inline HTML** in `text` — `'… my <span class="accent">full</span> focus.'` renders the span intact. This is how accent words work; the `.accent` style itself lives in the **child theme** (Bricks only emits global-class CSS for classes attached to an element, not for classes that ride inside raw text).
+- `_cssId => 'hero-title'` renders `id="hero-title"` — use it for `aria-labelledby` targets.
+
+### Verified typed setting shapes (all emit)
+- `_attributes => [ ['id'=>'6char','name'=>'aria-label','value'=>'…'] ]` → renders the literal HTML attribute. **WORKS HEADLESS** — corrects the 4b footer note that ARIA attrs "need the builder UI". Use for `aria-label` / `aria-labelledby` / `aria-hidden` / `role`.
+- `_flexWrap => 'wrap'`; `_direction => 'column'` (flex-direction); `_overflow => 'hidden'`; `_position => 'relative'|'absolute'` + offset keys `_top/_right/_bottom/_left` (bare `'0'` = `0px`).
+- `_width` / `_height => '42px'` (decorative bars); `_flexGrow => '1'` (equal-height card → push CTA to bottom); `_widthMax => '46ch'|'18ch'|'34rem'`, breakpoint-suffixable (`_widthMax:tablet_portrait => 'none'|'34rem'`).
+- `_border` radius-only: `['radius'=>['top'=>'var(--radius-l)', …]]`. Single-side: `['width'=>['left'=>'3'],'style'=>'solid','color'=>[…]]` → `border-left:3px solid …`. Full four-side emits the `border:` shorthand.
+- Grid: `_display:'grid'` + `_gridTemplateColumns:'var(--grid-3-2)'` (+ `:tablet_portrait`/`:mobile_portrait` suffixes) + `_rowGap`/`_columnGap` (string `var()` values; `_gap` still doesn't emit). Bricks injects a harmless `align-items:initial` before your `_alignItems` — yours wins (later in the rule).
+
+### Lean on ACSS utilities BEFORE `_cssCustom` (Mike preference, reinforced)
+Order: typed control → **ACSS utility class** → `_cssCustom` → child theme. Attach via `_cssGlobalClasses` using the import id:
+- list reset → `acss_import_list--none` (NOT `_cssCustom{list-style:none}`)
+- aspect ratio → `acss_import_aspect--4-3` / `--1-1` (NOT `_cssCustom{aspect-ratio}`)
+
+### ACSS buttons DO style headless (corrects 4b / 03 note)
+ACSS keys base button styling off `[class*="btn--"]:not(…)` and `a[class*="btn--"]{display:inline-flex}` — there is **no** base `.btn` rule. So attaching `acss_import_btn--primary` (or `--outline` + a color like `--white`) to an `<a>` (`div tag=a`) fully styles it with no builder step; the literal `btn` via `_cssClasses` is redundant (harmless). The footer build's "base `.btn` not locatable → confirm in builder" was from targeting `.btn` instead of `btn--*`. Builder pass is now just hover/contrast eyeballing — e.g. a ghost-on-light wants `btn--outline`+`btn--secondary` for a steel outline, not bare `btn--outline` (which renders red).
+
+### Global-class CSS delivery
+This install loads global-class CSS **INLINE in `<head>`** — so `post-{ID}.min.css` is often 0 bytes even for a page full of global classes. Verify emitted CSS by grepping the **rendered page HTML**, not the post CSS file. (See the matching `03` gotcha.)
+
+---
+
+## 4d. Schemas verified on Highland contact page build (Bricks 2.3.6, 2026-06-30)
+
+### `code` element (raw-HTML / shortcode slot)
+```php
+'name' => 'code',
+'settings' => [
+  'executeCode' => true,   // run the code (else it shows as escaped text); needs Bricks > Settings > Code execution ON
+  'noRoot'      => true,    // render without the .brxe-code wrapper div — outputs the raw markup directly
+  'code'        => "<form class=\"…\">…</form>",  // raw HTML (and/or PHP) string
+  // 'signature' => …       // DO NOT hand-write — Bricks generates it; see below
+],
+```
+- Used as the interim form stub (mockup `<form>` markup) — swap for a `shortcode` element (`[ws_form id=X]`) when the real form exists. Field CSS for raw HTML inside a code element can't be typed Bricks settings → child theme (the token-correct target WS Forms inherits).
+- **CRITICAL — code signature.** An `executeCode` element written headlessly renders **nothing** until signed. Bricks HMAC-signs executable code (`settings.signature`) to stop DB-injected code from running; an unsigned/invalid element returns empty from `Code::render()`. After writing, sign it as an admin with the code cap:
+  ```php
+  wp_set_current_user( 1 );
+  \Bricks\Admin::crawl_and_update_code_signatures(); // signs every code element in the DB
+  \Bricks\Assets_Files::regenerate_css_files();
+  ```
+  Read-back should show `settings.signature` (32 chars). Re-sign after any later headless edit to the code (signature is content-bound). Full incident in `03`.
+
+### `svg` element — color + size (reconfirms 4b)
+Color a `fill="currentColor"`/`stroke="currentColor"` icon via typed `_typography.color`; size via the svg-direct `width`/`height` keys (NOT `_width`/`_height`):
+```php
+'settings' => [
+  'source' => 'iconSet', 'iconSet' => [ 'library' => 'custom_set_468irzn12', 'svg' => [ 'id'=>34, 'icon_id'=>'icon_…', 'url'=>'….svg' ] ],
+  'width' => '20px', 'height' => '20px',
+  '_typography' => [ 'color' => [ 'id'=>'acss_import_primary', 'raw'=>'var(--primary)' ] ],
+],
+```
+
+### `text` only renders on `text-basic`/`heading` — NOT `div`/`block` (reconfirmed, bit again)
+A `div`/`block` with a `text` setting renders the wrapper (and any `::before`) but drops the text. For a list item that is text + a dot, the `<li>` is a `div tag=li` (carries flex/`_columnGap` so the `::before` dot spaces) **with a `text-basic` child** holding the label. Putting `text` on the `div` itself = dots with no labels.
+
+---
+
+## 4e. Schemas verified on Highland about page build (Bricks 2.3.6, 2026-07-01)
+
+### Breakpoint-suffixed `_border` / `_padding` emit headless (responsive side-switch)
+The hero credentials rail switches from a left border to a top border when it stacks — done entirely with typed, breakpoint-suffixed border/padding keys, verified in the rendered CSS:
+```php
+'_border'  => [ 'width' => ['left'=>'1'], 'style'=>'solid', 'color'=>['id'=>'acss_import_neutral-light','raw'=>'var(--neutral-light)'] ],
+'_padding' => [ 'left' => 'var(--space-l)' ],
+'_border:mobile_landscape'  => [ 'width' => ['top'=>'1','left'=>'0'], 'style'=>'solid', 'color'=>[...] ], // → @media(max-width:767px) border-top:1px; border-left:0
+'_padding:mobile_landscape' => [ 'left' => '0', 'top' => 'var(--space-l)' ],
+```
+Confirms breakpoint suffixes work on the object-valued `_border`/`_padding` keys (not just scalars). NOTE: when Mike then edits the same border via the builder UI, it re-emits as the **logical** border keys (`_borderWidthLogical` / `_borderStyle` / `_borderColor` / `_borderRadiusLogical`) — the builder's native border shape. Both the flat `_border` and the logical set emit; either is fine to author.
+
+### SVG element from a media file — native shape has no `source` key
+Builder-written SVG-from-media (e.g. Mike's value-card logo-mark icon) is just:
+```php
+'name' => 'svg',
+'settings' => [ 'file' => [ 'id' => 93, 'filename' => 'HHM-logo-mark.svg', 'url' => '…/HHM-logo-mark.svg' ] ],
+```
+No `'source' => 'file'` key. (My footer/contact note used `'source'=>'file'` + `file:{id,url}` — that also works, but the builder's own output omits `source` and includes `filename`.) Size via the svg-direct `width`/`height` keys on a global class (`about-value__icon` = `{width:'3rem',height:'3rem'}`), NOT `_width`/`_height`.
+
+### Split section head (eyebrow+title left / lede right)
+`mpd-section__header` is already a flex `row` / `space-between` / `align-items:flex-end`. Put `mpd-section__heading-wrapper` (eyebrow + `display` h2) and the lede as **siblings** under it → two columns. Use **`mpd-section__lede`** (margin-free) for the right-column lede, NOT `mpd-lede` (its `margin-bottom` misaligns under `flex-end`). Add a page-scoped bottom-margin class (`about-section-head`) on the header so it still spaces off the grid/list below (the homepage's `gsh02`/`gsi01` spacing ids are orphaned — no definition, emit nothing).
+
 ## 5. Failure modes (time sinks we hit today)
 
 ### 5.1 Silent strip on next builder load
@@ -327,3 +495,171 @@ The current Section 6.3 ("Clickable Parent Pattern") contradicts Section 5.2 ("A
 - References `wpgaurav/bricks-skills` as the complementary clipboard-paste resource
 
 *Future versions: document new Bricks versions' schema changes, expand the schema library as more element types are used, add element-level visual-settings schema (`_typography`, `_padding`, etc.) once they're discovered via the Golden Rule.*
+
+---
+
+## 4f. Schemas verified on Highland header rebuild (Bricks 2.3.8 / BricksExtras 1.6.9, 2026-07-02)
+
+Source: KSCBS header template export (builder-saved) + BE plugin source read + emitted-CSS verification. All survived Mike's builder open/save.
+
+### BricksExtras Pro OffCanvas (`xoffcanvasnestable`)
+```php
+'name' => 'xoffcanvasnestable', // one nestable child block = panel content
+'settings' => [
+  'direction'            => 'x-offcanvas_right',      // x-offcanvas_{left|right|top|bottom}
+  'offcanvas_width'      => ['top'=>'400','right'=>'400','bottom'=>'400','left'=>'400'],
+  'aria_label'           => 'Mobile menu',            // default "Offcanvas"; role default dialog
+  'auto_aria_control'    => 'true',                   // writes aria-controls onto triggers
+  'sync_burger_triggers' => 'true',                   // burger inside the panel = close button
+  'clickTrigger'         => '.brxe-xburgertrigger',   // selector; matches ALL burgers (open + close)
+  'backdrop_color'       => ['raw'=>'var(--black-trans-50)'],
+  'backdrop_to_close'    => true,
+  'esc_to_close'         => 'true',   // DEFAULTS OFF — set explicitly
+  'trapFocus'            => 'true',   // exists (undocumented in BE docs); DEFAULTS OFF
+  'preventScroll'        => 'true',   // DEFAULTS OFF; returnFocus defaults ON
+  'reduce_motion'        => 'notransition', // fade | slide | notransition
+  'builderHidden'        => true,
+],
+```
+- Renders: `.x-offcanvas_backdrop` + `.x-offcanvas_inner` (role=dialog, `inert` when closed, `data-lenis-prevent`). Config lands in `data-x-offcanvas` JSON — verify flags there via curl.
+- BE base CSS defaults: inner 300px wide, 30px padding, white bg, backdrop rgba(0,0,0,.5). Zero the padding via your own inner class and own the spacing.
+- Control keys are authoritative from `bricksextras/components/classes/x-offcanvas-nestable.php` — read source, don't guess.
+
+### BricksExtras Burger Trigger (`xburgertrigger`)
+```php
+'name' => 'xburgertrigger', 'settings' => [ 'aria_label' => 'Open main menu' ],
+```
+Renders a real `<button>`; aria-expanded/controls wired at runtime by BE JS (curl won't show them).
+
+### BE element-level styling + CLI regen — see the `03` entry
+`Assets_Files::regenerate_css_files()` under WP-CLI errors `Control type number is not defined!` and skips BE element settings CSS (width/backdrop). Global-class CSS is unaffected. Emits correctly on first builder save; bridge with `_cssCustom` on a related class targeting `.brxe-xoffcanvasnestable .x-offcanvas_inner`.
+
+### nav-menu (classic) typed class settings — full working shape
+`menuAlignment` (row|column), `menuGap`, `menuMargin`, `menuTypography` (+ `:hover`) — emits as `.cls .bricks-nav-menu > li > a { … }`. No typed control for the WP active state: `.cls .current-menu-item > a, .cls a[aria-current="page"]` is a legit `_cssCustom` case (like text-decoration).
+
+### Typography `font-size` accepts raw `clamp()` headlessly
+`'_typography' => ['font-size' => 'clamp(2.33rem, 1.69rem + 2.65vw, 3.95rem)']` on a global class emits verbatim (`.display` redo). Fluid utility sizes don't need `_cssCustom`.
+
+### Native sticky vs offcanvas-in-header
+`headerSticky`+`headerStickyOnScroll` transform `#brx-header` → traps `position:fixed` descendants (offcanvas panel rides the header). Removed sticky on Highland; alternative is BE `offcanvas_template` outside the header. See `03`.
+
+## 4g. BricksExtras Pro Slider — verified schemas (Bricks 2.3.8 / BE 1.6.9, 2026-07-03)
+
+Source: BE plugin source read (`components/classes/x-pro-slider*.php`) → headless build → **survived Mike's builder open/edit/save** (homepage hero, post 18). Splide-based.
+
+### Pro Slider (`xproslider`) — gallery-mode fade rotator
+```php
+'name' => 'xproslider', // nestable; in gallery mode its one child is a Pro Slider Gallery
+'settings' => [
+  'type'           => 'fade',       // select: loop | slide | fade (default slide)
+  'rewind'         => true,         // checkbox; REQUIRED for fade+autoplay to cycle back
+  'autoplayscroll' => 'autoplay',   // select: autoplay | autoscroll | none
+  'interval'       => '4000',       // number control; builder saves as STRING (int works headlessly too)
+  'pauseOnHover'   => true,         // checkbox → render checks isset()
+  'pauseOnFocus'   => true,
+  'arrows'         => 'false',      // select: string 'true'/'false' (default 'true' = icons ON)
+  'pagination'     => true,         // checkbox; render checks isset() — control 'default: true' does NOT apply headlessly, set it
+  'galleryMode'    => true,         // checkbox; child gallery element renders the splide__list
+],
+```
+- `perPage` forced to 1 when `type=fade`; omit. Defaults omitted = Splide defaults (speed 400, keyboard focused, drag on).
+- Config lands in `data-x-slider` JSON (`rawConfig`) — verify flags via curl.
+- Nestable non-gallery mode: each child is a `block` with hidden `_cssClasses: 'x-slider_slide splide__slide'` (from `get_nestable_item()`); slides only iterate real children.
+- Element-level styling (arrow/pagination controls) hits the known BE CLI-regen gap (`03`) — bridge on a global class if it must render pre-builder-save.
+
+### Pro Slider Gallery (`xproslidergallery`) — child of gallery-mode slider
+```php
+'name' => 'xproslidergallery',
+'settings' => [
+  'items' => [                       // Bricks image-gallery shape; builder-canonical per-image keys: id/full/url only
+    'images' => [ ['id'=>73,'full'=>'<full-url>','url'=>'<sized-url>'], /* … */ ],
+    'size'   => 'medium',            // top-level size drives rendered size
+  ],
+  'objectFit'       => 'cover',      // typed, emits `img { object-fit }` (element-level → regen gap applies)
+  'lazyLoadSupport' => 'none',       // select: none | splide (default) | bricks — see LCP gotcha in `03`
+  'maybeSRCSET'     => 'enable',     // select: disable (default) | enable
+],
+```
+- Renders as the `ul.splide__list` itself (`x-slider-gallery`), one `li.splide__slide` per image — the source's "place outside the Pro Slider" intro text is a copy-paste error; it goes INSIDE.
+- Captions off unless `caption: true` (pulls attachment captions). `link` default none.
+
+## 4h. Schemas verified on Highland projects archive build (Bricks 2.3.8 / BE 1.6.9, 2026-07-11)
+
+Source: BE plugin source read (`components/classes/x-before-after-image.php`) → headless build → **survived Michael's builder open/edit/save 2026-07-11** (template #138 — he added handle icons; nothing stripped). Same discovery route as the §4g Pro Slider.
+
+`iconLeft` / `iconRight` (slider handle chevrons) take the standard custom-icon-set shape: `['library' => 'custom_set_468irzn12', 'svg' => ['id' => 32, 'icon_id' => 'icon_dctwf7tqx', 'url' => '…/arrow-left-s-line.svg']]` — builder-verified (Michael's edit), renders inline SVGs with `fill="currentColor"`.
+
+### BricksExtras Before/After Image (`xbeforeafterimage`) — nestable
+```php
+'name' => 'xbeforeafterimage',
+'settings' => [
+  'maybeLabels' => true,   // checkbox → renders Before/After label divs (defaults 'Before'/'After'; beforeText/afterText override)
+  // 'start' => 50 (number, % start position), 'direction' => 'horizontal'|'vertical' — defaults fine, omit
+],
+// EXACTLY two children, each a `block` with the hidden BE class; each holds one `image`:
+'children' => [ /* block×2 */ ],
+// block:  'settings' => [ '_hidden' => ['_cssClasses' => 'x-before-after-image_block'] ]
+// image:  'settings' => [ 'image' => ['useDynamicData' => '{acf_before_image}', 'size' => 'medium'],
+//                         'caption' => 'none', '_hidden' => ['_cssClasses' => 'x-before-after-image_image'] ]
+```
+- **Child order is semantic:** child 1 = *before* (absolutely positioned, clip-path from left), child 2 = *after* (static, defines the element's flow height). BE CSS keys off `:nth-of-type()`.
+- Works inside a query loop with dynamic images (`{featured_image}` / ACF image fields) — verified, 8 loop iterations.
+- **Labels ship unpositioned** (`position:absolute` + translucent white bg only) — the label position/typography controls are element-level BE CSS → the known CLI-regen gap. Bridge on your own global class (Highland: label pills + the height chain live in `project-card__media` `_cssCustom`).
+- **Height chain for an aspect-pinned wrapper:** `.wrapper .brxe-xbeforeafterimage, .wrapper .x-before-after_container, .wrapper .x-before-after-image_block { height:100% }` + `img { width/height:100%; object-fit:cover }` (BE's own img CSS covers only its happy path).
+- Front-end JS bails inside the builder iframe (`body > .brx-body.iframe` guard) — **blank/static in canvas is expected**, same as Leaflet.
+- `\Bricks\Assets_Files::regenerate_css_files()` under CLI emits a benign `Error: Control type number is not defined!` when BE nestables are present (BE controls don't register headless). Files still regenerate — check the count, ignore the message.
+
+### Archive template conditions (`_bricks_template_type` = 'archive')
+```php
+update_post_meta( $tid, '_bricks_template_settings', [
+  'templateConditions' => [ [
+    'id' => '6char', 'main' => 'archiveType',
+    'archiveType' => ['postType'], 'archivePostTypes' => ['project'],
+  ] ],
+] );
+```
+Verified matching `is_post_type_archive('project')` (templates.php `archiveType` case). Content in `_bricks_page_content_2` as usual.
+
+### Conditions + dynamic data inside a loop (reconfirms §4.6 in loop context)
+`_conditions` with `key: 'dynamic_data'` on `{acf_*}` fields evaluate **per loop iteration** — used for the before/after ⇄ plain-image switch and hide-when-empty meta/description lines. Both branches verified (cleared a field, curled, restored).
+
+### This install's `large` image size is 1920px
+`wp media image-size`: `large` = 1920 (blueprint override; `medium` = `medium_large` = 768). Don't reach for `'size' => 'large'` on card-scale images — Michael's hero-slider precedent uses `medium`.
+
+### Verified on Services build (2026-07-11)
+- `'_width' => 'fit-content'` emits (`width: fit-content`) — keyword values work on the width control, not just number+unit.
+- `text-link` element: `{ text, link: {type,url}, _cssGlobalClasses }` renders a bare `<a>text</a>`; with a `#anchor` URL Bricks adds `data-brx-anchor="true"` (native smooth scroll) automatically.
+- Pills-in-a-row recipe (the `03` inline-row gotcha, applied): ul = flex + `_flexWrap:'wrap'` + gaps; li = `_width:'fit-content'`; link = `_display:'inline-block'`. All typed.
+- Rich Text element (`name: 'text'`): `settings.text` takes a full HTML block (h2/p/ul/table/code all render intact) and **resolves dynamic tags inside it** — incl. `{highland_*}` inside `href` attributes. Right tool for long legal/prose pages; one element instead of dozens of text-basics. (Privacy build, 2026-07-11.)
+- WS Form ships a native Bricks element: `'name' => 'ws-form-form'`, settings `{"form-id": "1"}` (string ID), wrapper `.brxe-ws-form-form` — prefer it over a shortcode element for WS Forms embeds. (Michael placed these via the builder, 2026-07-11.)
+
+## 4i. Bricks native Form element — auth action settings (Bricks 2.3.10, 2026-08-04)
+
+Fills a gap `02` explicitly lists as uncaptured ("Bricks native form element settings"). Read back from working login / lost-password / reset-password forms. **Harvest candidate for the master `02` schema library.**
+
+The action set lives in **`actions` (plural array)** — not `action`. Field bindings are by **field id**, not name:
+
+```php
+// LOGIN
+'actions'          => [ 'login', 'redirect' ],
+'loginName'        => 'e5b556',   // <- ids from settings.fields[].id
+'loginPassword'    => 'ba4114',
+'loginRemember'    => 'grxbiw',
+'redirectAdminUrl' => true,       // present = redirect to wp-admin
+
+// LOST PASSWORD
+'actions'                   => [ 'lost-password' ],   // note the hyphen
+'lostPasswordEmailUsername' => 'e5b556',
+
+// RESET PASSWORD
+'actions'          => [ 'reset-password', 'redirect' ],
+'resetPasswordNew' => 'e5b556',
+'redirect'         => '{site_login}',   // dynamic tags ARE rendered here
+```
+
+**Traps, all verified:**
+- `redirect` + `redirectAdminUrl` are **not** mutually exclusive; the admin branch overwrites the rendered redirect and re-wraps the *raw* string. Full mechanism + fix in `docs/stack-gotchas.md`. To use a dynamic redirect, `redirectAdminUrl` must be **unset**, not `false` (the code tests `isset()`).
+- The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions` (`elements/form.php` ~3771). Adding your own would be redundant.
+- `?redirect_to=` is honoured **only** when no redirect action is configured (`form/actions/login.php`).
+- Field ids survive a cross-site import intact; **font ids and `{acf_*}` tags do not** — see the import gotcha in `03`.
+- Bricks renders an empty trailing `<li class="brx-query-trail">` after any query loop; it carries no item class, so item-level borders/styles do not apply to it.

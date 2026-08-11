@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-135 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+169 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -78,7 +78,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks — `*{border-color}` plus a default 1px border on native inputs = "ghost" borders on every form
 - Bricks — where CSS actually lives: global-class CSS is INLINE, element-typed CSS is in `post-{id}.min.css`
 - Bricks emits a Global Class's CSS ONLY when an element on that page references it
-- Bricks file-mode CSS never externalizes global-class CSS — architecture, not a CLI limitation (and delete an empty `style-manager.min.css`)
+- Bricks file-mode CSS never externalizes global-class CSS — architecture, not a CLI limitation
 - Bricks `_typography.font-family` quotes the value — use `custom_font_<id>`, not a CSS string
 - Bricks image element with `tag=figure` collapses to content size — `:where(.brxe-image).tag` forces `width:auto; height:fit-content`
 - Bricks `_aspectRatio` dual-routes to the inner img — it can't drive the figure's box when the image element IS the figure
@@ -115,6 +115,22 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks — the `html` element is the ungated raw-markup injector; reserve it for genuinely non-native markup
 - Bricks — flex/grid + gap that arranges BEM children belongs on the Container, not the single-child Section
 - Bricks — header/footer TEMPLATE content lives in `_bricks_page_header_2` / `_bricks_page_footer_2`, not `_bricks_page_content_2`
+- Bricks has built-in sanitized SVG upload — don't add SVG handling to the core plugin; and `get_allowed_mime_types()` reads false under WP-CLI
+- Test custom Bricks dynamic tags with `bricks_render_dynamic_data()`, NOT manual `apply_filters()`
+- A WP-CLI write to `_bricks_page_content_2` can silently not persist — verify by DB read-back; and global-class CSS is inline, not in `post-*.min.css`
+- Advanced Themer "Remove style controls" tweak silently kills ALL typed-setting CSS site-wide — only `_cssCustom` survives
+- Typed flex `_columnGap`/`_rowGap`/`_direction` silently don't emit when a global class is on a `text-basic` element — only on layout elements (div/block/container)
+- Bricks builder open during a WP-CLI meta write → saving from that tab silently clobbers the DB edit
+- Frontend-only JS widget (Leaflet map etc.) renders as a blank box inside the Bricks builder canvas — looks clobbered, isn't
+- Bricks Code element written headlessly renders nothing until you regenerate its code signature
+- A mockup's "reuse these classes" note goes stale after a builder rework — reconcile against live `bricks_global_classes` BEFORE building
+- Grid container: `_alignItems` is ignored, `_alignItemsGrid` is the operative key (unset emits `align-items: initial`)
+- `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
+- Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path
+- Bricks custom login page ignores `?redirect_to=` whenever a redirect action is configured
+- A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
+- Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
+- Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
 
 **BricksExtras**
 
@@ -124,6 +140,10 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ProSlider list semantics (BricksExtras)
 - BricksExtras ProAccordion has a hardcoded `:where()` gray header background
 - BricksExtras ProAccordion emits no `aria-expanded` / `aria-controls` in SSR markup
+- BricksExtras element-level styling doesn't emit via CLI CSS regen — "Control type X is not defined!"
+- Sticky header + offcanvas inside the header template — the panel "drops"/slides with the header
+- BE Pro Slider Gallery default lazy-load ships placeholder `src` — kills hero/LCP images
+- BricksExtras before/after renders nothing server-side — verify headless with Playwright, and beware the screenshot-timing false alarm
 
 **Frontend Toolkit (animations)**
 
@@ -150,6 +170,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file
 - ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it
 - ACSS type: per-level Font Size Override hits a non-geometric brand scale exactly
+- ACSS is fully configurable headless via `Database_Settings::save_settings()` — but `API::update_settings()` is broken in 3.3.6
+- ACSS color shade ramps are stored per-shade, NOT recomputed from the master — must rewrite the ramp partials
+- ACSS → Bricks palette sync only hooks under `is_admin()` — CLI saves regenerate CSS but never update the color picker
 
 **ACF**
 
@@ -166,16 +189,19 @@ Group labels below are bold rather than headings on purpose — `###` here would
 
 - A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
 - A term archive whose slug matches a CPT single 301s to that single (`redirect_canonical` collision)
+- Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
 
 **Rank Math + Bricks**
 
 - Rank Math `%excerpt%` description template produces junk on Bricks-built Pages
-- Enabling a Rank Math module via the `rank_math_modules` option does NOT create its DB tables
+- The `rank_math_modules` option has two traps — slugs are legacy, and writing it does NOT create the module's DB tables
 - Bricks `bricks_template` CPT is publicly indexable AND in the Rank Math sitemap by default
 - Rank Math — SEO scores are computed CLIENT-SIDE; the DB value goes stale and NULL ≠ unoptimized
 - Rank Math — `og:type` defaults to `article` on EVERY non-homepage page, including archives
 - Disabling Rank Math's Schema (Rich Snippets) module removes ALL its JSON-LD — including the default @graph
 - Rank Math routes a CPT *named* `author` through its built-in Author sitemap provider
+- Rank Math's per-post-type sitemap toggle is all-or-nothing — turning a CPT off removes its ARCHIVE too
+- `blog_public = 0` on staging masks per-page noindex — you cannot verify indexing config until you lift it
 
 **Mailster**
 
@@ -205,11 +231,15 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WS Form — skin it by overriding root `--wsf-form-*` vars, never by writing rules against `.wsf-field` / `.wsf-label`
 - WS Form — per-field-type CSS loads AFTER the theme; the native checkbox IS the styled box (sibling of the label, no wrap mode)
 - WS Form CAPTCHA (Turnstile/reCAPTCHA) keys live in the global `ws_form` option, not the field meta
+- WS Form Pro implements Turnstile natively — and Cloudflare "Turnstile Spin" is redundant on any plugin stack
+- A client-rendered form cannot be verified with `curl` — check the CAPTCHA provider's own call count instead
 
 **Roles & Capabilities**
 
 - Bricks builder access is admin-only by default — custom roles get NO builder access unless explicitly granted
 - Walling Rank Math to admins — deny `rank_math_*` caps; the editor role ships with the metabox cap
+- `current_user_can('assign_terms')` is a false negative — check the taxonomy's MAPPED capability
+- A CPT registered `capability_type => 'post'` makes the "blog" caps load-bearing — do not drop them on a site with no blog
 
 **CSS general**
 
@@ -221,16 +251,20 @@ Group labels below are bold rather than headings on purpose — `###` here would
 **Fonts**
 
 - Variable-font prep for Bricks: TTF→WOFF2 (keep axes), subset, and the opsz-instance trap
+- Bricks custom fonts — `bricks_font_faces` meta schema + italic key encoding (also a `02` schema-library harvest candidate)
 
 **WP-CLI**
 
 - WP-CLI — inline `wp eval` fatals silently on `"{$arr[barekey]}"` in PHP 8
 - WP-CLI — `is_ssl()` is false, so WooCommerce reports gateways "unavailable" and strips the Payment Methods nav
 - Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
+- `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
+- `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
 
 **Diagnostic patterns**
 
 - Diagnostic JS via a Bricks code element
+- A copy sweep over Bricks content misses `_attributes` values — aria-labels and alt text are copy too
 
 ---
 
@@ -834,6 +868,195 @@ grep -rn "'_yourKey'" wp-content/themes/bricks/includes/elements/
 **Fix:** Match the key to the template type. Confirm with `wp post meta get <id> _bricks_template_type` first, then write to the matching `_bricks_page_{content|header|footer}_2`. Cross-check by reading back an existing working template of the same type — its content key tells you which one the renderer reads.
 **First seen:** VMG, 2026-06-07 — a footer template rendered empty until the tree moved from `_bricks_page_content_2` to `_bricks_page_footer_2`.
 
+### Bricks has built-in sanitized SVG upload — don't add SVG handling to the core plugin; and `get_allowed_mime_types()` reads false under WP-CLI
+**Symptom / When:** Deciding whether the core plugin needs SVG upload support. A `wp eval` check — `in_array('image/svg+xml', get_allowed_mime_types())` — returns false, suggesting WP blocks SVG and you need to add `upload_mimes` + a sanitizer. Meanwhile SVGs are already uploading fine in the admin.
+**Why:** Two things. (1) Bricks ships SVG upload (`themes/bricks/includes/svg.php`): hooks `upload_mimes` to enable SVG, `wp_handle_upload_prefilter` → sanitizes with `darylldoyle/svg-sanitizer` (the "enshrined" library) on by default, and gates on `Bricks\Capabilities::current_user_can_upload_svg()` (admins yes; per-role assignable under Bricks → Settings → Builder Access). (2) That `upload_mimes` filter only adds SVG when the capability check passes — and **WP-CLI runs as user 0**, so the cap is false and the filter no-ops. The mime/cap state under bare `wp eval` is therefore a false negative.
+**Fix:** Don't add SVG mime/sanitization to the core plugin — it would duplicate Bricks' filters (double `upload_mimes`, double sanitize). Rely on Bricks; just assign the SVG-upload capability to the roles that need it. When checking cap/mime state from CLI, `wp_set_current_user(1)` first or the check lies:
+```php
+wp eval 'wp_set_current_user(1); var_export( array_key_exists("svg", get_allowed_mime_types()) );'  // true
+```
+**First seen:** Highland, 2026-06-14 — concluded "WP blocks SVG, add a sanitizer to highland-core"; the block was a user-0 CLI artifact and Bricks already handles SVG safely. (General rule: verify any capability/mime/`current_user_can` check from CLI with the current user set.)
+**Also bites `wp media import`:** importing an SVG from the CLI fails with `Sorry, you are not allowed to upload this file type` — same root cause (user-0 → SVG mime not enabled). Fix: pass `--user=1` on the command, e.g. `wp media import logo.svg --title="…" --user=1 --porcelain`. First seen Highland, 2026-07-01 (about-page CTA logo import).
+
+
+### Test custom Bricks dynamic tags with `bricks_render_dynamic_data()`, NOT manual `apply_filters()`
+**Symptom / When:** Verifying a custom dynamic tag (registered via `bricks/dynamic_tags_list` + `render_tag` + `render_content`). Calling `apply_filters('bricks/dynamic_data/render_tag', '{my_tag}', ...)` by hand returns the value wrapped in extra braces (`{resolved}`), and an unknown tag comes back double-braced (`{{x}}`) — looks broken.
+**Why:** Bricks' own `Bricks\Integrations\Dynamic_Data\Providers::get_tag_value` (and `::render`) are hooked at the **same priority 10** as your callback. Your plugin's filter registers first (plugins load before the theme), so Bricks' provider runs *after* yours on the already-resolved string and re-wraps it. That chain isn't how Bricks resolves tags at runtime, so the manual test is misleading.
+**Fix:** Test through Bricks' canonical API, which mirrors real rendering:
+```php
+wp eval 'echo bricks_render_dynamic_data("{highland_phone_link}");'            // tel:3303383577
+wp eval 'echo bricks_render_dynamic_data("Call {highland_phone} now", get_the_ID(), "text");'
+```
+Standalone tags, embedded tags, link context, and unknown-tag passthrough all render correctly this way. (Building the three filters off one shared map array — per `02` — keeps add-a-tag to a one-row change.)
+**First seen:** Highland, 2026-06-14 — registering `{highland_phone}` / `{highland_phone_link}`; manual `apply_filters` showed `{tel:...}` and `{{unknown}}`, but `bricks_render_dynamic_data()` confirmed clean output.
+
+
+### A WP-CLI write to `_bricks_page_content_2` can silently not persist — verify by DB read-back; and global-class CSS is inline, not in `post-*.min.css`
+**Symptom / When:** Building page content section-by-section via `update_post_meta('_bricks_page_content_2', …)` after `wp_set_current_user(1)`. A build script reported its in-memory element count (155) and "success", but the new section was absent from the rendered page; a fresh `get_post_meta` showed the OLD count (142) — the write never landed. Re-running the identical script persisted it. Separately, grepping `post-{ID}.min.css` for the new global classes finds nothing (file is 0 bytes).
+**Why:** Two independent things. (1) The non-persist couldn't be pinned to a definitive cause — `update_post_meta` returned without the value landing once, then worked identically on re-run (a transient cache/timing artifact; the gated-capability requirement from the established `update_post_meta`-silently-fails entry was already satisfied). (2) This install delivers global-class CSS **inline in `<head>`**, not via per-post files — so `post-{ID}.min.css` is legitimately 0 bytes for a page built entirely from global classes; that file is the wrong place to verify.
+**Fix:** Never trust a build script's own echoed count. After every gated-meta write, re-read from the DB in a SEPARATE `wp eval` (fresh process) and assert the count/ids — if short, re-run. Verify emitted CSS by grepping the RENDERED page HTML (`curl`), not the post CSS file.
+**First seen:** Highland, 2026-06-16 — homepage hero section's first write was lost; caught because the section didn't render, re-ran, confirmed 155 in DB.
+
+
+### Advanced Themer "Remove style controls" tweak silently kills ALL typed-setting CSS site-wide — only `_cssCustom` survives
+**Symptom / When:** Global-class (and element) CSS built from **typed** Bricks settings (`_background`, `_padding`, `_typography`, `_border`, `_gridTemplateColumns`, …) stops rendering everywhere — builder canvas AND front-end. Raw `_cssCustom` classes still render. No PHP error, no fatal, nothing in the log. Data is fully intact (`bricks_global_classes` settings all present and valid). Toggling AT off restores everything; AT on re-breaks it. Looks at first like an AT *version* regression — it is **not** (reproduces on every AT version; a plugin rollback + browser hard-refresh does nothing because the trigger is a DB setting, not the binary).
+**Why:** AT's builder tweak **"Remove style controls"** (`AT__Builder::disable_style_controls`, gated by `remove-style-controls` being present in the `bricks-advanced-themer__brxc_builder_default_custom_settings` array). It hooks `bricks/elements/{element}/controls` at priority 999 and **unsets every control that has a `css` property** (keeping a small excluded set: `_cssCustom`, `_cssClasses`, `_cssId`, `_attributes`, …). The footgun: that filter is registered on `init`, so it runs on the **front-end**, not just the builder UI — and Bricks' CSS generator builds CSS from typed settings *by walking those same control definitions' `css` property*. Strip the controls → Bricks has no setting→CSS mapping → the entire typed pass emits nothing. `_cssCustom` is raw and excluded, so it's the only thing left. The feature's intent is a strict utility/class-only authoring workflow (hide native style controls so designers must use global classes) — fundamentally at odds with our **typed-first** methodology.
+**Fix:** Remove `remove-style-controls` from the setting (keeps AT 100% functional otherwise):
+```php
+wp eval '$o="bricks-advanced-themer__brxc_builder_default_custom_settings"; $v=get_option($o); $v=array_values(array_filter((array)$v,fn($x)=>$x!=="remove-style-controls")); update_option($o,$v);'
+```
+UI equivalent: Bricks → AT settings → Builder Tweaks → uncheck **"Remove style controls."** Then regenerate CSS (`\Bricks\Assets_Files::regenerate_css_files()` after `wp_set_current_user(1)`) and hard-refresh the builder to clear the iframe's cached assets. **Diagnostic tell:** if typed CSS is gone but `_cssCustom` rules survive, suspect a control-stripping filter (AT or otherwise) before anything else — bisect AT by clearing its settings rows (`bricks-advanced-themer__*`) with the plugin still active; if that restores rendering, it's a setting, not the code.
+**First seen:** Highland, 2026-06-20 — Header (#38) + Footer (#50) and homepage typed CSS vanished site-wide after an AT update; user had rolled back 3.3.15→3.3.13 with no effect. Bisected to this one setting; removing `remove-style-controls` restored 106 global-class rules with AT active.
+
+
+### Typed flex `_columnGap`/`_rowGap`/`_direction` silently don't emit when a global class is on a `text-basic` element — only on layout elements (div/block/container)
+**Symptom / When:** A global class sets `_display: flex` + `_alignItems` + `_columnGap` (string value) and the flex + alignment emit, but the **gap (and `_direction`) never appear in the rendered CSS**. The same class shape emits the gap correctly elsewhere. Looks like a per-class emit bug or a caching artifact (it is neither — reproduces in inline AND file mode, with only one class entry, correctly referenced).
+**Why:** Bricks resolves a global class's typed setting→CSS mapping against the **controls of the element type the class is applied to**. The `text-basic` (text) element does NOT register the flex layout sub-controls (`_direction`, `_columnGap`, `_rowGap`, `_flexWrap`), so those settings have no `css` mapping to emit through and are dropped. The controls a text element DOES have — `_display`, `_alignItems`, `_margin`, `_typography` — still emit, which is what makes it look selective. A `div`/`block`/`container` element carries the full layout group, so the identical class shape emits the gap there. **Confirmed:** `.eyebrow` (on `text-basic<p>`) dropped `_columnGap`; `.footer__social` (identical shape, on a `div`) emitted it.
+**Fix:** Three options when a flex **text** element needs a gap between flex items (e.g. an eyebrow `<p>` with a `::before` rule + its text):
+1. **(used here)** Define the gap in CSS alongside whatever it spaces — e.g. `margin-right`/`margin-inline-end` on the `::before` in the child theme (the pseudo-element is non-typeable anyway, so this is the legitimate typed-first exception, not a punt).
+2. Restructure the element to a `block` with `tag:"custom"` + `customTag:"p"` — a layout element rendered as `<p>`, which keeps `<p>` semantics and lets `_columnGap` emit typed. Invasive if the class is already used widely.
+3. Wrap the line + text in a layout child and gap that.
+Don't burn time hunting a "broken" typed gap on a text element — check the **applied element's type first**. `text-basic` = no flex gap/direction controls.
+**First seen:** Highland, 2026-06-20 — `.eyebrow` (text-basic `<p>`) wouldn't emit a typed `_columnGap` between its `::before` line and text; spent multiple passes ruling out value/cache/version/`_direction` before confirming it was the text-vs-div element type. Gap moved to `.eyebrow::before { margin-right }` in the child theme.
+
+
+### Bricks builder open during a WP-CLI meta write → saving from that tab silently clobbers the DB edit
+**Symptom / When:** You edit `_bricks_page_content_2` (or header/footer) headlessly while a Bricks builder tab for that same post is open in a browser. The DB write succeeds and the front-end renders correctly, but the builder still shows the *old* tree — and the moment anyone clicks Save in that stale tab, your headless changes vanish.
+**Why:** The builder loads the element tree into JS memory on open and treats that in-memory copy as the source of truth. Every Save POSTs the **entire** in-memory tree back over the meta key — it does not diff against, merge with, or re-read the DB first. So a builder session that opened *before* your CLI write is carrying a pre-edit snapshot, and its next Save overwrites the DB with that snapshot. The DB write itself isn't lost on contact — it's lost on the next builder Save. (Verify intactness with a `wp post meta get … --format=json` read-back, not by looking at the builder.)
+**Fix:** Sequence the surfaces, never overlap them on the same post. Before a WP-CLI build/edit, close or hard-reload any open builder tab for that post. After a headless edit, a builder that needs to reopen must be **reloaded** so it pulls the fresh DB tree — only then is Save safe. If a clobber already happened, re-run the (idempotent) headless build; it takes seconds. This is the write-side twin of the golden rule's read-side validator: the builder is authoritative on save, so don't let a stale one save over you.
+**First seen:** Highland, 2026-06-30 — integrated the Leaflet service-area map into homepage #18 via WP-CLI while a builder tab was open; the tab showed the old placeholder and looked "clobbered." DB read-back confirmed the map elements (canvas/caption) were actually intact — the real risk was a Save from the stale tab, avoided by closing all builders.
+
+
+### Frontend-only JS widget (Leaflet map etc.) renders as a blank box inside the Bricks builder canvas — looks clobbered, isn't
+**Symptom / When:** A component whose visuals are produced by a front-end JS library (Leaflet map, a slider, anything mounted by an enqueued script) shows as an empty styled `<div>` in the Bricks **builder** canvas, while rendering perfectly on the live page. Easy to misread as a failed/clobbered edit.
+**Why:** The builder canvas is its own iframe/context and only loads builder-registered assets. A script enqueued for the front end (here, conditionally via `wp_enqueue_scripts` on `is_front_page()`/`is_page()`) is **not** loaded in the builder, so the mount element stays an empty container. The element, its classes, and its typed settings are all present and correct in the tree — only the JS-painted result is absent.
+**Why it's fine:** Nothing to fix. The element box (background/radius/aspect/size from its Bricks/ACSS classes) still shows in the builder so you can position it; the widget itself only needs to be correct on the front end, which is where it's verified (curl/grep for the markup + enqueue, then a real browser to confirm the library initialised). If a builder-canvas preview is ever genuinely wanted, Bricks' `bricks/builder/…` asset hooks can enqueue the script there too — usually not worth it.
+**First seen:** Highland, 2026-06-30 — the Leaflet service-area map (init script `highland-core/assets/js/service-area-map.js`, enqueued front-end only) showed as a blank steel box in the builder; verified the map renders on the live homepage (tiles + 9 markers + radius) and confirmed the builder blank is expected, not data loss. See the companion entry above on builder-open clobber risk.
+
+
+### Bricks Code element written headlessly renders nothing until you regenerate its code signature
+**Symptom / When:** You create a Bricks `code` element with `'executeCode' => true` via WP-CLI / direct DB write. DB read-back confirms the element and its code, the page returns 200, but the element renders **nothing** on the front end (no output, no `brxe-code` wrapper, no error) — as if the element isn't there.
+**Why:** Bricks (1.9.7+) signs executable code with an HMAC (`settings.signature`) to stop DB-injected code from running as PHP — a security control against exactly this write path. `Code::render()` calls `Helpers::sanitize_element_php_code( $post_id, $element_id, $code, $signature )`; with no/invalid signature it returns empty and renders nothing. The signature is keyed to the post id + element id + code, so it can only be produced by Bricks itself, not hand-written.
+**Fix:** After writing the code element, sign all code instances as an admin with the code-execution cap:
+```php
+wp_set_current_user( 1 );
+\Bricks\Admin::crawl_and_update_code_signatures(); // signs every code element in the DB
+\Bricks\Assets_Files::regenerate_css_files();
+```
+Verify the element now carries `settings.signature` (32 chars) on read-back and the code renders. Requires `executeCodeEnabled` on (Bricks → Settings → Custom code) and the user to hold the cap. If `BRICKS_LOCK_CODE_SIGNATURES` is defined, signing is blocked by design — don't use the Code element for headless writes there; use a Shortcode element backed by a plugin shortcode instead. Re-sign after any later headless edit to the code (the signature is content-bound).
+**First seen:** Highland, 2026-06-30 — contact page (#21) form built as a static stub in a Code element (`executeCode`+`noRoot`); the `<form>` rendered nothing until `crawl_and_update_code_signatures()` signed it. Belongs with the auth gotcha (`wp_set_current_user(1)`) as a headless-write prerequisite.
+
+
+### A mockup's "reuse these classes" note goes stale after a builder rework — reconcile against live `bricks_global_classes` BEFORE building
+**Symptom / When:** Building a new page from a token-pure mockup whose header comment asserts it reuses existing global classes ("keep class contracts identical so the typed global classes carry over"). You plan to reuse `hh-card` / `hh-cta-band` / `hh-trust` / `hh-section-head` as named — but those classes don't exist in the install, or exist under different names, so a literal reuse would attach non-existent class ids (unstyled output) or silently rebuild components that already exist under another name (drift + duplication).
+**Why:** Mockups are authored against an earlier snapshot of the build. Between mockup and build, the person doing the hands-on Bricks pass renames/refactors the shared components (on Highland, Mike's homepage rework turned `hh-cta-band`→`dark-cta-band`, `hh-trust`→`trust-strip`, `hh-section-head`→`mpd-section__header`, `hh-card`→`home-services__card`, and moved page blocks to page-scoped `home-*`). The mockup's class names and its "these carry over" note are frozen at authoring time and quietly diverge from live state.
+**Fix:** Before building, dump the live classes and reconcile the mockup's assumed names against them — never trust the mockup's reuse note:
+```bash
+wp option get bricks_global_classes --format=json | python3 -c "import json,sys;[print(c['name']) for c in sorted(json.load(sys.stdin),key=lambda x:x['name'])]"
+```
+Also read what the sibling built page actually references (`_bricks_page_content_2` → `_cssGlobalClasses` → resolve ids to names) to learn the *current* naming. Then: reuse the live shared abstractions (here `mpd-*`, `dark-cta-band`, `trust-strip`, `eyebrow`, `display`, buttons) under their real names, and build page blocks page-scoped to the new page — do not resurrect the mockup's stale block names.
+**First seen:** Highland, 2026-07-01 — about-page mockup asserted `hh-*` reuse; recon showed all those shared components had been renamed in the homepage rework, so the build reused `dark-cta-band`/`mpd-section__header`/`trust-strip__item` and used page-scoped `about-*` blocks instead. (Reconciling class contracts against live state is the front-half "token/skip remap" step of `02` extended to class names.)
+
+
+### Grid container: `_alignItems` is ignored, `_alignItemsGrid` is the operative key (unset emits `align-items: initial`)
+**Symptom / When:** Grid items won't stretch to equal height (or an `_alignItems` value on a grid class does nothing). Rendered CSS shows `align-items: initial` — a value never present in any setting.
+**Why:** Bricks splits the control per display mode: `_alignItems` is the flex control and doesn't emit when `_display: grid`; the grid control is `_alignItemsGrid`, and when it's unset Bricks emits `align-items: initial` for grid containers (`initial` → `normal` → stretch, so the default behaves correctly — but the emitted `initial` misleads an audit into thinking a value is set).
+**Fix:** On grid classes, set/unset `_alignItemsGrid` (unset = stretch). Audit tip: a class carrying both keys (e.g. `_alignItems: start` + `_alignItemsGrid: center` on `home-diff__container`) is really centered — the flex key is dead weight under grid.
+**First seen:** Highland, 2026-07-03 — `.home-services__secondary` items wouldn't equal-height; class had `_alignItemsGrid: center`; removal restored stretch.
+
+
+### `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
+**Symptom / When:** Running the standard per-post CSS regen from WP-CLI on a site with BricksExtras (or any plugin registering custom Bricks controls). WP-CLI prints `Error: Control type number is not defined!` — which looks like the regen died.
+**Why:** The regen walks every element's control definitions to emit CSS. Some third-party control types are only registered inside the builder context, so outside it the lookup misses and Bricks emits a notice. It does not halt the run — the remaining files still generate.
+**Fix:** Do not trust the message either way. Assert on the output, which is why the canonical regen script ends with a file count:
+```php
+$f = glob( WP_CONTENT_DIR . '/uploads/bricks/css/post-*.min.css' );
+echo "post-*.min.css count: " . count( $f ) . "\n";   // plus: check the target post's mtime
+```
+Non-zero count + a fresh `post-<ID>.min.css` mtime = the regen worked. Then verify the actual rule landed in the rendered page.
+**First seen:** Highland, 2026-07-22 — regen after the Services media-tier conversion. Printed the error, wrote 11 files, page rendered correctly.
+
+
+### Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path
+**Symptom / When:** A Bricks Form with the `redirect` action and a dynamic URL (e.g. `redirect = {site_login}`) sends the user to a nonsense URL after a successful submit — `https://site.com/wp-admin/{site_login}` — with the tag unresolved and wrapped under `/wp-admin/`. Most visible on a custom Reset Password page, where the post-reset redirect is the last step of a flow nobody tests until launch.
+**Why:** In `themes/bricks/includes/integrations/form/actions/redirect.php` the two settings are **not** mutually exclusive and are evaluated in order. `redirect` is rendered first (`$redirect_to = $form->render_data( $settings['redirect'] )`), then the admin branch **overwrites it** and re-wraps the **raw, unrendered** string: `$redirect_to = isset($settings['redirect']) ? admin_url( $settings['redirect'] ) : admin_url();`. So the dynamic tag never resolves and the value becomes a path under wp-admin. In the Bricks UI the two controls sit in the same "Redirect" group with nothing indicating one nullifies the other.
+**Fix:** Pick one. To use a custom/dynamic redirect, the `redirectAdminUrl` key must be **UNSET, not set to `false`** — the code tests `isset()`, so a stored `false` still triggers the admin branch:
+```php
+$s = $el['settings'];
+unset( $s['redirectAdminUrl'] );   // NOT $s['redirectAdminUrl'] = false;
+```
+Verify by replicating the logic rather than trusting the panel:
+```php
+$r = isset($s['redirect']) ? bricks_render_dynamic_data($s['redirect']) : false;
+if ( isset($s['redirectAdminUrl']) ) $r = isset($s['redirect']) ? admin_url($s['redirect']) : admin_url();
+echo $r; // what the user will actually get
+```
+**First seen:** Highland, 2026-08-04 — imported Reset Password page had both set; every successful password reset landed on `/wp-admin/{site_login}`. Login page on the same build was correct precisely *because* it had `redirectAdminUrl` with **no** `redirect` value, which is the only combination where the admin branch behaves as labelled.
+
+
+### Bricks custom login page ignores `?redirect_to=` whenever a redirect action is configured
+**Symptom / When:** A user is bounced to the custom login page from a protected URL (`/login/?redirect_to=…`), logs in, and lands on the dashboard instead of where they were going. Looks like the parameter is being dropped.
+**Why:** `form/actions/login.php` only honours the `redirect_to` form field when the redirect action is **absent**, or when neither `redirect` nor `redirectAdminUrl` is set:
+```php
+if ( ! in_array( 'redirect', $form_settings['actions'], true ) ||
+     ( ! isset( $form_settings['redirect'] ) && ! isset( $form_settings['redirectAdminUrl'] ) ) ) { … }
+```
+A form configured to always land on wp-admin therefore ignores deep links by design.
+**Fix:** Accept it for an admin-only door (arguably desirable — every login goes to one known place). If deep-link-after-login is wanted, remove the redirect action from the form and let `redirect_to` drive, or filter `bricks/auth/custom_redirect_url`. Decide deliberately; don't discover it from a client.
+**Also here — a stale docblock to ignore:** `auth-redirects.php::modify_reset_password_email()` documents "only occurs if … the WordPress auth URL behavior is not set to default". **The implementation has no such check** — it rewrites the reset email to the custom page whenever that page is set and published. Verify behaviour, not the comment:
+```php
+apply_filters( 'retrieve_password_message', $native_msg, 'KEY', 'user', null ); // print the link it produces
+```
+**First seen:** Highland, 2026-08-04 — auditing the Bricks custom auth pages before launch.
+
+
+### A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
+**Symptom / When:** Pages imported from another build (a wireframe kit, a sibling project, a marketplace template) render structurally fine but: text uses the wrong typeface with **`font-family:"some-image-filename"`** in the emitted CSS; an `alt` or heading prints a literal `{acf_some_field}`; form notification settings name a domain you've never heard of.
+**Why:** Bricks stores several references as **numeric post IDs or bare field names that are only meaningful on the origin site**. `_typography.font-family` is `custom_font_<post_id>` — on the new site that ID is whatever post happens to occupy it, commonly a media attachment, and Bricks dutifully emits its title as a font name. `{acf_*}` tags reference field *names* that may not exist locally. Form `emailTo`/`fromName`/Mailchimp strings come along too. None of it errors; it just renders wrong.
+**Fix:** After ANY cross-site template import, sweep for foreign references before styling:
+```bash
+# font ids used, resolved against what they actually are locally
+wp eval 'global $wpdb; $r=$wpdb->get_col("SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key LIKE \"_bricks_page_%\"");
+$j=$wpdb->get_var("SELECT option_value FROM {$wpdb->options} WHERE option_name=\"bricks_global_classes\"");
+preg_match_all("/custom_font_(\d+)/", implode("",$r).$j, $m);
+foreach(array_unique($m[1]) as $id){ $p=get_post($id); printf("custom_font_%-5s -> %s\n",$id,$p?$p->post_type."/".$p->post_title:"MISSING"); }'
+# this install's real fonts (note the post type is bricks_fonts, plural)
+wp eval 'foreach(get_posts(["post_type"=>"bricks_fonts","numberposts"=>-1]) as $f) printf("%d %s\n",$f->ID,$f->post_title);'
+```
+Then confirm on the rendered page — `curl … | grep -oE 'font-family:[^;}]*' | sort -u` should list only real families. Also grep the rendered HTML for `{acf_` to catch unresolved tags, and read the form settings for the origin site's email config.
+**First seen:** Highland, 2026-08-04 — three auth pages imported as wireframe bones emitted `font-family:"highland-home-kit-before_001"` (font id 154 was a *kitchen photo* locally) and `alt="{acf_business_info_company_name}"`, plus `fromName: acss.brixies.co` on every form.
+
+
+### Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
+**Symptom / When:** A custom tag returns client-entered text (an ACF field, a repeater row). If that text itself contains another dynamic tag, the tag prints literally on the page — and, worse, gets published verbatim into JSON-LD or a meta description.
+**Why:** Bricks resolves tags in the element's saved settings. Your callback's **return value** is output, not re-parsed — there is no second pass. Anything nested arrives as literal text.
+**Fix:** Treat client-supplied text as a leaf. Do not put tags in it, and say so in the ACF field instructions so nobody tries later. If a value genuinely must be composed, resolve it inside the callback:
+```php
+function prefix_loop_answer() {
+    $row = prefix_current_row();
+    return $row ? bricks_render_dynamic_data( $row['answer'] ) : ''; // explicit second pass
+}
+```
+Weigh that carefully where the same string feeds structured data — a half-resolved tag in `acceptedAnswer` is worse than a hardcoded value.
+**First seen:** Highland, 2026-08-04 — a client-managed FAQ repeater feeds both the on-page block and `FAQPage` schema. Wiring the site-wide response promise (`{highland_response_time}`) into an answer would have published `{highland_response_time}` into `acceptedAnswer`; the literal string was kept deliberately and the constraint documented.
+
+
+### Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
+**Symptom / When:** A custom query type iterating arrays (an ACF **options-page** repeater, an API result) loops the right number of times, but `{post_title}`, `{acf_*}` and friends output empty inside the loop.
+**Why:** Those tags read the global post context. `bricks/query/loop_object` only establishes it when the loop object is a `WP_Post` and you call `setup_postdata()`. Plain arrays have no post context, and ACF's own repeater loop exposure (`acf_<repeater>`) applies to a repeater **on the current post** — an options-page repeater is not that.
+**Fix:** Register loop-aware custom tags that read the loop object directly, and have them fail quietly outside a loop:
+```php
+function prefix_current_row() {
+    if ( ! class_exists( '\Bricks\Query' ) ) return null;
+    $o = \Bricks\Query::get_loop_object();
+    return is_array( $o ) && isset( $o['question'] ) ? $o : null;
+}
+function prefix_loop_question() { $r = prefix_current_row(); return $r ? $r['question'] : ''; }
+```
+Register on `render_tag` **and** `render_content` (conditions resolve via the latter). The loop element itself must be a layout element — `hasLoop` is ignored on heading/text.
+**First seen:** Highland, 2026-08-04 — `highland_faqs` query type over a Site Options repeater so the client owns the FAQ; rows are arrays, so `{acf_*}` was never going to resolve.
+
+
 ## BricksExtras
 
 ### BricksExtras element `name` strips hyphens from the file basename
@@ -876,6 +1099,43 @@ Audit all disabled elements: `wp option list --search="bricksextras_*" --format=
 **Fix (in order of preference):** (1) file a feature request with BricksExtras for SSR ARIA; (2) inject via child-theme JS — walk `.x-accordion_header` on init, generate id pairs, set `aria-controls` on the header and `id` on the panel, toggle `aria-expanded` on click; (3) replace with native `<details>`/`<summary>` (full a11y by default, loses the BricksExtras features).
 Triage first: click an item and inspect. If `aria-expanded` updates, only SSR is stale (less urgent). If it doesn't update at all, severe.
 **First seen:** TAB, 2026-04-26 — FAQ a11y audit: 6 items, 0 with `aria-expanded`, 0 with `aria-controls`. Shipped fix was the child-theme JS route.
+
+### BricksExtras element-level styling doesn't emit via CLI CSS regen — "Control type X is not defined!"
+**Symptom / When:** After writing a BricksExtras element (e.g. `xoffcanvasnestable`) headlessly and running `\Bricks\Assets_Files::regenerate_css_files()` via WP-CLI, the regen prints `Error: Control type number is not defined!` and the BE element's *element-level* styling settings (`offcanvas_width`, `backdrop_color`, …) emit **zero CSS**. Global-class CSS on the same elements emits fine; the element markup and its JS config render fine.
+**Why:** Bricks' CSS generator resolves each setting against the element's registered control definitions to know how to map it to CSS. BricksExtras registers its custom control types only in builder context — under CLI the control type lookup fails, and the generator skips those settings (loudly, but non-fatally). Builder saves regenerate with all control types present, which is why the same settings work on installs where the element was authored in the UI.
+**Fix:** Keep the typed BE settings in place (correct, builder-visible, they emit on the first builder save of the template). For anything that must render before that first save — or that the typed control can't express (responsive `min()`) — carry it in `_cssCustom` on a related global class, targeting BE's stable structural classes, e.g. `.brxe-xoffcanvasnestable .x-offcanvas_inner { width: min(400px, 88vw); padding: 0; }`. Check BE's base stylesheet (`bricksextras/components/assets/css/`) first — its defaults may already cover you (backdrop is `rgba(0,0,0,.5)` out of the box, ≡ `--black-trans-50`).
+**First seen:** Highland, 2026-07-02 — header rebuild #38; BE Pro OffCanvas `offcanvas_width`/`backdrop_color` skipped by CLI regen. Width/padding moved to `_cssCustom` on `mpd-header-offcanvas__inner`; backdrop left to BE's default.
+
+
+### Sticky header + offcanvas inside the header template — the panel "drops"/slides with the header
+**Symptom / When:** An offcanvas element (BricksExtras Pro OffCanvas, or anything `position: fixed`) lives inside the header template, and native `headerSticky` + `headerStickyOnScroll` are enabled. Opening the offcanvas (or just scrolling) makes the main header bar visibly drop/slide, and the offcanvas panel positions against the header instead of the viewport.
+**Why:** `headerStickyOnScroll` animates `#brx-header` with a `transform`. A transformed ancestor becomes the containing block for `position: fixed` descendants — the offcanvas panel (and its backdrop) stop being viewport-fixed and ride the header's transform instead. Same family as the typed-`position:sticky` containing-block trap, from the other direction.
+**Fix:** Either (a) drop sticky from the header template (`headerSticky`/`headerStickyOnScroll` out of `_bricks_template_settings`) — chosen on Highland; or (b) keep sticky but move the offcanvas out of the header template (BE's OffCanvas supports a template source: `offcanvas_template`) so no transformed ancestor sits above the fixed panel. Plain `headerSticky` without `OnScroll` avoids the *slide* but the trap remains latent for any transform Bricks applies.
+**First seen:** Highland, 2026-07-02 — header #38 rebuild; BE offcanvas at header-template root; drop confirmed fixed by removing sticky.
+
+
+### BE Pro Slider Gallery default lazy-load ships placeholder `src` — kills hero/LCP images
+**Symptom / When:** A Pro Slider Gallery renders every slide `<img>` with an inline SVG data-URI as `src`/`srcset` (real URL only in `data-splide-lazy`), so images appear only after Splide's JS initializes. Harmless below the fold; on a hero it makes the LCP element a 0×0 SVG and defers the real paint to post-JS.
+**Why:** `lazyLoadSupport` defaults to `'splide'`, which swaps in the placeholder + `loading="eager"` and hands loading to Splide at init. The `fetchpriority="high"` WP adds targets the data-URI, not the real image.
+**Fix:** For above-the-fold sliders set `lazyLoadSupport: 'none'` (real `src`, eager, in initial HTML) + `maybeSRCSET: 'enable'` (srcset default is DISABLED — without it you ship the full-size original). Keep the `'splide'` default for below-fold sliders.
+**First seen:** Highland, 2026-07-03 — homepage hero slider; first slide was an SVG placeholder until JS ran.
+
+
+### BricksExtras before/after renders nothing server-side — verify headless with Playwright, and beware the screenshot-timing false alarm
+**Symptom / When:** Confirming a BE `xbeforeafterimage` (or any BE widget) actually works after a CLI build. `curl | grep` proves only that the markup shipped — BE builds the clip/handle in JS, so a broken widget and a working one look identical in the HTML. Worse: a full-section Playwright screenshot can show **the same image on both sides of the handle**, which reads as "the before image is wired wrong."
+**Why:** Two separate things. (1) BE's SSR output is just two stacked blocks; the clip-path, handle and labels only exist after Splide/BE JS initialises, which is why the widget is also blank in the Bricks builder iframe. (2) The before layer is `position:absolute; clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%)` **over** the after layer — if the screenshot fires before that layer's image has painted, you photograph the after layer showing through, at full width. The DOM is correct the whole time; only the pixels lie.
+**Fix:** Assert on the DOM, not the picture — then screenshot to confirm composition:
+```js
+// per block: which image, and is it the clipped (before) layer?
+[...ba.querySelectorAll('.x-before-after-image_block')].map(blk => ({
+  src:  blk.querySelector('img').currentSrc.split('/').pop(),
+  clip: getComputedStyle(blk).clipPath,   // before => polygon(...), after => 'none'
+  pos:  getComputedStyle(blk).position,   // before => absolute, after => static
+}))
+```
+Screenshot the **block element** (`locator.screenshot()`), or `scrollIntoViewIfNeeded()` + wait ~2s before shooting the section — never `page.screenshot({clip})` straight after load. Playwright installs clean on a RunCloud box with no root: `npm i playwright && npx playwright install chromium`.
+**First seen:** Highland, 2026-07-22 — promoting three Services sections to media tier. The kitchen section's first screenshot showed a finished kitchen on both sides of the handle; the pairing was in fact correct (before=154, after=168) and a block-level screenshot proved it immediately. Nearly "fixed" a bug that did not exist.
+
 
 ## Frontend Toolkit (animations)
 
@@ -1071,6 +1331,44 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Fix:** Set the brand ranges as per-level overrides (mobile=min, desktop=max); leave base+scale for the unspecified levels. Scriptable via `save_settings`. Pin a floor with a per-level override where a scale step would dip below it (e.g. `text-s`=14/14 for a 14px floor).
 **First seen:** MMHN, 2026-07-16.
 
+### ACSS is fully configurable headless via `Database_Settings::save_settings()` — but `API::update_settings()` is broken in 3.3.6
+**Symptom / When:** Configuring ACSS (colors, fonts, scales) from WP-CLI. `\Automatic_CSS\API::update_settings( $vars )` — the documented entry point — fatals: `Call to undefined method Automatic_CSS\Model\Database_Settings::save_vars()` (API.php:86). Version skew: the installed `API.php` calls a method that no longer exists.
+**Why:** The real save method is `Database_Settings::save_settings( $values, $trigger_css_generation = true )`. It validates `$values` against the allowed-variable list from the config UI and falls back to each var's **default** for any allowed var absent from input — so passing only your deltas resets everything else to defaults.
+**Fix:** Merge over the full current settings, then save. `save_settings()` regenerates the CSS files directly (no dashboard "Save" needed — supersedes the older `03` note about clicking Save).
+```php
+wp_set_current_user(1); // needs manage_options (CAPABILITY check)
+$db = \Automatic_CSS\Model\Database_Settings::get_instance();
+$vars = array_merge( $db->get_vars(), $my_changes ); // FULL set, not just deltas
+$db->save_settings( $vars, true );
+```
+**First seen:** Highland, 2026-06-14 — configuring ACSS to the brand. `API::update_settings()` fatalled (clean fail, no DB write); switched to `save_settings()` with a full merge.
+
+
+### ACSS color shade ramps are stored per-shade, NOT recomputed from the master — must rewrite the ramp partials
+**Symptom / When:** After setting a master color (`color-primary`) via DB + regenerate, the base `--primary` is correct but the whole shade ramp (`--primary-dark`, `-light`, `-hover`, …) stays the OLD color. The dashboard's color picker recomputes ramps in JS; the PHP save path does not.
+**Why:** Each shade's hue/sat/lightness is stored as ~60 option keys per family (`{color}-{mod}-{h,s,l}` plus `-alt` scheme variants). The SCSS compiler emits composites (`--primary-dark`) **from these stored partials** (composites are not themselves option keys). Change only the master and the partials are stale. `API::update_settings()` propagates saturation only (`-s`), not hue/lightness — and even that uses a stale modifier list (`medium` vs this build's `semi-light`/`semi-dark`).
+**Fix:** Rewrite the partials, then regenerate. Model validated against the blueprint baseline — every shade inherits master **H** and **S**; **L** is a fixed curve independent of master:
+```
+ultra-light 95 · light 85 · semi-light 65 · semi-dark 35 · dark 25 · ultra-dark 10 · medium 50
+comp = master L · hover = master L × 1.15      (-alt variants mirror the non-alt values)
+```
+Derive master H/S/L with `new \Automatic_CSS\Helpers\Color( $hex )` (`->h/->s/->l`) for exact consistency. Iterate only existing `{color}-{mod}-{h|s|l}(-alt)$` keys so nothing non-allowed is introduced. Related: each non-core color also needs its `option-{name}-clr` toggle = `'on'` or it emits no CSS at all (secondary/danger/success/warning ship OFF; only primary/base/neutral on by default).
+**First seen:** Highland, 2026-06-14 — primary went red but ramp stayed teal (hue 193); rewrote 270 ramp keys across 5 families.
+
+
+### ACSS → Bricks palette sync only hooks under `is_admin()` — CLI saves regenerate CSS but never update the color picker
+**Symptom / When:** After a headless `save_settings()`, the front-end CSS is correct (all `--color` vars emit) but the Bricks color picker still shows the OLD palette — newly added/enabled colors are absent. Repeated CLI saves never fix it.
+**Why:** `Bricks::__construct()` registers `add_action('automaticcss_settings_after_save', 'after_save_settings')` **inside an `if ( is_admin() )`** guard (Bricks.php:92). WP-CLI is not admin context, so the listener is never attached — the CSS regen runs (called directly in `save_settings`) but the palette sync (only via that hook) does not. The picker reflects whatever the last *browser* dashboard save wrote.
+**Fix:** Construct the platform (its ctor needs the DB-settings instance) and call the sync directly:
+```php
+wp_set_current_user(1);
+$db = \Automatic_CSS\Model\Database_Settings::get_instance();
+( new \Automatic_CSS\Framework\Platforms\Bricks( $db ) )->after_save_settings();
+```
+The sync is additive (never removes) and gated by `option-remove-deactivated-classes-from-globals` (the misnamed master sync switch — see established entry). It pulls `get_color_palettes()` with `pro_active_only=true`, so a color appears only if its `option-{name}-clr` is on. Semantic colors (danger/success/warning) additionally route through the `option-status-colors` path.
+**First seen:** Highland, 2026-06-14 — all brand colors emitted in CSS but the picker stuck on the blueprint's primary/base/neutral; forcing `after_save_settings()` synced all 9 families (345 entries).
+
+
 ## ACF
 
 ### ACF Pro — `default_value` seeds the form only, not `get_field()` reads
@@ -1191,6 +1489,20 @@ add_filter( 'redirect_canonical', fn( $r, $req ) => is_tax( 'project_category' )
 **Related:** if a nested-slug taxonomy (`projects/category`) 301s to a same-slug single, also check rewrite ordering — registering the **taxonomy before the post type** fixes a greedy CPT attachment rule sorting ahead of the taxonomy rule.
 **First seen:** TAB, 2026-05-31 — category archives 301'd to service singles until the filter was added.
 
+### Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
+**Symptom / When:** Wiring a favicon on a Bricks build. Two snags: (1) WP native Site Icon never emits an SVG favicon (raster only), so a crisp/scalable SVG needs separate output; (2) setting `site_icon` programmatically (import attachment + `update_option('site_icon', $id)`) does NOT generate the `site_icon-32/180/192/270` intermediate sizes — `wp_generate_attachment_metadata()` only makes the default sizes, so every favicon link falls back to the full image.
+**Why:** The `site_icon-*` sizes are registered only inside WP's admin crop flow (`WP_Site_Icon`), which doesn't run from WP-CLI / a plain attachment insert. And `wp_site_icon()` (hooked `wp_head` @ 99) only outputs `<link rel="icon">`/`apple-touch-icon`/`msapplication` for raster — no `type="image/svg+xml"`.
+**Fix (hybrid, what Highland uses):**
+- Raster set → WP native Site Icon from a 512² PNG. To get real sizes when setting it headless, register the sizes before regenerating:
+  ```php
+  add_filter('intermediate_image_sizes_advanced', function($s){ foreach([32,180,192,270,512] as $px){ $s["site_icon-$px"]=['width'=>$px,'height'=>$px,'crop'=>true]; } return $s; });
+  wp_update_attachment_metadata($id, wp_generate_attachment_metadata($id, get_attached_file($id)));
+  update_option('site_icon', $id);
+  ```
+- SVG favicon → emit it yourself in the core plugin (bundled asset, brand constant): `add_action('wp_head', fn() => printf('<link rel="icon" href="%s" type="image/svg+xml">', esc_url($url)), 2)`. Modern browsers prefer the SVG; Safari/iOS/Android use the native raster set. Add `<meta name="theme-color">` alongside. An SVG with `<style>@media (prefers-color-scheme: dark){...}</style>` gives a free dark-mode favicon.
+**First seen:** Highland, 2026-06-14 — programmatic Site Icon generated only `thumbnail`; added the size filter + a plugin SVG-favicon module (`inc/favicon.php`).
+
+
 ## Rank Math + Bricks
 
 ### Rank Math `%excerpt%` description template produces junk on Bricks-built Pages
@@ -1204,15 +1516,19 @@ update_post_meta( get_option('page_on_front'), 'rank_math_title', '%sitename% %s
 CPTs that keep real copy in `post_content` (body rendered via the Bricks Post Content element) are unaffected — `%excerpt%` works there. Rule: **Bricks Pages need manual descriptions; content-backed CPTs don't.**
 **First seen:** AHML, 2026-06-02 — homepage rendered the WP sample-page text as its meta description during RM Titles & Meta setup.
 
-### Enabling a Rank Math module via the `rank_math_modules` option does NOT create its DB tables
-**Symptom / When:** You enable an RM module programmatically by appending its slug to `rank_math_modules` (e.g. `redirections`). The module reports active, but using it fails — `\RankMath\Redirections\DB::add()` returns `0`; log shows `Table 'wp_rank_math_redirections' doesn't exist`.
-**Why:** Rank Math creates a module's tables in its module-activation path (the UI toggle / `Installer`), not when the option value changes. Writing the option directly skips table creation.
-**Fix:** Call the installer for the active module set after toggling the option:
+### The `rank_math_modules` option has two traps — slugs are legacy, and writing it does NOT create the module's DB tables
+**Symptom / When:** Managing Rank Math modules programmatically. Two distinct failures, same option, usually the same sitting. (1) You append a module slug (e.g. `redirections`) and the module reports active, but using it fails — `\RankMath\Redirections\DB::add()` returns `0`; log shows `Table 'wp_rank_math_redirections' doesn't exist`. (2) You *remove* `schema` to stop RM emitting its JSON-LD graph — matching the directory name in `includes/modules/schema/` — and RM keeps emitting it.
+**Why:** (1) Rank Math creates a module's tables in its module-activation path (the UI toggle / `Installer`), not when the option value changes. Writing the option directly skips table creation. (2) The Schema module's **directory** is `schema`, but the value persisted in the option is the legacy slug **`rich-snippet`**. Directory name ≠ option value, and nothing surfaces the mismatch.
+**Fix:** Read the option to learn the real slugs rather than assuming any — never infer a slug from the directory name:
+```bash
+wp option get rank_math_modules --format=json
+```
+Then call the installer for the active module set after any toggle:
 ```php
 \RankMath\Installer::create_tables( (array) get_option( 'rank_math_modules', array() ) );
 ```
-`create_tables()` is public/static and idempotent (dbDelta). Note `\RankMath\Redirections\Cache::purge()` requires an argument — don't call it bare; a plain `wp cache flush` is enough.
-**First seen:** AHML, 2026-06-02 — enabled Redirections by editing the option; the `/areas/ → home` redirect insert silently no-op'd until `Installer::create_tables()` ran.
+`create_tables()` is public/static and idempotent (dbDelta). Note `\RankMath\Redirections\Cache::purge()` requires an argument — don't call it bare; a plain `wp cache flush` is enough. Gate any "is RM emitting schema?" check on `in_array( 'rich-snippet', get_option('rank_math_modules', []), true )`.
+**First seen:** AHML, 2026-06-02 — enabled Redirections by editing the option; the `/areas/ → home` redirect insert silently no-op'd until `Installer::create_tables()` ran. **Highland, 2026-08-04** — scoping RM to titles/meta/sitemap/redirects while the core plugin took over JSON-LD; removing `schema` did nothing because the stored slug is `rich-snippet`. Folded at the Highland harvest: one option, one entry.
 
 ### Bricks `bricks_template` CPT is publicly indexable AND in the Rank Math sitemap by default
 **Symptom / When:** `/template/<name>/` URLs (header, footer, single/archive templates, error) return HTTP 200, render raw template scaffolding, are `index,follow`, and appear in `bricks_template-sitemap.xml`. Google can index your header/footer as standalone pages.
@@ -1262,6 +1578,44 @@ if ( is_object( $post ) && ( $post->post_type ?? '' ) === 'author'
 ```
 Then `\RankMath\Sitemap\Cache::invalidate_storage()`.
 **First seen:** TAB, 2026-06-27 — a post-launch crawl found a gated bio entry in `author-sitemap.xml` as a 404.
+
+### Rank Math's per-post-type sitemap toggle is all-or-nothing — turning a CPT off removes its ARCHIVE too
+**Symptom / When:** A CPT is archive-only (singles 301 to the archive, or are thin/noindex). The sitemap advertises every single URL, all of which redirect. Setting `pt_<type>_sitemap = off` fixes that but also removes the `/archive/` entry you *do* want indexed — the one page that matters.
+**Why:** RM builds one sitemap per post type and includes the post-type archive link as an entry inside it. The option governs the whole sitemap, so there is no setting that keeps the archive while dropping the members.
+**Fix:** Leave the toggle **on** and filter entries individually. Keeps working for posts added later, with no further config:
+```php
+add_filter( 'rank_math/sitemap/entry', function ( $url, $type, $object ) {
+    if ( empty( $url['loc'] ) ) return $url;
+    $archive = get_post_type_archive_link( 'project' );
+    if ( ! $archive ) return $url;
+    $loc = untrailingslashit( $url['loc'] );
+    if ( untrailingslashit( $archive ) === $loc ) return $url;                   // keep the archive
+    if ( 0 === strpos( $loc, untrailingslashit( $archive ) . '/' ) ) return false; // drop its singles
+    return $url;
+}, 10, 3 );
+```
+Verify every advertised URL actually returns 200 — a sitemap full of 301s is the symptom to look for:
+```bash
+for u in $(curl -s https://site/project-sitemap.xml | grep -oE '<loc>[^<]+' | sed 's/<loc>//'); do
+  printf "%s %s\n" "$(curl -so /dev/null -w '%{http_code}' "$u")" "$u"; done
+```
+**First seen:** Highland, 2026-08-04 — `project` is archive-only; the sitemap listed 12 single project URLs that every one of them 301'd to `/projects/`.
+*(Related, above the seam: "Bricks `bricks_template` CPT is publicly indexable AND in the Rank Math sitemap by default" — that one IS solved by the plain toggle, because templates have no archive worth keeping.)*
+
+
+### `blog_public = 0` on staging masks per-page noindex — you cannot verify indexing config until you lift it
+**Symptom / When:** Every page on staging reports `noindex`, so a page that is *supposed* to be noindexed at launch (login, thank-you, templates) looks correctly configured — and a page that is **missing** its per-page setting looks identical. The mistake surfaces after go-live.
+**Why:** With "Discourage search engines" on, Rank Math emits `noindex` site-wide, overriding the per-page signal in the output. The rendered `<meta name="robots">` therefore proves nothing about post-launch behaviour.
+**Fix:** Lift the flag in a bounded window, sample the pages, and restore in the same command so it cannot be left on:
+```bash
+wp option update blog_public 1 --quiet
+for p in /login/ /about/ /; do printf "%-16s %s\n" "$p" \
+  "$(curl -s "https://site$p" | grep -oP '(?<=name="robots" content=")[^"]*' | head -1)"; done
+wp option update blog_public 0 --quiet
+```
+Expect the protected pages to hold `noindex` from their own `rank_math_robots` meta while public pages return to `index, follow`. Do this before cutover, not after.
+**First seen:** Highland, 2026-08-04 — confirming three admin auth pages were noindexed. Staging showed `noindex` on all 10 pages, which would equally have been true if the per-page meta were absent.
+
 
 ## Mailster
 
@@ -1456,6 +1810,22 @@ curl -s https://challenges.cloudflare.com/turnstile/v0/siteverify -d 'secret=<ke
 ```
 **First seen:** TAB, 2026-06-27 — verifying a Turnstile setup; field meta was empty and the dummy-token trick confirmed the secret without a browser.
 
+### WS Form Pro implements Turnstile natively — and Cloudflare "Turnstile Spin" is redundant on any plugin stack
+**Symptom / When:** Adding Cloudflare Turnstile to a form. The Cloudflare dashboard prompts you to "set up siteverify with Spin", which reads like a required step, and Spin will happily generate backend code for you.
+**Why:** Two things are being conflated. **`siteverify` is not new and not optional** — `https://challenges.cloudflare.com/turnstile/v0/siteverify` is the server-side validation call that every Turnstile integration must make, and it is what the *secret* key is for (the client widget alone protects nothing). **WS Form Pro already makes that call**, via `WS_FORM_TURNSTILE_ENDPOINT` in `ws-form.php` — so on this stack it is already done. **Spin** (new in 2026, docs updated 2026-07-23 — postdates common model knowledge cutoffs, so it will not be in an assistant's memory) is a *setup convenience* that creates the widget, issues the keys, and **injects a siteverify call into your backend**, via dashboard / `wrangler turnstile widget create` / a prompt pasted into an AI coding agent. Cloudflare's own docs state it is not required and deploys nothing on your behalf.
+**Fix:** On any site whose form plugin handles CAPTCHA validation (WS Form, Fluent Forms, Gravity), **do not run Spin.** Its output lands as either dead code in the site plugin or a second validation path competing with the plugin's own. Create the widget in the dashboard, put the keys where the plugin expects them, and stop. In WS Form the global keys live in the **`ws_form` option** as `turnstile_site_key` / `turnstile_secret_key`; the `turnstile` **field type** declares `required_setting_global_meta_key`, so a field added to any form inherits the global keys automatically.
+**⚠️ Add every hostname to the widget's domain list** — production *and* staging. Turnstile validates against that list, so a production-only widget makes staging fail in a way indistinguishable from a broken configuration.
+**First seen:** Highland, 2026-08-04 — the dashboard prompted for Spin after the widget was created manually; the plugin source showed siteverify was already wired.
+
+
+### A client-rendered form cannot be verified with `curl` — check the CAPTCHA provider's own call count instead
+**Symptom / When:** Verifying a CAPTCHA integration by fetching the page and grepping for the widget markup or the provider's script. You get zero hits for `challenges.cloudflare.com` and conclude the integration is broken — or you get the markup, conclude it works, and ship a form that silently rejects every submission.
+**Why:** WS Form builds its fields **client-side** from a JSON definition embedded in the page. What `curl` returns is that definition, not the rendered DOM; the provider's script is injected at runtime. **Zero `challenges.cloudflare.com` in page source is the expected result and proves nothing in either direction.** The inverse is worse: a widget that renders is no evidence at all that the token validates server-side, and that is the half that actually gates the submission.
+**Fix:** Verify at the provider, not the page. **Submit the form for real, then check the widget's siteverify call count in the Cloudflare Turnstile dashboard** — a recorded call proves the token reached Cloudflare *and* validated server-side. Zero calls after a submission means the integration is not live regardless of what the page looks like. Then confirm the notification actually arrived, which closes the path end to end. This is cheaper and more conclusive than a headless browser, which only ever re-checks the client half.
+**Also — position the CAPTCHA field ABOVE the submit button.** WS Form sorts by `wp_wsf_field.sort_index` and will happily place it after submit; the challenge then renders below the button and invites a click before it is solved, turning a lead into a validation error. Fix it by dragging in the WS Form UI, **not** by patching `sort_index` in the database — WS Form DB edits do not take effect until the form is republished.
+**First seen:** Highland, 2026-08-04 — grepping the live pages returned `challenges.cloudflare.com: 0` on both forms and briefly read as a broken integration; the forms are client-rendered. The same inspection found the turnstile field sorted *after* submit on both forms.
+
+
 ## Roles & Capabilities
 
 ### Bricks builder access is admin-only by default — custom roles get NO builder access unless explicitly granted
@@ -1478,6 +1848,37 @@ add_filter( 'user_has_cap', function ( $allcaps, $caps ) {
 }, 10, 2 );
 ```
 **First seen:** AHML, 2026-06-02 — `inc/rank-math-admin-wall.php`; verified a throwaway editor had all `rank_math_*` denied while `edit_posts` stayed intact.
+
+### `current_user_can('assign_terms')` is a false negative — check the taxonomy's MAPPED capability
+**Symptom / When:** Auditing a custom role. `current_user_can('assign_terms')` returns false, so you conclude the role cannot categorise posts and start granting caps it does not need — commonly `manage_categories`, which also hands over term **deletion**.
+**Why:** `assign_terms` is a meta capability name, not a granted one. Each taxonomy maps it to a real cap — by default `assign_terms => 'edit_posts'` while manage/edit/delete map to `manage_categories`. Nobody literally holds a cap called `assign_terms`.
+**Fix:** Resolve through the taxonomy object:
+```php
+$tax = get_taxonomy( 'service_type' );
+current_user_can( $tax->cap->assign_terms );  // 'edit_posts' → true for a content role
+current_user_can( $tax->cap->manage_terms );  // 'manage_categories' → should be false
+```
+**First seen:** Highland, 2026-08-04 — verifying the Business Manager role; the false negative nearly justified granting `manage_categories` over a locked term set that drives both page anchors and `Service` schema.
+
+
+### A CPT registered `capability_type => 'post'` makes the "blog" caps load-bearing — do not drop them on a site with no blog
+**Symptom / When:** Building a scoped client role on a brochure site. The guidance (including our own Business Manager playbook) says to drop `edit_posts`/`publish_posts`/etc. when the site has no blog. You do — and the client can now edit nothing, because their actual content lives in a CPT.
+**Why:** A CPT registered with `capability_type => 'post'` (the default) does not get its own capability set; it *maps onto the post caps*. So `edit_posts` grants the CPT, not a blog. The presence or absence of a blog is irrelevant to whether those caps are needed.
+**Fix:** Check before pruning, and keep the caps if any CPT maps onto them — then hide the empty Posts menu instead of removing the capability:
+```bash
+wp eval 'foreach (["project"] as $t){ $o=get_post_type_object($t);
+  printf("%s capability_type=%s\n", $t, is_array($o->capability_type)?implode("/",$o->capability_type):$o->capability_type); }'
+```
+```php
+add_action( 'admin_menu', function () {
+    if ( ! prefix_is_business_manager() ) return;
+    remove_menu_page( 'edit.php' );          // empty Posts menu
+    remove_menu_page( 'edit-comments.php' );
+}, 9999 );
+```
+**⚠️ HARVEST ACTION — this amends `~/claude-config/business-manager-role-playbook.md`.** Its "Stack assumptions" and "Customization checklist per project" both say to drop blog caps when there is no blog, with no CPT caveat. That instruction is wrong for any brochure site whose content is a CPT — which is most of them. Amend the playbook at harvest; flagged here rather than edited at master mid-build.
+**First seen:** Highland, 2026-08-04 — building the Business Manager role. Highland has 0 posts and no posts page, but `project` is `capability_type => 'post'`, so following the checklist literally would have shipped a client login with no editable content.
+
 
 ## CSS general
 
@@ -1522,6 +1923,25 @@ a:any-link:hover { text-decoration: underline; }
 **Fix:** Verify axes with fontTools (`'fvar' in TTFont(f)` → list `f['fvar'].axes`), don't trust the filename. For optical sizing, download the full variable font WITH the opsz axis. `@font-face` maps discrete `font-weight:400/600` to the same variable file — true weights only if the file is really variable (else "600" renders 400 outlines). `font-optical-sizing` defaults to `auto`; don't set it `none`.
 **First seen:** MMHN, 2026-07-16 — first-added Newsreader files were the 16pt instance (no opsz); re-converted the full opsz+wght TTFs to latin-subset WOFF2.
 
+### Bricks custom fonts — `bricks_font_faces` meta schema + italic key encoding (also a `02` schema-library harvest candidate)
+**When:** Registering or auditing Bricks native Custom Fonts programmatically, or verifying every weight/style in a brand's type spec is actually installed.
+**Why / schema:** Each custom font is a `bricks_fonts` post; its faces live in post meta `bricks_font_faces`, keyed by weight → an array of variant files. Normal weights use an INTEGER key (`700`); **italics use a STRING key `"<weight>italic"`** (e.g. `"800italic"`). Each value is `[ 0 => ['woff2' => <attachment_id>] ]` (woff/ttf keys also accepted). Discovered by reading back UI-created faces (golden rule).
+```php
+get_post_meta( $font_id, 'bricks_font_faces', true ) === [
+  500         => [ 0 => [ 'woff2' => 14 ] ],   // normal weight  → upright file
+  800         => [ 0 => [ 'woff2' => 14 ] ],
+  '500italic' => [ 0 => [ 'woff2' => 16 ] ],   // italic = "<weight>italic" string key → italic file
+  '800italic' => [ 0 => [ 'woff2' => 16 ] ],
+];
+```
+**Things that bite:**
+- A single **variable** woff2 can back multiple discrete weight faces — Bricks emits one `@font-face` per declared weight and the browser pins the variable `wght` axis to each, so e.g. 500/600/700/800/900 all → the same variable file render at distinct weights. But any weight you DON'T declare falls back to the nearest declared one (declare only 700/800/900 and a request for 600 renders at 700 — too heavy). Declare every weight the brand uses.
+- **Italics need a separate file with an italic axis.** A typical upright variable font (Montserrat, Figtree) has NO italic axis (`fvar` carries `wght` only), so italics must be a distinct `-Italic` variable woff2 mapped to the `"<weight>italic"` keys. You cannot get real italics from the upright file (the browser would synthesize an oblique).
+- Editing `bricks_font_faces` directly is NOT gated like the `_bricks_page_*_2` keys — a plain `update_post_meta` sticks (replicate the exact shape per the golden rule).
+- **Verify a woff2 (variable? axes? italic?)** with fonttools in a throwaway venv — macOS system Python is PEP 668 externally-managed, so `pip install` is blocked: `python3 -m venv /tmp/fc && /tmp/fc/bin/pip install fonttools brotli` (brotli is required to open woff2), then check `"fvar" in TTFont(f)` + its axes and `OS/2.fsSelection & 0x01` (italic bit).
+**First seen:** Highland, 2026-06-13 — verifying the Montserrat/Figtree install. Only 700/800/900 (Montserrat) + 400 (Figtree) were declared, all pointing to a single upright variable file, no italics. Confirmed the italic key encoding and the separate-italic-file requirement by reading back faces the client added through the Bricks UI.
+
+
 ## WP-CLI
 
 ### WP-CLI — inline `wp eval` fatals silently on `"{$arr[barekey]}"` in PHP 8
@@ -1550,12 +1970,49 @@ print_r( wc_get_account_menu_items() );   // now includes payment-methods
 **Fix:** Use PHP-path WP-CLI (`wp eval`, `wp eval-file`, `wp option get/update`, `wp post *`) for DB work on Local; avoid `wp db query`/`wp db cli`. If everything DB-related fails, start the Local site first.
 **First seen:** MMHN, 2026-07-16.
 
+### `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
+**Symptom / When:** `wp media import icon.svg` errors "Sorry, you are not allowed to upload this file type" even though SVG uploads work fine in wp-admin and Bricks' SVG support is enabled.
+**Why:** Bricks registers the SVG mime via an `upload_mimes` filter gated by `current_user_can_upload_svg()`. WP-CLI runs as user 0, the capability check fails, and the mime never registers — same silent-capability family as the `_bricks_page_*_2` write gate.
+**Fix:** Sideload inside `wp eval` with the user set first:
+```php
+wp_set_current_user( 1 );
+require_once ABSPATH . 'wp-admin/includes/{image,file,media}.php';
+$aid = media_handle_sideload( [ 'name' => 'icon.svg', 'tmp_name' => $tmp ], 0, 'icon' );
+```
+Bricks' sanitizer still runs on the upload. To add the icon to a custom set, append `{id: 'icon_*', name, url, setId, attachment_id}` to the `bricks_custom_icons` option (set registry = `bricks_icon_sets`).
+**First seen:** Highland, 2026-07-11 — adding a Remix `star-line` icon to the MPD set for the Google-review CTA.
+
+
+### `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
+**Symptom / When:** `wp eval-file build-x.php` returns exit 0 with no output at all — not even a first-line `WP_CLI::log()` — while `php -l` passes and small probe files in the same directory run fine. Nothing lands in the DB.
+**Why:** RunCloud's bundled wp-cli phar `EvalFile_Command` strips the opening tag and `eval()`s the source. Some file contents trip a silent bailout in that eval path (mechanism unconfirmed — the failing file had a large HTML nowdoc with UTF-8 en dashes and a ~300-line element-tree array; a sibling script of similar size/shape ran fine). Truncated versions of the same file DO report parse errors, so the eval path can error loudly — this failure mode is specifically silent.
+**Fix:** Run the identical file as `wp eval 'include "/path/to/build-x.php";'` — `include` compiles it as a normal PHP file and it executes correctly. Cheap habit: if an eval-file script produces no output where output is expected, don't debug the script first — rerun via include.
+**First seen:** Highland, 2026-07-11 — the Request-an-Estimate page build script; identical file ran perfectly via include on the first try.
+
+
 ## Diagnostic patterns
 
 ### Diagnostic JS via a Bricks code element
 **When to use:** A click intercepted by something invisible, an element misbehaving, a mystery state.
 **Pattern:** Add a temporary `<script>` in a Bricks code element; drop `console.log`s and a `MutationObserver` on the suspect node; reload, perform the action, read the output; iterate. Strip the script after diagnosis — do not leave console noise in production.
 **First seen:** V1 baseline, 2026-05-24.
+
+### A copy sweep over Bricks content misses `_attributes` values — aria-labels and alt text are copy too
+**Symptom / When:** Find-and-replacing a term across page content (a rename, or removing something for privacy/legal reasons). The script reports every replacement made, read-back confirms the write, and the term is **still in the blob**.
+**Why:** Bricks scatters human-readable strings across several settings keys, and a sweep written against `settings.text` sees only one of them. The others: `settings._attributes[].value` (aria-label, title, any hand-set attribute), `settings.altText`, image `caption`, `settings.link.title`, and `_cssId` where an id was named after the thing being renamed. `_attributes` is the usual culprit because ARIA labels are written once at build time and never looked at again.
+**Fix:** Sweep by walking every string in the element, not by reading known keys — then assert the term is gone from the whole serialized blob rather than from the strings you happened to check:
+```python
+def walk(o, path):
+    if isinstance(o, dict):  [walk(v, f'{path}.{k}') for k, v in o.items()]
+    elif isinstance(o, list): [walk(v, f'{path}[{i}]') for i, v in enumerate(o)]
+    elif isinstance(o, str) and TERM in o: print(path, repr(o))
+```
+```php
+$blob = wp_json_encode( get_post_meta( $id, '_bricks_page_content_2', true ) );
+printf( "'%s' still present: %s\n", $term, strpos( $blob, $term ) !== false ? 'YES' : 'no' );
+```
+**First seen:** Highland, 2026-07-22 — removing a township name from the site for client location privacy. The text sweep reported 1/1 hits on all four pages and passed; two pages still carried the name inside map-canvas `aria-label` attributes. A whole-blob assertion caught it; a per-key one would have shipped it.
+
 
 ---
 
