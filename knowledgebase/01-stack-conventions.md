@@ -47,15 +47,17 @@ Templates in particular: give every styled element a template-specific class eve
 
 ---
 
-## Skinning third-party UI — bridge the token tier, never the component tier
+## Skinning third-party UI — check ACSS first, then bridge the token tier
 
-Before writing a single rule against a plugin's own classes, find out whether it exposes a **variable tier**. Modern form and UI plugins increasingly do, and the ones that do usually declare their internals at **zero specificity on purpose** — `:where(...)` — precisely so that author overrides win without a fight.
+Two steps, in this order. Getting them the wrong way round means rebuilding a system the framework already ships.
 
-Where a token tier exists, the convention is: **remap its roots to project tokens in one block, and let the plugin's own derivation repaint everything downstream.** Do not restyle its components.
+**1. Ask whether ACSS already owns this surface.** ACSS covers more third-party UI than its name suggests — most importantly it ships a **first-class WS Form layer**, gated by the `option-forms` setting: roughly 240 rules driven by a dedicated `--f-*` token namespace, made context-aware by the `.form--light` / `.form--dark` utility classes, covering inputs, labels, legends, help, placeholders, focus, the required marker, every button role, checkboxes, radios, selects, ranges, progress bars and tabs. Both context classes are registered as Bricks global classes by the ACSS import, so they are already in the picker.
 
-This is the same move as overriding an ACSS token rather than fighting an `automatic-bricks.css` rule (`03`): override what a rule *consumes*, not the rule. Here it is stronger still, because the plugin's component layer is usually generated — a colour ramp built with `color-mix()` off a handful of semantic roots. Change a root and every derived shade recomputes itself, because `var()` resolves against the element's computed value.
+Where ACSS covers it, **brand through `--f-*` and put the context class on the wrapper.** Do not remap the plugin's own root variables as well: ACSS's rules sit at `(0,2,0)` and above, a `.wsf-form` remap is `(0,1,0)`, and ACSS wins wherever the two touch the same property — so a parallel bridge is dead code that looks live. Starting point: `knowledgebase/assets/acss-form-brand.css`.
 
-**Find the tier before writing anything:**
+⚠️ **A form wrapper with neither context class gets none of it** and renders the plugin's stock skin. Every form needs one.
+
+**2. Only where ACSS does not cover it, bridge the plugin's token tier.** Find out whether the plugin exposes variables of its own before writing a single rule against its classes. Modern UI plugins increasingly do, and the ones that do usually declare their internals at **zero specificity on purpose** — `:where(...)` — precisely so author overrides win without a fight.
 
 ```bash
 curl -s <url> | grep -oE '\-\-<prefix>-[a-z0-9-]+\s*:' | sort -u
@@ -63,15 +65,17 @@ curl -s <url> | grep -oE '\-\-<prefix>-[a-z0-9-]+\s*:' | sort -u
 # that tells you the specificity you have to beat, which is often zero
 ```
 
-**Why component rules are the wrong layer**, even when they work: plugin stylesheets frequently enqueue *after* the theme, so equal specificity loses on source order and every override escalates. Hand-written component skins also accumulate dead selectors against class names that were guessed and never existed. A root remap is a dozen declarations that survive the plugin's own updates.
+Remap the roots in one block and let the plugin's own derivation repaint everything downstream. This is the same move as overriding an ACSS token rather than fighting an `automatic-bricks.css` rule (`03`): override what a rule *consumes*, not the rule. It is stronger here, because the component layer is usually generated — a ramp built with `color-mix()` off a handful of semantic roots, so changing a root recomputes every shade.
 
-**The two-context pattern.** A form or widget that appears on both light and dark sections needs a light default plus a dark override, opted into with a **generic wrapper class** (`wsform-dark`), never a project BEM class — scoping the bridge to one layout is what stops it being reusable. In the dark block, flip only what renders *outside* the control and pin the control's interior. Remapping the plugin's "base" colour wholesale is the classic error: base usually feeds the field text as well as the labels, so the input text goes light on a light fill and vanishes.
+**Why component rules are the wrong layer either way**, even when they appear to work: plugin stylesheets frequently enqueue *after* the theme, so equal specificity loses on source order and every override has to escalate. Hand-written component skins also accumulate dead selectors against class names that were guessed and never existed.
 
-**Guard the semantic tier.** A governance-minimal palette (above) enables only the colour slots the brand uses, so `--danger` / `--success` / `--warning` / `--info` may not exist on a given project. Reference them with a fallback — `var(--danger, #bb0000)` — or a bridge copied from a project with more slots enabled will emit dangling vars that fail silently.
+**The two-context pattern.** Anything appearing on both light and dark sections needs a light default plus a dark override, opted into with a wrapper class — ACSS's `.form--light` / `.form--dark` where it applies, otherwise a **generic** class of your own, never a project BEM class. Scoping to one layout is what stops it being reusable. In the dark block, flip only what renders *outside* the control and pin the control's interior. Remapping a "base" colour wholesale is the classic error: base usually feeds the field text as well as the labels, so input text goes light on a light fill and vanishes.
 
-**Starting artifact:** `knowledgebase/assets/ws-form-bridge.css` — the WS Form bridge, with the two-context pattern, the token-fallback guards, and a contrast checklist worth running against any skinned UI. Copy it into the child theme and change only the token names. Extend it from a real build rather than writing blind: it covers the field types that have actually been verified, and choice/file/date fields have their own tiers and their own traps (`03`).
+**Do not assume a framework default is accessible.** ACSS's own form defaults include an input border that fails 3:1 on white, and a focus colour and required marker that are light-surface brand colours reused unchanged on dark. The artifact carries the checklist; run it every time, because the ratios are per-brand and only the list travels.
 
-Mechanism, incident and the real class names: `03` → *"WS Form — skin it by overriding root `--wsf-form-*` vars"*.
+**Guard the semantic tier.** A governance-minimal palette (above) enables only the colour slots the brand uses, so `--danger` / `--success` / `--warning` / `--info` may not exist on a given project — and ACSS's own form defaults reference some of them. Confirm the slots a default depends on are enabled, or pin the value explicitly.
+
+Mechanism, incident and the real class names: `03` → *"WS Form — skin it by overriding root `--wsf-form-*` vars"*, which remains correct for the no-ACSS-coverage case.
 
 ---
 
