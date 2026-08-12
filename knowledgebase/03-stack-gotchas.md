@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-169 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+170 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -261,6 +261,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 - `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
 - WP-CLI `--prompt` ECHOES the resolved command line, secret included, to stdout — use `wp eval` + file read for secrets
+- The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
 
 **Diagnostic patterns**
 
@@ -1995,6 +1996,17 @@ Bricks' sanitizer still runs on the upload. To add the icon to a custom set, app
 **Why:** `--prompt` is an interactive convenience, not a secrecy feature; it reprints the command it assembled before running it.
 **Fix:** Keep secrets inside PHP where argv and stdout never see them: `wp eval 'wp_set_password(trim(file_get_contents("<mode-600 path>")), <user_id>);'`. Same pattern for any secret-bearing op — read from a restricted file inside the eval'd code. If a secret does get echoed, rotate it immediately; the echoed value is already in scrollback.
 **First seen:** 2026-08-11.
+
+### The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
+**Symptom / When:** `wp theme update bricks` (or any premium theme/plugin whose updater authenticates the download via the package URL) prints `Downloading update from https://…?license_key=<key>&version=…` to stdout. The licence key lands in terminal scrollback, CI logs, and AI-session transcripts — on every box the update runs on.
+**Why:** WP core's `WP_Upgrader` emits a `downloading_package` feedback line carrying the **full package URL**, and WP-CLI's `UpgraderSkin` routes feedback through `WP_CLI::log()`, which prints by default. Bricks builds that URL with the licence key as a query arg (`my.bricksbuilder.io/api/commerce/download/get_theme?license_key=…`); other premium updaters may do the same — check before assuming one doesn't. Same failure family as the `--prompt` echo above: WP-CLI treating a secret-bearing string as ordinary progress output.
+**Fix:** Update with `--quiet` and confirm by version readback instead of by output:
+```bash
+wp theme update bricks --quiet
+wp theme list --name=bricks --fields=version,update_version   # readback = the confirmation
+```
+`--quiet` suppresses only informational log lines — real errors still reach stderr and the exit code, so failures stay loud. **Verified empirically** (positive control: a default `wp theme install` printed the package URL; the identical run under `--quiet` produced 0 bytes of output while the install landed, proven by readback). Where a rollout script should keep its progress output, redact rather than suppress: `wp theme update bricks 2>&1 | sed -E 's/license_key=[^&[:space:]]+/license_key=REDACTED/g'`. If a key has already been echoed, regenerate it at the vendor portal (my.bricksbuilder.io for Bricks) — the echoed copy is already in scrollback.
+**First seen:** Nametank/ext-mem, 2026-08-12 — the first-in-fleet Bricks 2.3.11 update echoed the licence key to the session transcript. Promoted straight to master (Michael's direction) ahead of the fleet-wide 2.3.11 rollout, since the project deliberately carries no `03` copy and has no harvest to wait for.
 
 
 ## Diagnostic patterns
