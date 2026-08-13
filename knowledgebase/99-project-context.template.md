@@ -33,6 +33,10 @@ Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to us
 4. **After any compaction:** stop. Re-run the read protocol before the next
    write (`00`).
 5. **Session degrading:** `/clear` and re-prime. Do not push through.
+6. **Doc/build mismatch = flag, don't fix.** Audits never migrate built state.
+   Pinned tokens have one home: ACSS Global CSS (`01`). Any authorized move:
+   verify the new home on the rendered front end BEFORE deleting the old copy
+   (`00`).
 ```
 
 ---

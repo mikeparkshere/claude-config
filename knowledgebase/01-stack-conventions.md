@@ -29,7 +29,7 @@ This is the most-violated rule in the build, named as a core principle in `00` a
 
 1. **Typed Bricks setting, via the UI control.** Padding, margin, gap, border, background, typography, grid, alignment — if the value can be typed into a Bricks panel, it goes there. This is the first choice every time, not a fallback.
 2. **`_cssCustom` on the specific element or class.** Only when no typed control can express the value — `justify-items: center`, a `max-height` on a figure+img, a narrow per-breakpoint override the typed schema cannot reach. Scoped to where it is used, for that use case.
-3. **Child theme `style.css`.** When the need is genuinely global and site-wide — brand context systems, site-wide utilities, link policy. Not element-specific.
+3. **Child theme `style.css`.** When the need is genuinely global and site-wide — brand context systems, site-wide utilities, link policy. Not element-specific. Pinned custom brand tokens are the one exception at this layer: they live in ACSS Global CSS, not the child theme — see "Pinned custom tokens" below.
 
 **Why the order matters.** `_cssCustom` is the fast instinct and it gives more control. It is also less maintainable the moment anyone else touches the site. Inline custom CSS is invisible in the Bricks UI — a junior dev or a client working through the panels cannot see it, cannot edit it, and will not know it exists. It accumulates as cruft that has to be swept later. A typed setting is visible, editable in the panel, and survives a handoff intact. The rule is about what is maintainable to inherit, not what is fastest to write.
 
@@ -176,7 +176,24 @@ Configure ACSS the way we build Bricks: **programmatically, verified against out
 
 Direct-value settings — type sizes and **per-level Font Size Overrides**, scales, radius, button typography, font families, line-heights, focus — are fully scriptable this way (seconds, not a UI session). **The colour palette is the one exception:** its shade ladder (`-light/-dark/-hover/-trans` + `-h/-s/-l` partials) is computed by the dashboard's JS and stored in the option; generation reads those stored keys, so writing only the base hex leaves the ramp on the old colour. Either prompt the user to enter the palette in the dashboard once (it runs the derivation) — the established default — or replicate the derivation in PHP (keep base H/S, set each shade's L to its fixed step). Reserve browser automation for the palette-only case; never for the scriptable settings. Full mechanism and the boundary incident: `03` → ACSS; the ordered procedure: `02`.
 
-**Governance-minimal palette.** Enable only the ACSS colour slots the brand uses. Every enabled slot emits ~15 auto-derived, full-saturation intermediates into the Bricks/AT colour picker — off-brand, and an invitation to pick off-script. Represent one-off brand colours (a flat surface, an accessible-text variant) as **pinned custom tokens in Global SCSS**, not slots; keep sub-14px sizes (eyebrows) out of the general text scale for the same reason.
+**Governance-minimal palette.** Enable only the ACSS colour slots the brand uses. Every enabled slot emits ~15 auto-derived, full-saturation intermediates into the Bricks/AT colour picker — off-brand, and an invitation to pick off-script. Represent one-off brand colours (a flat surface, an accessible-text variant) as **pinned custom tokens in ACSS Global CSS** (next section), not slots; keep sub-14px sizes (eyebrows) out of the general text scale for the same reason.
+
+### Pinned custom tokens — one home, by law
+
+**Pinned custom brand tokens live in a `:root {}` block in ACSS Global CSS (Settings → Global CSS in the dashboard; earlier versions labeled the same field "Global SCSS"). That is the only home. No alternatives.** Not child-theme `:root`. Not Bricks Global Variables. Not a per-project choice. A brand guide, project doc, or template that names any other home is a doc bug — fix the document, never the build (`00` → doc/reality mismatches).
+
+Why this home:
+
+- **Cascade position is deterministic.** ACSS delivers Global CSS inline after `automatic.css` (`03` → ACSS), so a pinned `:root` token always beats anything ACSS emits — including any future collision with emitted names (`--h1`–`--h6`, `--success`, `--danger`). Child-theme `style.css` wins only by enqueue order, which is not something to make load-bearing.
+- **Builder canvas delivery is native.** No builder-guard tuning required, unlike child-theme CSS (see Motion — the two-tier guard).
+- **One audit surface.** Slots, scales, and pinned tokens all read from one place.
+- **The picker stays clean either way.** Tokens stay out of the Bricks colour picker because they are not registered palette slots — the home has nothing to do with it. The "keep it out of the picker" rationale is not an argument for the child theme.
+
+The child theme keeps a pointer: a header comment in `style.css` naming ACSS Global CSS as the token home, so nobody greps the theme and concludes the tokens don't exist.
+
+**Irregular heading ladders are not pinned tokens.** A brand ladder that fits no scale ratio (56→40→28→22→18→16) goes into ACSS per-level Font Size Overrides — ACSS then emits the brand values directly and no override exists anywhere. Never re-declare `--h1`–`--h6` in any CSS home to express a ladder.
+
+**Grandfathered fleet.** Pre-convention sites carry pinned tokens — and on most of the fleet, full `--h1`–`--h6` ladder overrides — in child-theme `:root`. **These are correct as-built. Never migrate them during an audit, KB-alignment pass, or any doc-driven sweep** (`00` → audits never migrate). They work; the doc adapts to them, not the reverse. Opportunistic migration of a heading ladder to Font Size Overrides is fine when already in a site's ACSS settings for other work — same values in, override block deleted only after front-end verification. Known fleet-wide risk worth naming: if headings change size across a grandfathered site after an ACSS update, the child-theme ladder losing its enqueue-order win is the first suspect.
 
 ---
 

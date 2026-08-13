@@ -13,13 +13,14 @@ The canonical knowledgebase for how this stack works and how Mike builds with it
 
 ## Hard rules
 
-These five govern almost everything. Full versions are in the files below.
+These six govern almost everything. Full versions are in the files below.
 
 1. **Golden rule: never guess a Bricks schema.** Not in `02`'s library means discover it by reading back builder-saved output. A guessed key persists in the DB and silently strips on the next builder load.
 2. **Typed settings before CSS, and styled elements get a class.** Check whether Bricks has a typed control before writing any CSS. Whatever the layer, it attaches to a Global Class — never to the element, which emits `#brxe-<id>` at `(1,0,0)` and poisons every later override. Discovery and expression are different rules — see `00`; both rules in full in `01`.
 3. **Readbacks are narrow.** `jq`-extract the shape you need. Whole blobs go through a subagent. A full `_bricks_page_content_2` read on staging can run tens of thousands of tokens and evict this skill.
 4. **`wp_set_current_user(1)` first.** Any WP-CLI script writing `_bricks_page_*_2` meta. Without it the write silently no-ops and reports success.
 5. **After any compaction: stop.** Re-run the read protocol before the next write. A compacted session is a new session wearing the old one's scrollback.
+6. **Doc/build mismatches get flagged, not fixed.** Audits and alignment passes never migrate built state between homes. Pinned custom tokens have exactly one home — ACSS Global CSS (`01`) — and a doc naming another home is a doc bug. Any authorized move of load-bearing state verifies the new home on the rendered front end before the old copy is deleted (`00`).
 
 ---
 

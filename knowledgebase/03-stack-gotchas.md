@@ -170,7 +170,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file
 - ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it
 - ACSS type: per-level Font Size Override hits a non-geometric brand scale exactly
-- ACSS is fully configurable headless via `Database_Settings::save_settings()` — but `API::update_settings()` is broken in 3.3.6
+- ACSS is fully configurable headless via `Database_Settings::save_settings()` — but only under an admin context, or it silently GUTS `automatic-bricks.css`
 - ACSS color shade ramps are stored per-shade, NOT recomputed from the master — must rewrite the ramp partials
 - ACSS → Bricks palette sync only hooks under `is_admin()` — CLI saves regenerate CSS but never update the color picker
 
@@ -1333,17 +1333,20 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Fix:** Set the brand ranges as per-level overrides (mobile=min, desktop=max); leave base+scale for the unspecified levels. Scriptable via `save_settings`. Pin a floor with a per-level override where a scale step would dip below it (e.g. `text-s`=14/14 for a 14px floor).
 **First seen:** MMHN, 2026-07-16.
 
-### ACSS is fully configurable headless via `Database_Settings::save_settings()` — but `API::update_settings()` is broken in 3.3.6
-**Symptom / When:** Configuring ACSS (colors, fonts, scales) from WP-CLI. `\Automatic_CSS\API::update_settings( $vars )` — the documented entry point — fatals: `Call to undefined method Automatic_CSS\Model\Database_Settings::save_vars()` (API.php:86). Version skew: the installed `API.php` calls a method that no longer exists.
-**Why:** The real save method is `Database_Settings::save_settings( $values, $trigger_css_generation = true )`. It validates `$values` against the allowed-variable list from the config UI and falls back to each var's **default** for any allowed var absent from input — so passing only your deltas resets everything else to defaults.
-**Fix:** Merge over the full current settings, then save. `save_settings()` regenerates the CSS files directly (no dashboard "Save" needed — supersedes the older `03` note about clicking Save).
+### ACSS is fully configurable headless via `Database_Settings::save_settings()` — but only under an admin context, or it silently GUTS `automatic-bricks.css`
+**Symptom / When:** Configuring ACSS (colors, fonts, scales) from WP-CLI. Two failure layers. (1) `\Automatic_CSS\API::update_settings( $vars )` — the documented entry point — fatals: `Call to undefined method Automatic_CSS\Model\Database_Settings::save_vars()` (API.php:86). (2) Worse and **silent**: a successful `save_settings()` from plain WP-CLI regenerates all files and reports success, but `automatic-bricks.css` collapses ~22 KB → **140 bytes** and the core bundles shed ~34 KB — the Bricks button/focus layer (`.btn--primary`, the `bricks-is-frontend` focus system) vanishes from the front end. Nothing errors; the site just quietly loses styling.
+**Why:** The real save method is `Database_Settings::save_settings( $values, $trigger_css_generation = true )`. It validates `$values` against the allowed-variable list and resets any **omitted** allowed var to its default — so pass the full merged set, never deltas. The gutting: ACSS's Bricks-integration partials only register under `is_admin()` (same hook family as the palette-sync gotcha below), so a plain-CLI generation runs with those partials absent and writes near-empty integration files.
+**Fix:** Full merge **plus** an admin-context bootstrap via `--require`:
 ```php
+// admin-context.php:  <?php define( 'WP_ADMIN', true );
+// wp --require=admin-context.php eval-file configure-acss.php
 wp_set_current_user(1); // needs manage_options (CAPABILITY check)
 $db = \Automatic_CSS\Model\Database_Settings::get_instance();
 $vars = array_merge( $db->get_vars(), $my_changes ); // FULL set, not just deltas
 $db->save_settings( $vars, true );
 ```
-**First seen:** Highland, 2026-06-14 — configuring ACSS to the brand. `API::update_settings()` fatalled (clean fail, no DB write); switched to `save_settings()` with a full merge.
+Verified byte-identical to a dashboard save with the require in place; without it, compare `automatic-bricks.css` size before/after — that file is the canary. Audit any site whose last ACSS save was headless. Input caveat: an **empty string for a color value fatals the generator** (PHPColors) — "clearing" a color means omitting the key so it resets to its default, not writing `''`.
+**First seen:** Highland, 2026-06-14 — `API::update_settings()` fatalled (clean fail, no DB write); switched to `save_settings()` with a full merge. **Corrected Nametank/ext-mem, 2026-08-12** — the earlier "no dashboard Save needed" claim was wrong in a way that mattered: a plain-CLI save on mmhn (2026-07-16) had silently shipped the 140-byte `automatic-bricks.css` for a month before the byte-size comparison here exposed the mechanism. The `WP_ADMIN` require restores full parity and was verified against pre-change sizes on all seven generated files.
 
 
 ### ACSS color shade ramps are stored per-shade, NOT recomputed from the master — must rewrite the ramp partials

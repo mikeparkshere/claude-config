@@ -301,6 +301,19 @@ The corollary is about tone, not tooling: **when a prior conclusion turns out to
 
 ---
 
+## Doc/reality mismatches on built state — flag, don't fix
+
+When a project document and the built site disagree — a brand guide naming one token home while the tokens live in another, a doc describing config that isn't what's installed — **the mismatch is a report for Mike, not a thing for a session to reconcile.** Neither direction is safe to pick silently: migrating the build to match the doc moves live state on a document's authority; rewriting the doc to match the build erases a decision that may have had reasons. This is the same shape as the phase-sources rule in the read protocol: two authorities disagreeing is a drift report, and a session that resolves it by picking one has converted a documentation question into a production change.
+
+Two hard corollaries:
+
+1. **Audits never migrate.** A KB-alignment pass, documentation audit, or convention sweep reads and reports. It does not move CSS, config, or content between homes — however small the move looks, and however clear the convention seems.
+2. **An authorized move of load-bearing state completes only when the new home is verified on the rendered front end — and the old copy is deleted only after that.** For tokens: `getComputedStyle(document.documentElement).getPropertyValue('--token')` on the live page, or curl and grep the delivered CSS. Verify-then-delete, never delete-then-assume. The move is one motion; a session that deletes first and intends to land the new copy "next" can compact, die, or get redirected in between, leaving the state defined nowhere.
+
+> **(2026-08-12.)** During a KB-alignment audit, a project's seven pinned brand tokens were moved out of child-theme `:root` toward the documented home in ACSS Global CSS. The deletion executed; the landing never did, and no front-end verification ran. The tokens existed nowhere for two days while the sessions that followed debugged the *convention* — relitigating which home was correct — instead of the *absence*. Every downstream symptom traced to variables that had simply never been re-declared. A thirty-second `getComputedStyle` check at the moment of the move would have caught it; corollary 2 exists so that check is never optional.
+
+---
+
 ## The two core principles
 
 Two rules govern almost everything in a build. They are easy to confuse because both say "don't just do the obvious thing" — but they apply at different moments. Keep them distinct.
