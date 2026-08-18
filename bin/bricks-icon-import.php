@@ -149,8 +149,25 @@ foreach ( $files as $file ) {
 		$normalised = preg_replace( '/<svg\b/i', '<svg aria-hidden="true"', $normalised, 1 );
 	}
 
+	// Bricks ships `svg:not([width]){min-width:1em}` (and the height twin) as a
+	// floor for unsized icons. That selector is (0,1,1) — it OUTRANKS a plain
+	// global class, so a class asking for anything under 1em is silently clamped
+	// up and the icon looks wrong for reasons invisible in the class. Giving the
+	// file real width/height attributes stops :not([width]) matching, and a
+	// presentation attribute loses to any CSS, so classes size freely again.
+	if ( ! preg_match( '/<svg[^>]*\bwidth=/i', $normalised ) ) {
+		$normalised = preg_replace( '/<svg\b/i', '<svg width="1em" height="1em"', $normalised, 1 );
+	}
+
 	if ( $dry ) {
-		printf( "  %-32s would import%s\n", $name, ( $normalised !== $svg ? '  (+aria-hidden)' : '' ) );
+		$fixes = [];
+		if ( false === stripos( $svg, 'aria-hidden' ) ) {
+			$fixes[] = 'aria-hidden';
+		}
+		if ( ! preg_match( '/<svg[^>]*\bwidth=/i', $svg ) ) {
+			$fixes[] = 'width/height';
+		}
+		printf( "  %-32s would import%s\n", $name, $fixes ? '  (+' . implode( ', +', $fixes ) . ')' : '' );
 		$added++;
 		continue;
 	}
