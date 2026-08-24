@@ -1018,7 +1018,7 @@ apply_filters( 'retrieve_password_message', $native_msg, 'KEY', 'user', null ); 
 
 **And "remove the redirect action and let `redirect_to` drive" has an unstated cost:** with `actions: ['login']` and no `redirect_to` in the URL, `login.php` sets `type: 'success'` and the user is **stranded on the login page** with a success message and no navigation. You have traded a broken deep link for a dead end on the far more common path.
 
-Bricks offers no native "honour `redirect_to`, else fall back" — it is strictly either/or. Get both with the **undocumented but stable** `bricks/form/response` filter (`integrations/form/init.php`, literally commented `// NOTE: Undocumented`, present since 1.7), the last hook before the JSON response is sent:
+Bricks offers no native "honour `redirect_to`, else fall back" — it is strictly either/or. Get both with the `bricks/form/response` filter (`integrations/form/init.php`), the last hook before the JSON response is sent:
 
 ```php
 add_filter( 'bricks/form/response', function ( $response, $form ) {
@@ -1038,7 +1038,13 @@ add_filter( 'bricks/form/response', function ( $response, $form ) {
 }, 10, 2 );
 ```
 
-Pair it with `redirectAdminUrl` **unset** and `actions` trimmed to `['login']`. Failure mode if a future Bricks release drops the hook is benign and diagnosable: login succeeds and goes nowhere, rather than login breaking.
+Pair it with `redirectAdminUrl` **unset** and `actions` trimmed to `['login']`.
+
+⚠️ **Treat this hook as unguaranteed.** It is carried in the source under a bare `// NOTE: Undocumented` with **no `@since` tag** — unlike essentially every other Bricks hook, so there is no stated version history and no compatibility promise. Verified present in **2.3.10**; that is the only claim you can make about it. Re-check after every Bricks bump:
+```bash
+grep -rn "bricks/form/response" wp-content/themes/bricks/includes/
+```
+The failure mode is at least benign and diagnosable: login succeeds and goes nowhere, rather than login breaking.
 
 **Testing this needs a stub, not curl.** Auth forms almost always carry reCAPTCHA/Turnstile, so a server-side POST can't pass the captcha (see *A client-rendered form cannot be verified with `curl`*). Exercise the registered callback directly — it only calls `get_settings()`:
 
