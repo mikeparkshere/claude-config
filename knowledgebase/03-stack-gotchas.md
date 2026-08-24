@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-170 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+172 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -128,6 +128,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
 - Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path
 - Bricks custom login page ignores `?redirect_to=` whenever a redirect action is configured
+- A cloned Bricks auth page ships a cleartext password input — audit `type`, not appearance
 - A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
 - Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
 - Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
@@ -260,7 +261,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
 - `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 - `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
-- WP-CLI `--prompt` ECHOES the resolved command line, secret included, to stdout — use `wp eval` + file read for secrets
+- WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
 - The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
 
 **Diagnostic patterns**
@@ -1004,12 +1005,72 @@ if ( ! in_array( 'redirect', $form_settings['actions'], true ) ||
      ( ! isset( $form_settings['redirect'] ) && ! isset( $form_settings['redirectAdminUrl'] ) ) ) { … }
 ```
 A form configured to always land on wp-admin therefore ignores deep links by design.
-**Fix:** Accept it for an admin-only door (arguably desirable — every login goes to one known place). If deep-link-after-login is wanted, remove the redirect action from the form and let `redirect_to` drive, or filter `bricks/auth/custom_redirect_url`. Decide deliberately; don't discover it from a client.
+**Fix:** Accept it for an admin-only door (arguably desirable — every login goes to one known place). If deep-link-after-login is wanted, remove the redirect action from the form and let `redirect_to` drive. Decide deliberately; don't discover it from a client.
+
 **Also here — a stale docblock to ignore:** `auth-redirects.php::modify_reset_password_email()` documents "only occurs if … the WordPress auth URL behavior is not set to default". **The implementation has no such check** — it rewrites the reset email to the custom page whenever that page is set and published. Verify behaviour, not the comment:
 ```php
 apply_filters( 'retrieve_password_message', $native_msg, 'KEY', 'user', null ); // print the link it produces
 ```
-**First seen:** Highland, 2026-08-04 — auditing the Bricks custom auth pages before launch.
+
+⚠️ **Two corrections to the above, ECT 2026-08-24.**
+
+**`bricks/auth/custom_redirect_url` cannot solve this** — ignore that suggestion. It fires inside `Auth_Redirects::handle_auth_redirects()` on **`wp_loaded`**, and redirects immediately (`wp_safe_redirect(); exit;`). It governs *where a request to an auth URL is sent*, not *where a successful login lands*. It never sees the form submission.
+
+**And "remove the redirect action and let `redirect_to` drive" has an unstated cost:** with `actions: ['login']` and no `redirect_to` in the URL, `login.php` sets `type: 'success'` and the user is **stranded on the login page** with a success message and no navigation. You have traded a broken deep link for a dead end on the far more common path.
+
+Bricks offers no native "honour `redirect_to`, else fall back" — it is strictly either/or. Get both with the **undocumented but stable** `bricks/form/response` filter (`integrations/form/init.php`, literally commented `// NOTE: Undocumented`, present since 1.7), the last hook before the JSON response is sent:
+
+```php
+add_filter( 'bricks/form/response', function ( $response, $form ) {
+    $settings = $form->get_settings();
+    if ( empty( $settings['actions'] ) || ! in_array( 'login', (array) $settings['actions'], true ) ) {
+        return $response;   // not the login form
+    }
+    if ( ! is_user_logged_in() ) {
+        return $response;   // sign-in failed — leave the error alone
+    }
+    if ( ! empty( $response['redirectTo'] ) ) {
+        return $response;   // a redirect_to was honoured; don't clobber it
+    }
+    $response['redirectTo']      = admin_url();
+    $response['redirectTimeout'] = 0;
+    return $response;
+}, 10, 2 );
+```
+
+Pair it with `redirectAdminUrl` **unset** and `actions` trimmed to `['login']`. Failure mode if a future Bricks release drops the hook is benign and diagnosable: login succeeds and goes nowhere, rather than login breaking.
+
+**Testing this needs a stub, not curl.** Auth forms almost always carry reCAPTCHA/Turnstile, so a server-side POST can't pass the captcha (see *A client-rendered form cannot be verified with `curl`*). Exercise the registered callback directly — it only calls `get_settings()`:
+
+```php
+$stub = fn( array $actions ) => new class( $actions ) {
+    private $a; public function __construct( $a ) { $this->a = $a; }
+    public function get_settings() { return [ 'actions' => $this->a ]; }
+};
+wp_set_current_user( 2 );
+var_dump( apply_filters( 'bricks/form/response', [ 'message' => 'ok' ], $stub( [ 'login' ] ) ) );
+```
+Cover: logged-in + no `redirectTo` → admin; `redirectTo` present → preserved; not logged in → untouched; a non-login form → untouched. Then do one real browser login, because the stub proves the filter, not the flow.
+
+**First seen:** Highland, 2026-08-04 — auditing the Bricks custom auth pages before launch. **Re-hit ECT, 2026-08-24** — same misconfiguration on a live site, found while chasing a half-remembered "redirect issue"; the corrections above came from resolving it properly rather than accepting the trade-off.
+
+
+### A cloned Bricks auth page ships a cleartext password input — audit `type`, not appearance
+**Symptom / When:** None. That is the problem. A custom Reset Password (or Login) page built by duplicating another auth page renders, submits, and resets the password correctly — but the new-password field is `type="text"`, so the password is typed in the clear, shoulder-surfable, and captured by browser autofill and form history. ACSS/Bricks styling makes a text and a password input look identical apart from the dots, and nothing in the builder, WordPress, or any scanner flags it.
+**Why:** Bricks form fields carry `type` per field in `settings.fields[]`. The duplicate inherits whatever the source page had, and the source is usually a *username* field that was relabelled — label, placeholder and `name` get edited, `type` does not. Two related leftovers travel the same way and are equally invisible because Bricks guards every lookup with `isset()`: `loginPassword` / `loginRemember` pointing at field IDs that exist only on the *source* page, and email-action keys (`fromName`, `emailTo`) from the original template vendor.
+**Fix:** Audit the served HTML, never the builder canvas — one grep per auth page:
+```bash
+curl -s "https://site.com/reset-password/?action=rp&key=K&login=admin" \
+  | grep -oE '<input[^>]*type="(text|password)"[^>]*>'
+```
+Then fix in the meta and assert the read-back (`--user=<admin>`; Bricks 2.3+ drops `_bricks_page_content_2` writes as user 0):
+```php
+foreach ( $settings['fields'] as $i => $f ) {
+    if ( ( $f['id'] ?? '' ) === $field_id ) { $settings['fields'][$i]['type'] = 'password'; }
+}
+```
+Leave the field's custom `name` attribute alone even when it is misleading (a password field still named `…-username-field`): Bricks remaps custom names back to `form-field-{id}` in `integrations/form/init.php` (~line 294), so the name is cosmetic, and renaming can break CSS keyed on the attribute.
+**First seen:** ECT, 2026-08-24 — live adult-industry site; the Reset Password page had shipped with `type="text"` since build, found only by diffing the served HTML during an unrelated redirect audit. Every other auth-page defect that day was cosmetic; this one was real.
 
 
 ### A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
