@@ -274,6 +274,48 @@ Writes the consts and installs `object-cache.php`. Redis password = `/etc/redis/
 **⚠️ Before a second app shares Redis:** set a `maxmemory` cap and an eviction policy — a default install is uncapped `noeviction`.
 **First seen:** TAB, 2026-06-28 — bare `enable-object-cache` no-op'd until `provider.redis` was set.
 
+## LiteSpeed Cache / OpenLiteSpeed
+
+*New section at the MBC harvest, 2026-08-25. OpenLiteSpeed boxes run LiteSpeed Cache rather than RunCache, and its optimisation features fail in ways that look like application bugs. All three entries below cost real debugging time before the cache was suspected.*
+
+### LSCache ESI never works on OpenLiteSpeed — every `<esi:include>` ships raw to the browser
+**Symptom / When:** Any ESI-dependent LSCache feature breaks, each wearing a different disguise. Observed: cart Update / remove-item forms silently no-op with no error anywhere (the nonce in the form input was an unresolved ESI tag); a ~32px empty strip above the header **for logged-in users only** (LSCache replaces the admin bar with an ESI block, so WP's `html{margin-top:32px}` bump CSS renders with no bar under it — reads convincingly as a body/root layout bug); a raw `wp_rest` nonce placeholder leaking into guest-cacheable HTML.
+**Why:** ESI is a LiteSpeed **Enterprise** feature. OpenLiteSpeed does not process it *at all* — not in attributes, not in tag position. The LSCache plugin does not gate the setting on OLS, so it looks configurable, happily emits placeholders, and sends `X-LiteSpeed-Cache-Control: …,esi=on` that the server simply ignores. The `/?lsesi=…` endpoints work when requested directly, which misleads: it is the server-side *substitution* that never happens.
+**Fix:** Turn it off. Nothing on OLS can use it, and the features that appear to need it don't — a mini-cart updates via WC's cart-fragments JS, which never involved ESI.
+```bash
+wp litespeed-option set esi false
+wp litespeed-purge all
+```
+**Verification:** `curl -s <url> | grep -c 'esi:include'` on a served page; nonzero means leaking. **Check logged-in as well** — the admin-bar ESI only appears there. Gotcha inside the gotcha: `wp option get litespeed.conf.esi` prints **empty** for `false`, so use `wp eval 'var_export(get_option("litespeed.conf.esi","MISSING"));'` to tell "off" from "absent".
+**First seen:** MBC, 2026-05-22 — a cart breakage cost ~90 minutes and was symptom-patched by editing the `esi-nonce` list, which fixed that one case by accident of scope and left a false mechanism on record ("OLS doesn't substitute ESI inside attributes, only element content" — it does neither). Root cause found 2026-08-07 while chasing the admin-bar gap; ESI disabled outright and the fleet swept.
+
+### LSCache UCSS strips state-only selectors — anything that only renders after a user action
+**Symptom / When:** On cacheable pages, a notice or state that appears only in response to a click renders **unstyled** — no background, no padding. The same markup on an uncached page (cart, checkout, account) is fine, which makes it look like a template problem rather than a cache one.
+**Why:** UCSS crawls each cacheable page at regeneration time, walks the rendered DOM, and prunes every selector it cannot find. Selectors that exist only in a post-interaction state — success/error notices, `:hover`, `:focus`, markup injected after an action — are never present during a steady-state crawl, so they are pruned as "unused". Pages excluded from caching never get pruned, hence the split behaviour.
+**Fix:** Allowlist the selector roots. Patterns are fine and cost nothing at runtime — the list is applied once at regeneration:
+```bash
+wp litespeed-option set optm-ucss_whitelist '.woocommerce*
+.brxe-woocommerce*'
+wp litespeed-purge all
+```
+**Design around it too:** where a JS-applied state can be expressed as an inline style rather than a class, do that — an inline `style.display` cannot be pruned, a `.is-hidden` class can. Any new component with hover/focus styling or a JS-toggled class needs its own allowlist entry; this is a recurring tax, not a one-time fix.
+**Verify UCSS is even running before trusting the allowlist.** On one site `optm-ucss` was `1` while `wp-content/litespeed/ucss/` did not exist and zero UCSS files had ever been generated (CCSS generated normally, ~20 URLs sat queued) — so the allowlist was protecting nothing and the real CSS delivery was per-file minification. `ls wp-content/litespeed/ucss/ | wc -l` answers it in one command.
+**First seen:** MBC, 2026-05-22 — a WooCommerce add-to-cart notice rendered stripped on `/shop/` but correct on `/cart/`.
+
+### `optm-js_defer` defers **inline** scripts too — it rewrites them into base64 `data:` URIs
+**Symptom / When:** An inline script whose entire purpose is to run *before paint* runs after it instead. Every pre-paint pattern breaks the same way: a no-flash theme switch, a "hide what this user already dismissed" guard, a layout-shift preventer. The user sees the element render and then vanish — a visible flash plus a CLS regression on a site that may otherwise measure 0. **The PHP source looks entirely correct**, which is what makes it expensive: the damage exists only in the served HTML.
+**Why:** LiteSpeed's "Load JS Deferred" is not limited to external `<script src>`. It rewrites inline blocks into `<script src="data:text/javascript;base64,…" defer>`. `defer` means "after HTML parsing", so a script deliberately placed immediately after the element it manipulates no longer runs before that element paints.
+**Fix:** Opt the script out. Add `data-cfasync="false"` alongside on any site on — or heading to — Cloudflare, since Rocket Loader does the same thing.
+```html
+<script data-no-optimize="1" data-cfasync="false"> /* stays inline and synchronous */ </script>
+```
+**Verification — never trust the source, curl the rendered page.** Decode to confirm *which* script you have; a page carries several and `grep -o … | head -1` will hand you the wrong one (the loadCSS polyfill is usually first):
+```bash
+curl -s "https://example.com/?cb=$RANDOM" | grep -c 'src="data:text/javascript;base64,'
+```
+Sibling to the Perfmatters entry below — Delay JS and Defer JS each independently break things. Two different plugins, same class of failure: **a JS optimisation silently relocating correct code.**
+**First seen:** MBC, 2026-08-25 — a dismissable homepage announcement bar shipped with its dismissal script deferred, so anyone who had dismissed it would have watched it render and disappear on every subsequent visit. Caught only because the served HTML was checked rather than the PHP.
+
 ## Performance
 
 ### ShortPixel on Bricks behind Cloudflare: use `deliverWebp=1` (Global `<picture>`) and leave SPIO's own CDN off

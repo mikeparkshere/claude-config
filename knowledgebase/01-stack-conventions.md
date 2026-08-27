@@ -168,9 +168,10 @@ ACSS ships `.bg--ultra-light` / `.bg--light` / `.bg--dark` / `.bg--ultra-dark` b
 
 ## ACSS configuration
 
-Configure ACSS the way we build Bricks: **programmatically, verified against output** — not by hand in the dashboard. The mechanism is `Automatic_CSS\Model\Database_Settings::save_settings( $values, $trigger_css_generation = true )`:
+Configure ACSS the way we build Bricks: **programmatically, verified against output** — not by hand in the dashboard. The mechanism is `Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $values, $trigger_css_generation = true )`:
 
-- `wp_set_current_user(1)` first — `save_settings` runs a capability check (same class of gotcha as Bricks' gated `_bricks_page_*` writes).
+- **`save_settings()` is an instance method, not static.** `Database_Settings` is `final` and uses the `Singleton` trait, so the call goes through `get_instance()`. Calling it statically throws `Error: Non-static method … cannot be called statically` and fatals *before* writing — fail-closed, so nothing is half-saved, but the script dies.
+- `wp_set_current_user(1)` first — `save_settings` requires `manage_options` and throws `Insufficient_Permissions` otherwise (same class of gotcha as Bricks' gated `_bricks_page_*` writes). `wp --user=1 eval` does the same job.
 - **Pass the full settings array**, merged from the current option — `save_settings` resets any *omitted* allow-listed variable to its default.
 - One call saves **and** regenerates the CSS (ScssPhp compiler). No separate regen step.
 

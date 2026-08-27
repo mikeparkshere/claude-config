@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-170 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+182 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -128,9 +128,11 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
 - Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path
 - Bricks custom login page ignores `?redirect_to=` whenever a redirect action is configured
+- A cloned Bricks auth page ships a cleartext password input — audit `type`, not appearance
 - A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
 - Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
 - Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
+- Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 
 **BricksExtras**
 
@@ -181,6 +183,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACF — `acf/prepare_field`: `$field['name']` is the PREFIXED input name; match on `_name`
 - ACF — `acf_form()` front-end survival kit
 - ACF field removal — `get_field()` stops working but the raw post meta survives
+- A field group rebuilt with the same names nested in `group` fields — `get_field()` returns the OLD top-level value
+- ACF `group` fields are structural — reorganising into tabs must WRAP them, never replace them
+- Migrating a UI/JSON field group to PHP — `local` lies, the post types can't be trashed, and children orphan
 - ACF `url` field type rejects relative paths and query strings
 - Bricks ACF query loop: `objectType: acf_<field>`; repeater subfields are `{acf_<repeater>_<subfield>}`
 - ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
@@ -218,6 +223,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WooCommerce — Woo overrides `wp_mail_from`, so transactional mail can fail DMARC even when plugin mail passes
 - WooCommerce — brand transactional emails via SETTINGS, not template overrides (esp. with `email_improvements` ON)
 - WooCommerce — admin-created customers get WP's PLAIN email, not the branded WC welcome
+- Bricks WC template types take over the render — the `[woocommerce_*]` shortcode on the page is inert
+- WooCommerce HPOS — `--with-sync` keeps writing legacy `wp_posts` rows until compat mode is explicitly dropped
+- WooCommerce Shipping label printing needs `xmlrpc.php` reachable — a blanket block breaks it
 - WooCommerce Subscriptions — create subscription products from WP-CLI
 - WooCommerce Subscriptions — manual gateways (COD) are hidden on subscription carts until "Accept Manual Renewals" is on
 - WooCommerce Subscriptions — the staging-site lock silently SKIPS all automatic renewals after a Local→production migration
@@ -260,13 +268,16 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
 - `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 - `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
-- WP-CLI `--prompt` ECHOES the resolved command line, secret included, to stdout — use `wp eval` + file read for secrets
+- WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
 - The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
+- Vendor-updater products are invisible to WP-CLI — `wp plugin/theme list` prints `none` whether or not an update exists
 
 **Diagnostic patterns**
 
 - Diagnostic JS via a Bricks code element
 - A copy sweep over Bricks content misses `_attributes` values — aria-labels and alt text are copy too
+- Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
+- Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
 
 ---
 
@@ -1004,12 +1015,78 @@ if ( ! in_array( 'redirect', $form_settings['actions'], true ) ||
      ( ! isset( $form_settings['redirect'] ) && ! isset( $form_settings['redirectAdminUrl'] ) ) ) { … }
 ```
 A form configured to always land on wp-admin therefore ignores deep links by design.
-**Fix:** Accept it for an admin-only door (arguably desirable — every login goes to one known place). If deep-link-after-login is wanted, remove the redirect action from the form and let `redirect_to` drive, or filter `bricks/auth/custom_redirect_url`. Decide deliberately; don't discover it from a client.
+**Fix:** Accept it for an admin-only door (arguably desirable — every login goes to one known place). If deep-link-after-login is wanted, remove the redirect action from the form and let `redirect_to` drive. Decide deliberately; don't discover it from a client.
+
 **Also here — a stale docblock to ignore:** `auth-redirects.php::modify_reset_password_email()` documents "only occurs if … the WordPress auth URL behavior is not set to default". **The implementation has no such check** — it rewrites the reset email to the custom page whenever that page is set and published. Verify behaviour, not the comment:
 ```php
 apply_filters( 'retrieve_password_message', $native_msg, 'KEY', 'user', null ); // print the link it produces
 ```
-**First seen:** Highland, 2026-08-04 — auditing the Bricks custom auth pages before launch.
+
+⚠️ **Two corrections to the above, ECT 2026-08-24.**
+
+**`bricks/auth/custom_redirect_url` cannot solve this** — ignore that suggestion. It fires inside `Auth_Redirects::handle_auth_redirects()` on **`wp_loaded`**, and redirects immediately (`wp_safe_redirect(); exit;`). It governs *where a request to an auth URL is sent*, not *where a successful login lands*. It never sees the form submission.
+
+**And "remove the redirect action and let `redirect_to` drive" has an unstated cost:** with `actions: ['login']` and no `redirect_to` in the URL, `login.php` sets `type: 'success'` and the user is **stranded on the login page** with a success message and no navigation. You have traded a broken deep link for a dead end on the far more common path.
+
+Bricks offers no native "honour `redirect_to`, else fall back" — it is strictly either/or. Get both with the `bricks/form/response` filter (`integrations/form/init.php`), the last hook before the JSON response is sent:
+
+```php
+add_filter( 'bricks/form/response', function ( $response, $form ) {
+    $settings = $form->get_settings();
+    if ( empty( $settings['actions'] ) || ! in_array( 'login', (array) $settings['actions'], true ) ) {
+        return $response;   // not the login form
+    }
+    if ( ! is_user_logged_in() ) {
+        return $response;   // sign-in failed — leave the error alone
+    }
+    if ( ! empty( $response['redirectTo'] ) ) {
+        return $response;   // a redirect_to was honoured; don't clobber it
+    }
+    $response['redirectTo']      = admin_url();
+    $response['redirectTimeout'] = 0;
+    return $response;
+}, 10, 2 );
+```
+
+Pair it with `redirectAdminUrl` **unset** and `actions` trimmed to `['login']`.
+
+⚠️ **Treat this hook as unguaranteed.** It is carried in the source under a bare `// NOTE: Undocumented` with **no `@since` tag** — unlike essentially every other Bricks hook, so there is no stated version history and no compatibility promise. Verified present in **2.3.10**; that is the only claim you can make about it. Re-check after every Bricks bump:
+```bash
+grep -rn "bricks/form/response" wp-content/themes/bricks/includes/
+```
+The failure mode is at least benign and diagnosable: login succeeds and goes nowhere, rather than login breaking.
+
+**Testing this needs a stub, not curl.** Auth forms almost always carry reCAPTCHA/Turnstile, so a server-side POST can't pass the captcha (see *A client-rendered form cannot be verified with `curl`*). Exercise the registered callback directly — it only calls `get_settings()`:
+
+```php
+$stub = fn( array $actions ) => new class( $actions ) {
+    private $a; public function __construct( $a ) { $this->a = $a; }
+    public function get_settings() { return [ 'actions' => $this->a ]; }
+};
+wp_set_current_user( 2 );
+var_dump( apply_filters( 'bricks/form/response', [ 'message' => 'ok' ], $stub( [ 'login' ] ) ) );
+```
+Cover: logged-in + no `redirectTo` → admin; `redirectTo` present → preserved; not logged in → untouched; a non-login form → untouched. Then do one real browser login, because the stub proves the filter, not the flow.
+
+**First seen:** Highland, 2026-08-04 — auditing the Bricks custom auth pages before launch. **Re-hit ECT, 2026-08-24** — same misconfiguration on a live site, found while chasing a half-remembered "redirect issue"; the corrections above came from resolving it properly rather than accepting the trade-off.
+
+
+### A cloned Bricks auth page ships a cleartext password input — audit `type`, not appearance
+**Symptom / When:** None. That is the problem. A custom Reset Password (or Login) page built by duplicating another auth page renders, submits, and resets the password correctly — but the new-password field is `type="text"`, so the password is typed in the clear, shoulder-surfable, and captured by browser autofill and form history. ACSS/Bricks styling makes a text and a password input look identical apart from the dots, and nothing in the builder, WordPress, or any scanner flags it.
+**Why:** Bricks form fields carry `type` per field in `settings.fields[]`. The duplicate inherits whatever the source page had, and the source is usually a *username* field that was relabelled — label, placeholder and `name` get edited, `type` does not. Two related leftovers travel the same way and are equally invisible because Bricks guards every lookup with `isset()`: `loginPassword` / `loginRemember` pointing at field IDs that exist only on the *source* page, and email-action keys (`fromName`, `emailTo`) from the original template vendor.
+**Fix:** Audit the served HTML, never the builder canvas — one grep per auth page:
+```bash
+curl -s "https://site.com/reset-password/?action=rp&key=K&login=admin" \
+  | grep -oE '<input[^>]*type="(text|password)"[^>]*>'
+```
+Then fix in the meta and assert the read-back (`--user=<admin>`; Bricks 2.3+ drops `_bricks_page_content_2` writes as user 0):
+```php
+foreach ( $settings['fields'] as $i => $f ) {
+    if ( ( $f['id'] ?? '' ) === $field_id ) { $settings['fields'][$i]['type'] = 'password'; }
+}
+```
+Leave the field's custom `name` attribute alone even when it is misleading (a password field still named `…-username-field`): Bricks remaps custom names back to `form-field-{id}` in `integrations/form/init.php` (~line 294), so the name is cosmetic, and renaming can break CSS keyed on the attribute.
+**First seen:** ECT, 2026-08-24 — live adult-industry site; the Reset Password page had shipped with `type="text"` since build, found only by diffing the served HTML during an unrelated redirect audit. Every other auth-page defect that day was cosmetic; this one was real.
 
 
 ### A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
@@ -1057,6 +1134,18 @@ function prefix_loop_question() { $r = prefix_current_row(); return $r ? $r['que
 ```
 Register on `render_tag` **and** `render_content` (conditions resolve via the latter). The loop element itself must be a layout element — `hasLoop` is ignored on heading/text.
 **First seen:** Highland, 2026-08-04 — `highland_faqs` query type over a Site Options repeater so the client owns the FAQ; rows are arrays, so `{acf_*}` was never going to resolve.
+
+### Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
+**Symptom / When:** Bricks → Settings → Maintenance is switched on, anonymous visitors correctly get a 503, but the page they get is Bricks' unstyled default rather than anything of yours.
+**Why:** Two separate keys in the `bricks_global_settings` option, and only one of them is the toggle. `maintenanceMode` (`"maintenance"` = 503, `"coming_soon"` = 200, key **absent** = off) turns it on; `maintenanceTemplate` holds a `bricks_template` post ID whose `_bricks_template_type` is `content`. With no template ID set, `Maintenance::get_default_maintenance_page_html()` serves the plain fallback. The custom template renders standalone — header and footer are OFF by default (`maintenanceRenderHeader` / `maintenanceRenderFooter` opt back in), and search/archive/error templates are zeroed.
+**The second-order trap:** logged-in users bypass maintenance entirely, so during a maintenance window you only ever see the site *logged in*. Any logged-in-only rendering bug masquerades as a site-wide one for the whole window.
+**Fix:** Build a `content`-type template, set both keys, and purge. Note `maintenanceMode` is switched off by **unsetting** the key, not by writing a falsy value.
+```bash
+wp eval '$s=get_option("bricks_global_settings");$s["maintenanceMode"]="maintenance";update_option("bricks_global_settings",$s);' # on
+wp eval '$s=get_option("bricks_global_settings");unset($s["maintenanceMode"]);update_option("bricks_global_settings",$s);'        # off
+```
+Purge the page cache after either toggle. The template dropdown in the admin filters on `meta_value = content`, so a template of any other type will not appear as an option.
+**First seen:** MBC, 2026-08-07 — built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation.
 
 
 ## BricksExtras
@@ -1434,6 +1523,49 @@ for ( $i = 0; $i < $count; $i++ ) {
 **Order matters:** read the raw data BEFORE removing the field from the PHP if you can — it's far easier. If the field is already gone, this is the recovery path.
 **First seen:** TAB, 2026-04-26 — refactoring a page-level FAQ repeater to a FAQ CPT + relationship; the repeater was removed from the field group first, so the 6 rows had to be read raw.
 
+### A field group rebuilt with the same names nested in `group` fields — `get_field()` returns the OLD top-level value
+**Symptom / When:** The inverse of the entry above, and worse: not `null`, but a **stale value returned confidently**. The admin shows the correct content, while `get_field('company_name','option')` and any `{acf_company_name}` dynamic tag return something that appears nowhere in the ACF UI — often a scaffold placeholder from the original build, months after it was replaced.
+**Why:** A scaffold registers top-level fields and stores `options_company_name` + `_options_company_name`. The group is later rebuilt with the same field **names** nested inside ACF `group` fields, which store under a prefixed key (`options_business_info_company_name`). The old top-level rows are never deleted. They are invisible in the admin because they are no longer registered — but ACF's raw-meta fallback in `get_field()` happily returns them for the unprefixed name. The old and new values coexist, and which one you get depends entirely on which name you ask for.
+**Fix:** Two parts, and both are needed. (1) Repoint every reference to the group-prefixed form — `{acf_business_info_company_name}`, `get_field('business_info_company_name','option')`. (2) Delete the orphaned `options_*` / `_options_*` pairs so the misleading fallback dies.
+**Audit programmatically, not by eye** — build the registered set from the field group and diff the option rows against it:
+```php
+$live = [];
+foreach ( acf_get_fields( '<GROUP_KEY>' ) as $g ) {
+    $live[ "options_{$g['name']}" ] = 1;
+    foreach ( ( $g['sub_fields'] ?? [] ) as $sf ) $live[ "options_{$g['name']}_{$sf['name']}" ] = 1;
+}
+// then list every options_* row not in $live
+```
+**One sweep is not enough.** A first cleanup on one project deleted 16 rows and was recorded as complete; a later audit on the same site found 8 more — including a typo-twin of a live field (`burger_ad_info` beside `burger_add_info`) and an abandoned repeater. Re-run the diff after **any** group rebuild, and treat "we cleaned this up once" as unproven.
+**First seen:** MBC, 2026-08-07 — a header logo text fallback resolved to the build scaffold's placeholder company name months after the real Site Options group replaced it. Follow-on audit 2026-08-25 found the second batch.
+
+### ACF `group` fields are structural — reorganising into tabs must WRAP them, never replace them
+**Symptom / When:** "Reorganise these fields into tabs" arrives as a cosmetic request. If the fields currently sit in ACF `group` fields, the obvious implementation is a data migration that destroys data **silently** — no error, no warning; fields render empty and the old rows sit unreferenced.
+**Why:** A `group` field contributes its name to the stored key (`options_business_info_company_name`) and to the Bricks dynamic tag (`{acf_business_info_company_name}`). A `tab` field stores **nothing at all** — it is a rendering marker that sections whatever follows it until the next tab. Swap a group for a tab and every key on the page is renamed at once.
+**Fix:** Keep the groups. Insert `tab` fields as siblings *before* them; one tab can span several groups.
+```php
+'fields' => array(
+    array( 'key' => 'field_tab_biz', 'label' => 'Biz Info', 'name' => '', 'type' => 'tab',
+           'placement' => 'top', 'endpoint' => 0 ),
+    array( 'key' => 'field_existing_group', 'name' => 'business_info', 'type' => 'group', /* untouched */ ),
+)
+```
+**Verify by reading values back through `get_field()`, not by looking at the admin screen** — the screen looks correct either way. Related: `post_id => 'options'` on `acf_add_options_page()` is what produces the `options_*` prefix; change it and every value on the page orphans.
+**First seen:** MBC, 2026-08-25 — a Site Options page reorganised into four tabs across five group fields, implemented as a wrap; all 42 option rows verified intact afterward.
+
+### Migrating a UI/JSON field group to PHP — `local` lies, the post types can't be trashed, and children orphan
+**Symptom / When:** Moving an ACF group out of the admin UI or Local JSON into `acf_add_local_field_group()`, to satisfy the PHP-registration convention.
+**Why:** Three mechanisms collide. (1) While a DB definition and a PHP registration both exist, the reported source is **unreliable** — in one migration, with JSON retired but the DB post still present, one group reported `local => 'php'` and another `local => 'db'`; same plugin, same hook, both confirmed present in `acf_get_local_store('groups')`. (2) ACF's post types (`acf-field-group`, `acf-ui-options-page`) opt out of trash support, so removal is permanent. (3) Field definitions are separate `acf-field` posts parented to the group, and deleting the group does **not** cascade to them.
+**Fix:** Register in PHP → export the group post *plus* its `acf-field` children → delete descendants deepest-first, then the group → **only then** confirm `local => 'php'`. Never infer the winning definition from the reported value while both exist.
+```bash
+# collect descendants before deleting
+wp eval '$q=[<GROUP_POST_ID>]; $t=[]; while($q){ $p=array_shift($q);
+  foreach(get_posts(["post_type"=>"acf-field","post_parent"=>$p,"numberposts"=>-1,"post_status"=>"any","fields"=>"ids"]) as $i){$t[]=$i;$q[]=$i;} }
+  echo implode(",", $t)."\n";'
+```
+Keep `acf/settings/save_json` pointed at the (now empty) `acf-json/` afterwards: a group someone later creates in the UI then lands as a file on disk instead of invisible DB state, so **the directory becoming non-empty is itself the alarm**. Note the end state also makes the ACF admin effectively read-only for structure — UI edits neither apply nor warn.
+**First seen:** MBC, 2026-08-25 — two groups migrated and one deleted. One deletion left 34 orphaned `acf-field` rows, and the `local` inconsistency would have shipped the first group on a false positive had its DB post happened to win too.
+
 ### ACF `url` field type rejects relative paths and query strings
 **Symptom / When:** A field declared `'type' => 'url'` throws "Value must be a valid URL" and blocks save when you enter an internal link like `/request-a-quote/` or `/request-a-quote/?service=decks`.
 **Why:** ACF's `url` type validates against a full RFC URL (scheme + host). Relative paths, site-root paths and bare query strings all fail — the type is for absolute external URLs only.
@@ -1643,11 +1775,18 @@ Expect the protected pages to hold `noindex` from their own `rank_math_robots` m
 ### Bricks — the WooCommerce integration sheet loads AFTER the child theme and restyles Woo surfaces
 **Symptom / When:** A custom-themed My Account nav (or other Woo surface) renders with Bricks' default look — light nav background, `line-height:60px` block links, no custom styling — even though the child-theme CSS targets the right classes and is enqueued. Same family: the order-details table shows a near-white block behind the Subtotal/Total rows even after theming the cells transparent.
 **Why:** Bricks enqueues `themes/bricks/assets/css/integrations/woocommerce-layer.min.css` AFTER the child-theme `style.css`, with rules like `.woocommerce-account .woocommerce-MyAccount-navigation a{display:block;line-height:60px;padding:0 30px}` (0,2,1) and nav `background-color`/`min-width:25%`. These beat single-class child rules on both specificity and source order. The tfoot case is the same sheet: `.woocommerce-order-details table tfoot { background-color: var(--bricks-bg-light) }` (#f5f6f7) is set on the `<tfoot>` ELEMENT, not the cells — so transparent `td`/`th` let it show through.
-**Fix — two routes:**
+**Fix — three routes:**
+- **Re-order** when you're theming Woo surfaces site-wide rather than fighting one rule. The child theme cannot win this on ordering, so stop putting Woo overrides there: move them into the project's core plugin and enqueue at `wp_enqueue_scripts` **priority 99 with a dependency on `bricks-woocommerce`**, which lands the sheet after *both* the Woo layer and the Theme Style export. Measured order on one site: child theme at position 5, `bricks-woocommerce-css` at 6, `bricks-theme-style-*` at 9, plugin sheet at 16 — no specificity tricks needed for anything after that. This is the route to prefer when a project has a dedicated Woo override sheet; the two below are for one-offs.
+```php
+add_action( 'wp_enqueue_scripts', function () {
+    wp_enqueue_style( '<prefix>-woo', PLUGIN_URL . 'assets/css/woocommerce.css',
+        array( 'bricks-woocommerce' ), filemtime( PLUGIN_DIR . 'assets/css/woocommerce.css' ) );
+}, 99 );
+```
 - **Opt out** when you're fully theming a surface: drop the conventional hook class (e.g. `woocommerce-MyAccount-navigation` from the `<nav>` in the `navigation.php` override; keep your own `.acct__nav`). Per-`<li>` `--{endpoint}` classes from `wc_get_account_menu_item_classes()` are unaffected. Opting out also disables Bricks' account-nav JS that would double with a custom toggle.
 - **Out-specify** for a one-off rule, with the doubled-class trick (no `!important`): `.woocommerce-table--order-details.woocommerce-table--order-details tfoot { background: transparent; }` — two classes (0,2,1) beats Bricks' (0,1,2). Same family as the `@layer bricks` and ghost-border cascade fights.
 **Process note (carry-forward):** this finding, the ACSS `:where(section…)` one, and the `.btn--primary` one ALL appear only with the full stylesheet cascade loaded. When verifying a PHP-rendered Woo/portal surface by headless screenshot, replicate the page's ENTIRE stylesheet set in source order (Advanced Themer → automatic.css → frontend-light-layer → child style.css → woocommerce-layer → content-default → theme-style-* → post-* → automatic-bricks). A tokens+ACSS+style.css subset gives false confidence — pull the real list from the rendered page's `<link>`s (auth-cookie curl for gated pages).
-**First seen:** VMG, 2026-06-07 — a dashboard account nav rendered unstyled on the real page after a partial-CSS preview had shown it correct; the order-details tfoot the same day.
+**First seen:** VMG, 2026-06-07 — a dashboard account nav rendered unstyled on the real page after a partial-CSS preview had shown it correct; the order-details tfoot the same day. Re-order route: MBC, 2026-05-22 — a whole Woo visual overhaul kept losing to the same two sheets until the override CSS was moved out of the child theme into the core plugin.
 
 ### WooCommerce — Cart/Checkout pages default to BLOCKS, which bypass classic template overrides
 **Symptom / When:** You add `woocommerce/checkout/form-checkout.php` (or `cart/cart.php`) overrides + CSS, but the live page renders the default block UI and ignores your template entirely — and a curl shows a React skeleton (`is-loading`, no billing fields).
@@ -1714,6 +1853,39 @@ WC()->mailer()->get_emails()['WC_Email_Customer_New_Account']->trigger( $user_id
 `trigger( $id, '', true )` makes the email include the "set your password" link, pointing at the **themed My Account reset page** (`/my-account/lost-password/?action=newaccount&key=…&login=…`), not raw wp-login. Emptying `to` is the cleanest core-safe way to cancel WP's email (no clean "skip" filter exists). CLI `wp wc customer create` needs none of this — it already fires the branded email.
 **Account model (who needs an account):** subscriptions **force** account creation at checkout (WCS, no guest subs) — so custom service subscriptions REQUIRE the admin-invite path. One-off **invoices don't need an account** if billed as a **guest order** (paid via the secure order-pay link, no login); but an order **assigned to a registered customer requires that customer to log in to pay** (`woocommerce_order_received_verify_known_shoppers` defaults true, gating both order-received and order-pay). Sequencing trap: assigning a first invoice to a brand-new customer means they must set their password before they can log in to pay it.
 **First seen:** VMG, 2026-06-08 — verified end-to-end (created a customer → branded set-password welcome → delivered → user deleted). Password-at-checkout set via `woocommerce_registration_generate_password=no`; public registration left off.
+
+### Bricks WC template types take over the render — the `[woocommerce_*]` shortcode on the page is inert
+**Symptom / When:** You open the Cart / Checkout / Shop / single-product WP page in the editor, or run `wp post get N --field=post_content`, and find only a bare shortcode like `[woocommerce_cart]`. Editing that page changes nothing on the front end. Debugging "why does the cart render this markup" through the page's content leads nowhere, because the markup you are looking at is never executed.
+**Why:** Bricks ships native WooCommerce **template types** — `wc_cart`, `wc_checkout`, `wc_product`, `wc_archive_product`, `wc_thankyou`, `wc_empty_cart`, `wc_account_*`. A published `bricks_template` of one of those types takes over the render for the matching WC page **entirely**, and the shortcode in the WP page's `post_content` is never run. The Bricks WC elements (`woocommerce-cart-items`, `woocommerce-mini-cart`, `woocommerce-notice`, …) call WC's own functions underneath, so form actions and nonces still flow through `WC_Form_Handler` on POST — which is why the page *behaves* like a normal Woo page while being impossible to find by reading its content.
+**Fix:** Edit the template, not the page. Enumerate what actually renders before you start:
+```bash
+wp post list --post_type=bricks_template --fields=ID,post_title --format=table
+wp post meta get <TEMPLATE_ID> _bricks_template_type      # wc_cart, wc_checkout, …
+wp post meta get <TEMPLATE_ID> _bricks_page_content_2 --format=json | jq .
+```
+Keep the type→ID map in the project's `CLAUDE.md`; it is the first thing anyone debugging a Woo surface needs and it is not discoverable from the page.
+**First seen:** MBC, 2026-05-22 — found while tracing a cart nonce bug. The working assumption was that the cart shortcode emitted a broken nonce; the shortcode was never executing, and a Bricks `wc_cart` template was the real render path.
+
+### WooCommerce HPOS — `--with-sync` keeps writing legacy `wp_posts` rows until compat mode is explicitly dropped
+**Symptom / When:** HPOS is enabled and reads come from `wp_wc_orders`, so the migration looks finished. It isn't. Legacy `wp_posts` `shop_order` rows keep growing in lockstep, and everything that reads them keeps working — which is exactly what hides the problem.
+**Why:** `wp wc cot enable --with-sync` makes `OrdersTableDataStore` authoritative but keeps dual-writing to the legacy rows as a safety net. Sync mode is easy to forget: custom reports, dashboards and integrations reading legacy `shop_order` rows continue to function, so nothing signals that the migration is incomplete. The failure arrives later and elsewhere — someone writes a query against `wp_wc_orders` only, it passes in dev, and then compat mode gets dropped in production and whatever still read legacy rows breaks silently.
+**Fix:** Treat compat mode as a task with an end date, not a setting. After a safety window (about a week of live orders):
+1. Audit for legacy readers — grep the active plugin set, mu-plugins and any external reporting for `shop_order` against `wp_posts`.
+2. `wp wc hpos disable_compat_mode` — stops the dual writes.
+3. Optionally `wp wc hpos cleanup` to remove the legacy posts. **Order matters:** posts only become eligible once compat mode is off; running cleanup earlier is a silent no-op.
+Take a DB dump before enabling HPOS at all. Reverting is `wp db import` — `wp wc cot disable` only flips the flag, it does not migrate data back.
+**First seen:** MBC, 2026-05-22 — HPOS enabled with sync on a live store; the compat-mode drop had to be tracked as an explicit open item precisely because nothing in the running site would ever surface it.
+
+### WooCommerce Shipping label printing needs `xmlrpc.php` reachable — a blanket block breaks it
+**Symptom / When:** A standard hardening pass adds an `xmlrpc.php → 403` rule, and WooCommerce Shipping label printing stops working. The admin shows a connection/account error; the underlying request 403s.
+**Why:** WooCommerce Shipping connects through WordPress.com, and that Jetpack-style handshake runs over `xmlrpc.php`. Blocking the endpoint — the near-universal default in bot-block and brute-force hardening — kills the handshake. The two layers that typically do it are an `.htaccess`/server rule and a performance plugin's "disable XML-RPC" toggle; **both** must be relaxed, and a site can look correctly configured while one of them still blocks.
+**Fix:** On any site running WC Shipping, exempt `xmlrpc.php` from the block and leave the plugin toggle off. Mark the exemption **in the file, at the rule**, with the reason and date — the whole failure mode is a future redeploy silently reinstating a rule nobody remembers was removed on purpose:
+```apache
+# xmlrpc.php block intentionally omitted — required by the WordPress.com /
+# WooCommerce Shipping handshake. Do not re-add while WC Shipping is in use.
+```
+When redeploying a shared hardening block, replace only the delimited block and re-emit it from a source that already omits the rule; never copy another site's file over the top. The exemption can be withdrawn if WC Shipping is ever dropped.
+**First seen:** MBC, 2026-05-14 — a fleet-wide bot-block rollout took out label printing on the one site in the fleet using WC Shipping.
 
 ### WooCommerce Subscriptions — create subscription products from WP-CLI
 **Symptom / When:** Need to create recurring/subscription products programmatically (seeding plans, migrations). A plain `WC_Product_Simple` has no recurring price.
@@ -1966,7 +2138,19 @@ $g = WC()->payment_gateways()->payment_gateways()['stripe'];
 var_dump( $g->is_available() );          // now true
 print_r( wc_get_account_menu_items() );   // now includes payment-methods
 ```
-**First seen:** VMG, 2026-06-07 — after a live gateway flip, `is_available()` and the Payment Methods nav both read as missing in `wp eval`; both flipped to present once HTTPS was simulated. (The origin terminated real HTTPS, so `is_ssl()` was genuinely true on real requests.)
+**Second route — a real-HTTPS probe, when simulation isn't enough.** Setting `$_SERVER['HTTPS']` is the right tool for introspecting one object, but it only fakes the single var you set. When the code path depends on the genuine request environment — the full `$_SERVER`, proxy headers, `FORCE_SSL_*`, `wp_redirect()` canonicalisation, redirect-loop guards — run the check in real PHP-FPM context instead:
+```bash
+cat > <WEBROOT>/wp-content/uploads/_diag.php <<'PHP'
+<?php
+require __DIR__ . '/../../wp-load.php';
+header('Content-Type: text/plain');
+echo 'is_ssl: ' . var_export( is_ssl(), true ) . "\n";
+PHP
+curl -s https://example.com/wp-content/uploads/_diag.php; rm <WEBROOT>/wp-content/uploads/_diag.php
+```
+**Delete the probe in the same command.** A wp-load-bootstrapping PHP file under `uploads/` is web-accessible and is a live exposure for as long as it exists — never leave one behind "just for now".
+**Scope note:** this is not only a gateway problem. Anything gated on `is_ssl()` reports a false negative under WP-CLI; gateways are just where it is loudest because the symptom looks like a broken payment config.
+**First seen:** VMG, 2026-06-07 — after a live gateway flip, `is_available()` and the Payment Methods nav both read as missing in `wp eval`; both flipped to present once HTTPS was simulated. (The origin terminated real HTTPS, so `is_ssl()` was genuinely true on real requests.) Probe route: MBC, 2026-05-22, during payment-gateway verification after an HPOS migration.
 
 
 ### Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
@@ -2011,6 +2195,19 @@ wp theme list --name=bricks --fields=version,update_version   # readback = the c
 `--quiet` suppresses only informational log lines — real errors still reach stderr and the exit code, so failures stay loud. **Verified empirically** (positive control: a default `wp theme install` printed the package URL; the identical run under `--quiet` produced 0 bytes of output while the install landed, proven by readback). Where a rollout script should keep its progress output, redact rather than suppress: `wp theme update bricks 2>&1 | sed -E 's/license_key=[^&[:space:]]+/license_key=REDACTED/g'`. If a key has already been echoed, regenerate it at the vendor portal (my.bricksbuilder.io for Bricks) — the echoed copy is already in scrollback.
 **First seen:** Nametank/ext-mem, 2026-08-12 — the first-in-fleet Bricks 2.3.11 update echoed the licence key to the session transcript. Promoted straight to master (Michael's direction) ahead of the fleet-wide 2.3.11 rollout, since the project deliberately carries no `03` copy and has no harvest to wait for.
 
+### Vendor-updater products are invisible to WP-CLI — `wp plugin/theme list` prints `none` whether or not an update exists
+**Symptom / When:** You audit versions from the CLI, every premium product reports `none`, and you report the site current. It may not be. Confirmed for **Bricks** (theme) and **HappyFiles Pro**; assume it for any product with its own updater.
+**Why:** These register their update check on `pre_set_site_transient_update_{plugins,themes}` from **admin-only** code paths (`bricks/includes/license.php`, `happyfiles-pro/includes/pro/settings.php`), so a WP-CLI run never contacts the vendor. WP-CLI prints `none` for anything **absent from the update transient** — which is indistinguishable from "checked, and current". Forcing a refresh with `delete_site_transient('update_plugins')` + `wp_update_plugins()` does not help; the hook still never fires outside admin.
+**Not a licensing fault.** HappyFiles read `License active` at the same moment it failed to report. Don't go hunting for an expired key.
+**Fix:** Confirm those products at the vendor dashboard. Before claiming any site is fully current, list what never reported — anything absent from **both** arms of the transient is unverified:
+```bash
+wp eval '$t=get_site_transient("update_plugins"); $all=array_keys(get_plugins());
+$known=array_merge(array_keys((array)($t->response??[])),array_keys((array)($t->no_update??[])));
+foreach(array_diff($all,$known) as $m) echo "NOT REPORTING: $m\n";'
+```
+In-house plugins and mu-plugins legitimately appear (they have no updater). Everything else in that list is a gap. Note `wp plugin list` also reports `version higher than expected` for products whose installed build is ahead of the update API's record — that is normal for some premium plugins, not a fault.
+**First seen:** MBC, 2026-08-25 — a version audit surfaced three pending updates and implied the rest were current; the theme and one premium plugin were in neither arm of the transient and had simply never been asked.
+
 
 ## Diagnostic patterns
 
@@ -2033,7 +2230,45 @@ def walk(o, path):
 $blob = wp_json_encode( get_post_meta( $id, '_bricks_page_content_2', true ) );
 printf( "'%s' still present: %s\n", $term, strpos( $blob, $term ) !== false ? 'YES' : 'no' );
 ```
-**First seen:** Highland, 2026-07-22 — removing a township name from the site for client location privacy. The text sweep reported 1/1 hits on all four pages and passed; two pages still carried the name inside map-canvas `aria-label` attributes. A whole-blob assertion caught it; a per-key one would have shipped it.
+**The other half of the same blind spot — a section merely *styled* for the thing you are removing.** Even a whole-blob string sweep misses it, because `_cssGlobalClasses` stores six-character class **IDs** (`nddpgh`), never readable names (see "Bricks `_cssGlobalClasses` must reference class IDs, not names"). A section built as `reservations__*` contains the concept nowhere as text. Resolve names to IDs first, then search the IDs — and check `bricks_global_classes_trash` too, since trashed classes stay in the option and can still be referenced by live content:
+```bash
+wp eval 'foreach (["bricks_global_classes","bricks_global_classes_trash"] as $o) {
+  foreach ((array) get_option($o) as $cl)
+    if (stripos($cl["name"] ?? "", "TERM") !== false) echo $o.": ".$cl["name"]." = ".$cl["id"]."\n"; }'
+wp db query "SELECT post_id, meta_key FROM wp_postmeta
+  WHERE meta_key LIKE '_bricks_page%' AND (meta_value LIKE '%ID1%' OR meta_value LIKE '%ID2%');"
+```
+**First seen:** Highland, 2026-07-22 — removing a township name from the site for client location privacy. The text sweep reported 1/1 hits on all four pages and passed; two pages still carried the name inside map-canvas `aria-label` attributes. A whole-blob assertion caught it; a per-key one would have shipped it. Class-ID half: MBC, 2026-08-25 — a policy-change copy sweep returned two pages and looked complete while a live `reservations__*` class block existed that it structurally could not have found.
+
+### Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
+**Symptom / When:** A bug only reproduces logged-in (admin bar, maintenance-mode bypass, an admin screen, user-specific rendering), but `curl` is anonymous and there is no browser on the box. **This catalog already tells you to "verify with an auth-cookie curl" in several places — this is the recipe those entries assume.**
+**Why:** WP auth is two cookies (`LOGGED_IN_COOKIE`, plus `SECURE_AUTH_COOKIE` over HTTPS) whose values `wp_generate_auth_cookie()` will mint for any user id and expiry. A session token from `WP_Session_Tokens` makes the cookie revocable the moment you are done.
+**Fix:** Short expiry, never echo the value, destroy the token and shred the file afterwards:
+```bash
+umask 077
+wp eval '$u=1; $exp=time()+300; $tok=WP_Session_Tokens::get_instance($u)->create($exp);
+file_put_contents("/tmp/.c", LOGGED_IN_COOKIE."=".wp_generate_auth_cookie($u,$exp,"logged_in",$tok).";"
+  .(defined("SECURE_AUTH_COOKIE")?SECURE_AUTH_COOKIE:"wordpress_sec")."=".wp_generate_auth_cookie($u,$exp,"secure_auth",$tok));
+file_put_contents("/tmp/.t",$tok);'
+
+curl -s -o /tmp/.o -b "$(cat /tmp/.c)" -w '%{http_code}\n' "https://example.com/wp-admin/admin.php?page=<slug>"
+
+wp eval '$t=trim(file_get_contents("/tmp/.t")); WP_Session_Tokens::get_instance(1)->destroy($t);'
+shred -u /tmp/.c /tmp/.t /tmp/.o
+```
+**Two traps.** Send a browser-like `-A` user-agent if the site runs a bot block, or the request may be filtered. And **follow or inspect redirects** — a bare `curl` without `-L` on an admin URL returns an empty body with no error, which reads exactly like a fatal.
+**First seen:** MBC, 2026-08-07 — an admin-bar layout bug needed logged-in HTML to diff against anonymous. Reused throughout 2026-08-25 to verify admin screens after an ACF migration.
+
+### Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
+**Symptom / When:** You want to confirm an admin page or menu registered, so you fire its hook from the CLI — `wp eval 'do_action("admin_menu"); …'` — and it reports the menu entry missing. The page is fine.
+**Why:** WP-CLI is not an admin request. The admin globals (`$menu`, `$submenu`, screen context) are never initialised, so hooks expecting them emit warnings from `wp-admin/includes/plugin.php` and populate nothing. **The result is indistinguishable from a genuine registration failure**, which is the dangerous part: it invites you to "fix" working code, or to record a real success as a failure.
+**Fix:** Split the question. Use CLI for **registration state** — `acf_get_options_pages()`, `acf_get_field_groups()`, `has_action()` — and a real authenticated request (recipe above) for **rendering**. Assert on content, not just status:
+```bash
+grep -c "My Tab Label" /tmp/.o           # 0 = genuinely absent
+grep -ciE "fatal error|critical error" /tmp/.o
+```
+They answer different questions, and only the second is evidence the screen works.
+**First seen:** MBC, 2026-08-25 — after moving an options page to `acf_add_options_page()`, the CLI check reported zero menu entries; an authenticated request returned 200 with every tab rendering. Trusting the CLI would have meant rolling back a correct migration.
 
 
 ---
