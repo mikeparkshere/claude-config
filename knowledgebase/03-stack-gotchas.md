@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-182 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+183 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -190,11 +190,12 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks ACF query loop: `objectType: acf_<field>`; repeater subfields are `{acf_<repeater>_<subfield>}`
 - ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
 
-**WordPress core — CPTs, rewrites, canonical**
+**WordPress core — CPTs, rewrites, canonical, mail**
 
 - A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
 - A term archive whose slug matches a CPT single 301s to that single (`redirect_canonical` collision)
 - Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
+- A `wp_mail_from` filter beats an explicit `From:` header — a form plugin's per-message From field is cosmetic
 
 **Rank Math + Bricks**
 
@@ -1593,7 +1594,7 @@ Keep `acf/settings/save_json` pointed at the (now empty) `acf-json/` afterwards:
 ```
 **First seen:** TAB, 2026-06-08 — a gallery loop returned 0 items. **Same mechanism again:** TAB, 2026-06-10 — a repeater's logo-image subfield looped (chips rendered) but every `<img>` was empty.
 
-## WordPress core — CPTs, rewrites, canonical
+## WordPress core — CPTs, rewrites, canonical, mail
 
 ### A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
 **Symptom / When:** You register a CPT named `author` with rewrite slug `authors` (plural, to dodge the obvious `/author/` user-archive collision). The archive `/authors/` resolves. Single URLs `/authors/{slug}/` **404**. `url_to_postid()` returns 0. The post exists, rules are flushed, the meta is fine.
@@ -1638,6 +1639,16 @@ add_filter( 'redirect_canonical', fn( $r, $req ) => is_tax( 'project_category' )
   ```
 - SVG favicon → emit it yourself in the core plugin (bundled asset, brand constant): `add_action('wp_head', fn() => printf('<link rel="icon" href="%s" type="image/svg+xml">', esc_url($url)), 2)`. Modern browsers prefer the SVG; Safari/iOS/Android use the native raster set. Add `<meta name="theme-color">` alongside. An SVG with `<style>@media (prefers-color-scheme: dark){...}</style>` gives a free dark-mode favicon.
 **First seen:** Highland, 2026-06-14 — programmatic Site Icon generated only `thumbnail`; added the size filter + a plugin SVG-favicon module (`inc/favicon.php`).
+
+
+### A `wp_mail_from` filter beats an explicit `From:` header — a form plugin's per-message From field is cosmetic
+**Symptom / When:** A site runs an SMTP layer (custom module or mailer plugin) alongside a form plugin that lets you set a **From** address per notification. You set the form action's From to `sales@…`, ship it, and every notification arrives as `noreply@…`. Nothing errors, the form UI keeps displaying your value, and the sent mail silently disagrees with the config. Usually only noticed when a *second* email (an autoresponder) needs a different sender.
+**Why:** `wp_mail()` parses an explicit `From:` header into `$from_email` (`wp-includes/pluggable.php:329–345`) and **then** applies the filter unconditionally — `$from_email = apply_filters( 'wp_mail_from', $from_email );` at `:437`. There is no "only if unset" guard, so **a `wp_mail_from` filter always wins over the header**, whatever the caller set. Verified on WP 7.1; the ordering is longstanding. (This is the general rule; the WooCommerce entry below is the *exception* — Woo bypasses the filter entirely via its own `woocommerce_email_from_address` setting.)
+**Fix:** Don't fight it — one aligned sender is usually the whole point of the SMTP layer (SPF/DKIM alignment). Set From once, centrally, and carry per-message routing intent in **`Reply-To`**, which is **not** filtered: it is parsed at `:374` and passed straight to `$phpmailer->addReplyTo()` at `:495`. So a staff notification sets Reply-To to the *enquirer*, and an autoresponder sets it to the *monitored mailbox* — get that backwards and a lead who hits Reply is writing to `noreply@`. If one message genuinely needs a different From, the filter callback must exempt it deliberately (inspect `$to` or a flag) rather than the caller setting a header and assuming it sticks. Check what actually goes out, since the form UI will lie:
+```php
+add_action( 'phpmailer_init', function( $m ) { error_log( 'FROM: ' . $m->From . ' REPLY: ' . print_r( $m->getReplyToAddresses(), true ) ); } );
+```
+**First seen:** TAB, 2026-08-31 — spec'ing a submitter autoresponder on WS Form. The SMTP module hooked `wp_mail_from` at priority 99, so the form action's `sales@` had been discarded on every notification since launch without anyone noticing, because the notification reads fine either way.
 
 
 ## Rank Math + Bricks

@@ -299,6 +299,19 @@ The corollary is about tone, not tooling: **when a prior conclusion turns out to
 
 > **(NLTA, 2026-08-05 — first recorded.)** A session searching an error log for one plugin's fatals had its `grep` killed by memory pressure. The empty output was read as clean and the finding "zero references in the whole log" was written into the project `CLAUDE.md`. The session noticed the kill and started to re-run the search — and was itself killed before finishing. The re-run, done the next session, found 23 matching lines. Every one turned out to predate the window in question, so the conclusion held and nothing shipped wrong; the point is that it held **by luck**, and for a day the file carried a claim whose evidence had never existed.
 
+### The mirror image — a loud result that is entirely false positives
+
+The section above is about a **false negative**: an empty result misread as "nothing there." The inverse is just as dangerous and feels far more convincing, because it arrives with numbers attached.
+
+Searching a web server's error log for mail failures returns dozens of hits on `mailgun`, `PHPMailer`, `smtp`, `wp_mail`. **Every one is a bot probing for exposed credentials** — `/mailgun.env`, `/config/mailgun.php`, `/wp_mail_smtp.ini`, and a long tail of `wp-includes/PHPMailer/<random>.php`. What the log records is the *cache layer* or *autoindex* reacting to a 404; the mail subsystem was never involved. On a site behind a page cache each probe also emits a chatty `advanced-cache.php loaded for: …` line, which reads even more like an application error. The same shape applies to any widely-scanned path: `xmlrpc`, `wp-login`, `.env`, `phpinfo`.
+
+**The rule: a keyword count is not a finding until you have read the lines.** "124 PHPMailer errors" is an easy thing to report to a client before looking, and it points the wrong way at exactly the moment you are under pressure.
+
+- **Grep for a marker only your own code can emit**, not for the vendor's name. Register the failure handler and log a distinctive prefix — `add_action( 'wp_mail_failed', fn( $e ) => error_log( 'myprefix-smtp: ' . $e->get_error_message() ) );` — then grep that. **Zero hits on `myprefix-smtp` is meaningful; zero hits on `PHPMailer` never was.**
+- **Prefer the application's own gated log to the server's.** A form plugin that logs success only inside `if ( $wp_mail_return )` is telling you the relay returned a 250 accept — which cleanly separates "the app failed to send" from "it sent and something downstream ate it." Two different investigations.
+
+> **(TAB, 2026-08-31 — first recorded.)** A lead was reported as "never sent." Four mail-related greps over the error log returned 768 hits between them and **not one was a mail error**. The actual answer came from the form plugin's gated success log plus an HTTP-level reconciliation of submit POSTs against stored rows: every submission had been accepted, and the message had in fact been delivered ~3 minutes after the complaint was raised.
+
 ---
 
 ## Doc/reality mismatches on built state — flag, don't fix
