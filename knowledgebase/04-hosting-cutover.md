@@ -44,7 +44,16 @@ Same contract as `03`: **inherited, not authored**. A lookup catalog, consulted 
 
 ⚠️ **This entry previously said "the discriminator is the permission bit, not the extension and not the `.htaccess`." That is wrong**, and it steered projects away from a working defence. The extension determines *which* control applies; both are real. Use **both**: mode for everything, plus an `.htaccess` deny in doc directories — because **new files land `644` by default**, and mode alone protects only the files you remembered to chmod.
 
-⚠️ **Beware the cache when testing.** RunCloud Hub serves the pre-change response over a rule that is already live (`x-runcloud-cache: HIT`), so a correct fix reads as a failed one. Purge Hub **then** Cloudflare and always cache-bust (`?cb=$RANDOM`). This is how the original wrong diagnosis was produced.
+⚠️ **Beware the cache when testing.** RunCloud Hub serves the pre-change response over a rule that is already live (`x-runcloud-cache: HIT`), so a correct fix reads as a failed one. Purge Hub (`wp runcloud-hub purgeall`) **then** Cloudflare, and cache-bust (`?cb=$RANDOM`) when curling for the status code. This is how the original wrong diagnosis was produced.
+
+⚠️ **But `?cb=` verifies the RESPONSE, never the Hub cache — the two questions need opposite tools** (amended JBM, 2026-09-03). A cache-buster is right here, where the question is "does this file 403 now". It is wrong the moment the question becomes "did my purge land", because **an unrecognised query string bypasses Hub by design** (`allow_query_onn: 0`, and `cb` is not in `ignore_query_mch`) — so every URL reads `BYPASS` and a fully-caching site looks like it caches nothing. Reading Hub state through Cloudflare fails the other way: **CF caches the origin's `x-runcloud-cache` header along with the body**, so a stored `HIT` survives a real purge and the purge reads as a no-op (`cf-cache-status: HIT` is the tell). To read Hub, go origin-direct with no query string, warming twice to reach `HIT` first:
+```bash
+O="--resolve <domain>:443:127.0.0.1 -k"
+curl -sI $O https://<domain>/ | grep -i x-runcloud-cache   # warm ×2 → HIT
+wp runcloud-hub purgeall
+curl -sI $O https://<domain>/ | grep -i x-runcloud-cache   # expect MISS
+```
+**First seen:** JBM, 2026-09-03 — verifying a Hub purge produced two confident opposite wrong conclusions in one afternoon ("`purgeall` is broken", then "Hub isn't caching at all"), both from reading the right header through the wrong instrument.
 
 *(Open: the mode behaviour is verified but unexplained. On JBM both `httpd` and `nginx-rc` run workers as `runcloud`, the file owner, so the "Nginx doesn't run as the owner" explanation does not hold. Recorded as observation, not mechanism.)*
 **Fix:** Perms first, then a deny as the net that catches the next file:
