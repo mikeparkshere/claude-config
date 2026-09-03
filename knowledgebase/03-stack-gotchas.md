@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-183 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+189 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -51,6 +51,7 @@ awk '/^# === PROJECT/{exit} /^## /{s=$0; sub(/^## /,"",s); skip=(s ~ /^How this 
 ```
 
 Group labels below are bold rather than headings on purpose — `###` here would collide with the entry headings the generator reads.
+
 
 **WordPress + Bricks Builder**
 
@@ -133,6 +134,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
 - Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
 - Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
+- `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
 
 **BricksExtras**
 
@@ -208,6 +210,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Rank Math routes a CPT *named* `author` through its built-in Author sitemap provider
 - Rank Math's per-post-type sitemap toggle is all-or-nothing — turning a CPT off removes its ARCHIVE too
 - `blog_public = 0` on staging masks per-page noindex — you cannot verify indexing config until you lift it
+- A Bricks accordion can carry FAQ **microdata** that survives the `faqSchema` toggle — "one JSON-LD block" does not prove single-source schema
+- `wp_rank_math_internal_links` is stale, and a raw HTML link count is inflated by nav/footer chrome
 
 **Mailster**
 
@@ -243,6 +247,11 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WS Form Pro implements Turnstile natively — and Cloudflare "Turnstile Spin" is redundant on any plugin stack
 - A client-rendered form cannot be verified with `curl` — check the CAPTCHA provider's own call count instead
 
+**Fluent Forms**
+
+- Fluent Forms `fluentform_submission_success` never bubbles from the `<form>` — an `e.target` listener reads an empty form id
+- Global autoload-captcha Turnstile silently breaks *payment* forms only — single-use tokens expire before a slow fill completes
+
 **Roles & Capabilities**
 
 - Bricks builder access is admin-only by default — custom roles get NO builder access unless explicitly granted
@@ -272,6 +281,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
 - The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
 - Vendor-updater products are invisible to WP-CLI — `wp plugin/theme list` prints `none` whether or not an update exists
+- An emergency plugin deactivation outlives the fix, and edge-cached HTML hides the outage
 
 **Diagnostic patterns**
 
@@ -279,8 +289,6 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A copy sweep over Bricks content misses `_attributes` values — aria-labels and alt text are copy too
 - Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
 - Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
-
----
 
 # === ESTABLISHED — "we know" ===
 
@@ -1149,6 +1157,23 @@ Purge the page cache after either toggle. The template dropdown in the admin fil
 **First seen:** MBC, 2026-08-07 — built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation.
 
 
+### `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
+**Symptom / When:** A card grid built as a query loop, where each card's heading carries a `_cssId` and each card's link references it via `aria-labelledby`. Visually flawless; automated colour/contrast/heading checks all pass. A screen reader announces **every link with the first card's name** — six "Learn More" links all reading "Website Design and Development".
+**Why:** `_cssId` is a static string in the element settings and Bricks does **not** dedupe it across loop iterations — the same HTML `id` is emitted once per item. `aria-labelledby` resolves to the **first** matching element in the document, so every reference in the loop points at item one. WCAG 2.4.4 (Link Purpose) and 4.1.2 (Name, Role, Value), both Level A, and invisible to any check that doesn't compute accessible names.
+**Detect — worth running on any Bricks site:**
+```js
+const ids = {}; document.querySelectorAll('[id]').forEach(e => ids[e.id] = (ids[e.id]||0)+1);
+console.log(Object.entries(ids).filter(([,c]) => c > 1));
+```
+**Fix:** Remove both the `_cssId` and the `aria-labelledby`, and name the link from data that resolves **per iteration** — the element's `text` setting, which does:
+```
+Learn More <span class="hidden-accessible">about {post_title}</span> <span aria-hidden="true">&rarr;</span>
+```
+`.hidden-accessible` is **ACSS's** visually-hidden utility and ships in `automatic.css` on the front end. (Bricks' own equivalent is `.screen-reader-text`, from `frontend.min.css`.) Do not reach for dynamic data inside `_attributes` without reading the entry on that subject first — a loop-aware *custom* tag does resolve per item there, but whether a *native* tag does is not established.
+**Rule:** `aria-labelledby`, `aria-describedby` and `label[for]` can never point between two elements that are both inside the same loop body. Reserve `_cssId` for the static wrapper one level up — which is also what the `_cssId`-as-filter-hook entry above recommends, for a different reason. `01`'s ARIA requirements carry the matching caveat.
+**First seen:** JBM, 2026-09-03 — a homepage services grid emitting six identical heading ids, with all six card links announcing the first service's name. Found during a footer accessibility review; it had shipped unnoticed because it is invisible to visual inspection.
+
+
 ## BricksExtras
 
 ### BricksExtras element `name` strips hyphens from the file basename
@@ -1765,6 +1790,32 @@ Expect the protected pages to hold `noindex` from their own `rank_math_robots` m
 **First seen:** Highland, 2026-08-04 — confirming three admin auth pages were noindexed. Staging showed `noindex` on all 10 pages, which would equally have been true if the per-page meta were absent.
 
 
+### A Bricks accordion can carry FAQ **microdata** that survives the `faqSchema` toggle — "one JSON-LD block" does not prove single-source schema
+**Symptom / When:** The Rich Results Test reports **duplicate `FAQPage`** on a page containing exactly **one** `<script type="application/ld+json">`. A grep for `application/ld+json` looks clean, so the duplicate is invisible to a JSON-LD-only audit.
+**Why:** The FAQ exists in **two formats**. The visible accordion was hand-authored as a `FAQPage` in **microdata** — `itemscope` / `itemtype` / `itemprop` added as Bricks custom **`_attributes`** on the accordion and its loop children. That is independent of the element's `faqSchema` toggle, which governs only Bricks' own JSON-LD `<script>` output. Disabling `faqSchema` removes the JSON-LD path and leaves the microdata untouched. Once any other layer emits a JSON-LD `FAQPage`, Google merges JSON-LD and microdata into one model → two `FAQPage` entities.
+**Detect — check both formats:**
+```bash
+curl -s <url> | grep -o 'itemtype="https://schema.org/[^"]*"' | sort | uniq -c
+curl -s <url> | grep -o 'itemprop=' | wc -l    # 0 = clean
+```
+**Fix:** Strip `_attributes` whose `name` matches `^item(scope|type|prop)$` or whose `value` contains `schema.org`, and write via `$wpdb->update` — Bricks' Ajax filter silently blocks `update_post_meta` on `_bricks_page_content_2`. The change is visually invisible: the accordion still renders and still opens; only the machine-readable markup changes.
+**The general lesson:** counting JSON-LD blocks is **not** sufficient to prove single-source schema. Microdata and RDFa are separate emission paths — any schema migration or cutover validation must grep rendered HTML for `itemtype` / `itemprop` as well.
+**First seen:** JBM, 2026-06-11 — a migration to a hand-owned `@graph` validated clean for three days by counting JSON-LD blocks, while accordion microdata on twelve templated pages kept producing a duplicate `FAQPage`.
+
+### `wp_rank_math_internal_links` is stale, and a raw HTML link count is inflated by nav/footer chrome
+**Symptom / When:** You audit internal links to a page and get two contradictory answers, both wrong. Rank Math's table reports roughly one inbound link and names a source post whose current HTML contains no such link. A raw grep of rendered HTML reports several — from the homepage and every location page — which reads perfectly healthy.
+**Why:** The table records only links Rank Math has processed and is **not re-synced when content changes**, so it names sources that no longer link and misses ones that now do. The raw grep meanwhile counts the **header menu, the mobile menu and the footer menu** — site-wide chrome carrying no topical signal. Neither number describes in-content linking, and they fail in *opposite* directions, so agreeing with either is a coin flip.
+**Fix:** Count links inside the **content region only** — between the header and `<footer>` on the rendered page — and treat Rank Math's table as a lead, never as evidence:
+```bash
+curl -s "<url>" | python3 -c "
+import sys, re
+h = sys.stdin.read(); pre = h[:h.find('<footer')]
+print(len(re.findall(r'href=\"[^\"]*<target-path>/?\"', pre)))"
+```
+Then check each match's byte offset against the header and footer offsets to confirm it is genuinely in-content.
+**First seen:** JBM, 2026-09-03 — diagnosing a service page's authority gap. Rank Math reported 1 inbound link (from a post with zero in its HTML); rendered HTML reported 7. The true in-content count was **zero** — every link was menu or footer chrome.
+
+
 ## Mailster
 
 ### Mailster — custom dynamic tags use `{tag:option}` syntax and resolve at SEND time, not in the editor
@@ -2014,6 +2065,53 @@ curl -s https://challenges.cloudflare.com/turnstile/v0/siteverify -d 'secret=<ke
 **First seen:** Highland, 2026-08-04 — grepping the live pages returned `challenges.cloudflare.com: 0` on both forms and briefly read as a broken integration; the forms are client-rendered. The same inspection found the turnstile field sorted *after* submit on both forms.
 
 
+## Fluent Forms
+
+### Fluent Forms `fluentform_submission_success` never bubbles from the `<form>` — an `e.target` listener reads an empty form id
+**Symptom / When:** A GTM→GA4 form-conversion pipeline is built, verified green in Tag Assistant / DebugView, and published — then weeks of real submissions produce **zero** analytics events while the entries sit in `wp_fluentform_submissions` the whole time. Nothing errors anywhere in the chain.
+**Why:** FF's success dispatch in `form-submission.js` is threefold, and **none of the three bubbles from the form element**: (1) `$form.triggerHandler(...)` fires only handlers bound directly on the form — no bubbling, so a delegated document listener never sees it; (2) `jQuery(document.body).trigger(...)` reaches a document listener but `e.target` is **body**; (3) a native `CustomEvent` on `document`, where the target is **document**. A listener doing `$(e.target).closest('form').attr('data-form_id')` therefore always resolves to `""` — a GTM Lookup Table falls through to its empty default, a regex-gated trigger drops the event, and the tag never fires.
+**The verification trap — this is the part that costs the weeks.** Console-testing with `$('form[data-form_id="3"]').trigger('fluentform_submission_success')` **passes**, because jQuery's `.trigger()` synthesises a bubbling path FF itself never takes. A green DebugView proves the tag works when fed a correct payload; it proves nothing about whether FF ever delivers one.
+**Fix:** Read the form from the event **payload**, not the target. FF passes `{form, config, response}` as the CustomEvent `detail`. Native listener — no jQuery dependency, so it also survives delay-JS ordering:
+```js
+document.addEventListener('fluentform_submission_success', function (e) {
+  var form = e.detail && e.detail.form;
+  var id = (form && form.getAttribute && form.getAttribute('data-form_id')) ||
+           (e.detail && e.detail.config && e.detail.config.id) || '';
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'ff_submit', ff_form_id: String(id) });
+});
+```
+Test the **real** dispatch path, never `.trigger()`:
+```js
+document.dispatchEvent(new CustomEvent('fluentform_submission_success',
+  { detail: { form: document.querySelector('form[data-form_id="3"]') } }));
+```
+**The only sufficient proof is a ground-truth cross-check:** submission row count in `wp_fluentform_submissions` vs the analytics event count over the same window. Anything short of that can pass while the pipeline is dead.
+**First seen:** JBM, 2026-07-15 — 5 real entries across 20 days, 0 analytics events; root cause read directly from the published GTM container source. The listener had been "verified" three weeks earlier by the `.trigger()` method above.
+
+### Global autoload-captcha Turnstile silently breaks *payment* forms only — single-use tokens expire before a slow fill completes
+**Symptom / When:** One Fluent Forms payment form throws **"Turnstile verification failed, please try again."** on submit while every other form on the site submits fine. Keys are valid; nothing appears in the error log, because rejection happens before an entry or log row is created.
+**Why:** With `_fluentform_global_form_settings → misc.autoload_captcha` on and `captcha_type = turnstile`, FF injects a **page-load** Turnstile widget into *every* form and validates the token server-side on submit. Turnstile tokens are **single-use and expire after ~300s**. A payment form's fill time (card details + billing + the Stripe element) routinely outlives the page-load token → `timeout-or-duplicate` → failure. Short forms submit inside the window, so **only the payment form breaks** — which makes it look form-specific when the cause is a global setting.
+**Rule out the keys first** — POST the secret plus a dummy token to `https://challenges.cloudflare.com/turnstile/v0/siteverify`: `invalid-input-response` means the secret is **good** and the problem is client-side; `invalid-input-secret` means the key is wrong.
+**Fix:** Disable the CAPTCHA on payment forms only — Stripe's real-card requirement plus Radar already gate bots there, so it is redundant *and* is the thing blocking real payments. Use the per-form hooks; don't disable autoload globally, since the other forms want it:
+```php
+add_filter( 'fluentform/disable_captcha', function ( $disabled, $form, $type ) {
+    return ( isset( $form->id ) && (int) $form->id === PAYMENT_FORM_ID ) ? true : $disabled;
+}, 10, 3 );
+
+// Strip the now-decorative widget too (priority > 10, so it runs after injection)
+add_filter( 'fluentform/rendering_form', function ( $form ) {
+    if ( ! isset( $form->id ) || (int) $form->id !== PAYMENT_FORM_ID ) return $form;
+    $form->fields['fields'] = array_values( array_filter( $form->fields['fields'], function ( $f ) {
+        return ! in_array( $f['element'] ?? '', array( 'turnstile', 'recaptcha', 'hcaptcha' ), true );
+    } ) );
+    return $form;
+}, 20, 1 );
+```
+The form HTML is baked into cached pages, so after the render-side change purge **both** layers (page cache then CDN) or the widget-removed markup never serves.
+**First seen:** JBM, 2026-05-27 — an invoice/payment form failing at submit for real customers while every other form on the site worked.
+
+
 ## Roles & Capabilities
 
 ### Bricks builder access is admin-only by default — custom roles get NO builder access unless explicitly granted
@@ -2218,6 +2316,14 @@ foreach(array_diff($all,$known) as $m) echo "NOT REPORTING: $m\n";'
 ```
 In-house plugins and mu-plugins legitimately appear (they have no updater). Everything else in that list is a gap. Note `wp plugin list` also reports `version higher than expected` for products whose installed build is ahead of the update API's record — that is normal for some premium plugins, not a fault.
 **First seen:** MBC, 2026-08-25 — a version audit surfaced three pending updates and implied the rest were current; the theme and one premium plugin were in neither arm of the transient and had simply never been asked.
+
+
+### An emergency plugin deactivation outlives the fix, and edge-cached HTML hides the outage
+**Symptom / When:** A plugin update fatals every request (`Class "…" not found`, `vendor/autoload.php` missing). Deactivating from `plugins.php` recovers the site, the files are replaced, and everything **looks** fine afterwards — because nothing forces the reactivation. Meanwhile the plugin is still off: for an SEO plugin that means titles falling back to `Site – Tagline`, meta descriptions gone, redirects dead, sitemap 404ing at origin.
+**Why:** Two independent failures compound. The update replaced the plugin files incompletely, and emergency deactivation — the correct immediate move — has no follow-up gate. Then the page cache and CDN keep serving pre-outage HTML for the rest of the TTL, so a browser visit or a plain `curl` shows **correct** titles from the edge while origin serves fallbacks. The surface check confirms the wrong thing.
+**Fix:** Reinstall the files, `wp plugin activate`, then verify with a **cache-busted** request (`curl "https://<site>/?cb=$(date +%s)"`) that titles, meta, redirects and sitemap are actually back, and purge page cache → CDN so the outage-window HTML doesn't sit at the edge.
+**Standing hygiene after any update session:** run `wp plugin list` and diff the `status` column against the expected active set. Any session that touched `plugins.php` can leave a plugin deactivated, and the site will look healthy from outside for hours.
+**First seen:** JBM, 2026-07-15 — an SEO plugin update fataled, was deactivated, the files were re-replaced eleven minutes later, and the reactivation was missed. Caught ~45 minutes on by a cache-busted title check; settings and all 34 stored redirects had survived the deactivation.
 
 
 ## Diagnostic patterns

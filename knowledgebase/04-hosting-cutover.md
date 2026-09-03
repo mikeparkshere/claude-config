@@ -152,6 +152,17 @@ Verify all four states with cache-busters: bare → 401, creds → 200, an ACME 
 **Fix:** `rsync -az source/ runcloud@<dest>:dest/`. No key dance. Destination addresses come from the `/servers` API listing; the current box's own is `curl -s ifconfig.me`.
 **First seen:** 2026-07-14, on a cross-server migration.
 
+### A `GET` 404 on a RunCloud v3 route does not mean the route is absent — OPTIONS-probe before concluding
+**Symptom / When:** `GET /webapps/{id}/settings/<thing>` returns 404, and the obvious reading is that the API doesn't expose the feature. Reporting that sends the work to the panel unnecessarily.
+**Why:** Several v3 routes are **write-only** — `PATCH`/`POST`/`DELETE` with no `GET` handler wired up. The route exists and accepts mutations while `GET` 404s. Route names are also not always guessable: the FPM tuner lives at a **compound** name (`settings/fpmnginx`), not the `settings/fpm` you would try first.
+**Fix:** Probe before declaring anything missing. Anything whose `Allow:` header carries more than `GET,HEAD` is a real route:
+```bash
+curl -s -X OPTIONS -i "$URL" | grep -i '^allow:'
+```
+Write-only routes confirmed this way: `PATCH /webapps/{id}/settings/php` (PHP version), `PATCH /webapps/{id}/settings/fpmnginx` (FPM process manager, PHP-INI, per-app security headers — partial PATCH is fine and idempotent on no-change), `PATCH /servers/{id}/services` (`start|stop|restart|reload` only).
+**The inverse also holds:** `GET /webapps/{id}/settings` answers `OPTIONS` with `GET,HEAD` — genuinely read-only, despite returning a body that lists writable-looking fields.
+**First seen:** JBM, 2026-05-01 — `settings/fpmnginx` was dismissed as missing after a `GET` 404 and the work was pivoted to a manual panel checklist. Mike pushed back ("I've seen RunCloud's own example code use this endpoint"); the OPTIONS probe returned `allow: GET,HEAD,PATCH` and the PATCH worked first try.
+
 ## Cron
 
 ### The RunCloud panel OWNS the user crontab — `crontab -e` edits are transient
@@ -353,10 +364,12 @@ Sibling to the Perfmatters entry below — Delay JS and Defer JS each independen
 **First seen:** TAB, 2026-06-28 — Global picture-rewrite was the only mode that both caught Bricks images and stayed CF-safe.
 
 ### Perfmatters RUCSS (Remove Unused CSS, async) regresses LCP on an already-lean Bricks site
-**Symptom / When:** Enabling "Remove Unused CSS" (async) makes mobile LCP **worse** on most templates, even though TTFB and CLS are fine.
+**Symptom / When:** Enabling "Remove Unused CSS" (async) makes mobile LCP **worse** on most templates, even though TTFB and CLS are fine. **Second, distinct symptom:** freshly-built sections whose classes are present in the HTML render **unstyled**, or the page paints and then visibly reflows (FOUC / layout jump) on load.
 **Why:** Async inlines the used-CSS then loads full stylesheets asynchronously. On a lean site (small render-blocking CSS, fast TTFB) the async full-CSS lands **after** first paint and pushes the LCP element's final styling later — you're paying async's cost without having the problem it solves. It also **strips classes injected at runtime by JS**.
-**Fix:** On a lean Bricks+ACSS site RUCSS usually isn't worth it — measure per template and revert if net-negative. Keep `minify_css/js` regardless (safe win). If you do keep RUCSS, exclude: **any CSS whose classes are added at runtime** (scroll-reveal/animation stylesheets — otherwise elements stay permanently hidden), form CSS, and the conversion pages.
-**First seen:** TAB, 2026-06-28 — RUCSS regressed LCP on 3 of 4 templates (1.8→3.4s, 2.9→4.8s); reverted, kept minify.
+**Why (the stale-snapshot variant):** Separately from the async timing cost, Perfmatters stores **template-level** Used-CSS snapshots (`wp-content/cache/perfmatters/<site>/css/{front,service,…}.used.css`), inlines one per template, and strips `href` off the real sheets in favour of `data-pmdelayedstyle`. **Those snapshots are not invalidated when Bricks regenerates its CSS**, so after any build they drift behind the markup. With Stylesheet Behavior on *Delay*, the foundational sheets then don't load until user interaction — a stale snapshot paints first and the real CSS arrives late, which is the FOUC.
+**Fix:** On a lean Bricks+ACSS site RUCSS usually isn't worth it — measure per template and revert if net-negative. Keep `minify_css/js` regardless (safe win). If you do keep RUCSS, exclude: **any CSS whose classes are added at runtime** (scroll-reveal/animation stylesheets — otherwise elements stay permanently hidden), form CSS, and the conversion pages. On a Bricks site specifically, also clear the snapshots after **every** build (`rm -f wp-content/cache/perfmatters/<site>/css/*.css` — the file delete is the reliable clear; a missing file falls back to full render-blocking CSS, which is correct-but-slower rather than broken), set Stylesheet Behavior to **async** rather than Delay, and purge the HTML caches, since the snapshot is baked into cached pages.
+**Diagnostic note:** `data-pmdelayedstyle` still appears ~2× in the HTML with RUCSS **off** — that is the Perfmatters loader JS referencing the attribute, not real delayed sheets. Count elements (`grep -oiE "<link[^>]*data-pmdelayedstyle[^>]*>"`), not raw string occurrences, or you will "find" a problem that isn't there.
+**First seen:** TAB, 2026-06-28 — RUCSS regressed LCP on 3 of 4 templates (1.8→3.4s, 2.9→4.8s); reverted, kept minify. · **JBM, 2026-06-08 → 2026-06-19** — the stale-snapshot variant: missing CSS on a newly built template, then FOUC from snapshots nine days behind the Bricks builds. Disabled rather than managed; PSI afterwards 98 mobile / 100 desktop, CLS 0.
 
 ### PSI lab (mobile) is unreliable under load — confirm with desktop + objective metrics + an A/B before "fixing" a regression
 **Symptom / When:** PSI mobile shows a large perf/LCP regression (88→69, LCP 5–6s) with "Something went wrong" errors and big run-to-run swings — while objective signals say the site is fast (TTFB ~40ms, LCP images 0ms, all assets 200, CLS ~0).
@@ -405,6 +418,34 @@ add_filter( 'perfmatters_defer_js', $off );
 **Verify:** `curl -s -o /dev/null -D - -H "Accept: image/png,image/*;q=0.8" "<url>" | grep -i content-type` — must return `image/jpeg`, not `image/webp`.
 **First seen:** NLTA, 2026-06-16 — roster images in an email campaign broke in Outlook.
 **See also** the ShortPixel entry at the top of this section — leaving SPIO's own CDN off (in favour of `deliverWebp=1`) sidesteps the no-JPEG-fallback problem at source.
+
+### Perfmatters "delay ALL" JS kills front-end AJAX forms — and a *partial* exclusion breaks them harder than none
+**Symptom / When:** A contact form's submit button does **nothing** — no entry, no error, no confirmation, no console message that names the cause. Or: "Turnstile verification failed" on a genuine submission. Or: CSP console warnings from the CAPTCHA origin. The form looks completely alive.
+**Why:** Delay JavaScript set to "delay all" (`perfmatters_options[assets][delay_js_behavior] = all`) defers every script until first user interaction. Three failure modes stack, and the middle one is the trap:
+1. **CAPTCHA delayed.** The widget is rendered by JS (the container div carries no `data-sitekey`), so neither the vendor `api.js` nor the form's render call run before interaction → no token exists at submit → "verification failed".
+2. **Partial exclusion is worse than none.** Excluding the *dependent* (the form's submission script, its localised vars object) from delay while leaving its *dependency* (`jquery`) delayed makes the submission script execute on DOMContentLoaded **before jQuery is defined** → uncaught error → the submit handler never binds → **total silence**. A half-done fix converts a visible CAPTCHA error into an invisible dead form.
+3. **CSP blocks the widget.** The CAPTCHA origin missing from `script-src` blocks `api.js`; with no `frame-src` entry the widget iframe falls back to `default-src 'self'` and is blocked too. Two console warnings = those two directives.
+**Fix:** Exclude the **entire** form stack from delay-JS as one unit — jQuery, the form submission script, the localised vars object, and the CAPTCHA origin. Add the CAPTCHA origin to CSP `script-src` **and** `frame-src`. Both the CSP header and the delay-rewritten HTML are cached, so purge page cache **then** CDN, in that order, or the CDN re-caches the stale copy.
+**Verify:**
+- `curl -s <url> | grep -oE '<script[^>]*(jquery|<form-script>|<captcha-origin>)[^>]*>'` — none should carry `type="pmdelayedscript"`.
+- Real submit in a **fresh incognito window** — an open tab caches the broken JS and keeps failing after the fix.
+**Related:** the entry above covers Delay JS and Defer JS killing the WP media modal. Same plugin, same class of failure, different victim and a different exclusion set. **Whenever delay-JS is on, enumerate the dependency chain of anything interactive and exclude it whole.**
+**First seen:** JBM, 2026-06-24 — a contact form silently dropping submissions, found while wiring conversion tracking. Root cause was jQuery still delayed while the form's own scripts had been excluded.
+
+## Backups (Duplicator Pro)
+
+### Retention is per *storage*, not per schedule — one shared storage lets the daily backup delete your fulls
+**Symptom / When:** Weekly and monthly full backups disappear from remote storage days after they were written, with no failure signal anywhere. Every log reads healthy: upload completed, `last_run_status: 0`, `failedUploads: []`.
+**Why:** `max_packages` is a property of the **storage entity**, not of the schedule. Point a daily database backup, a weekly full and a monthly full at one storage and all three share a single retention counter over a single folder — so every daily run's purge trims the **combined** pool oldest-first and deletes the fulls. The per-run log line under-reads badly: `Num packages deleted 2` means two *files* (archive + installer), i.e. **one backup**, so it looks like routine trimming. The tell is a `backup_delete` for a *full* logged inside a **database-only** run.
+**Fix:** One storage entity per schedule, each with its own subfolder and its own `max_packages`. Nesting sibling subfolders under a shared site prefix is safe — the purge lists with `Delimiter: '/'` and drops `CommonPrefixes`, so it is strictly one level deep. **Do not park one storage at the parent of the others:** that works today only because of the delimiter, and it is one upstream change away from a daily purge that reaches into the weekly and monthly folders. `max_packages` counts archives, not files, sorted oldest-first by the date embedded in the filename.
+**Also worth setting:** failure-only alerting makes a **stopped** schedule indistinguishable from a healthy one. Enable the periodic email summary as a positive heartbeat — a schedule that silently reverted to inactive after a reconfiguration is otherwise invisible.
+**First seen:** JBM, 2026-07-30 — a backup audit found the weekly full had been deleted by that morning's database-only daily run, evidenced by a `backup_delete` for the previous Tuesday's archive inside the daily run's log. The single-storage setup had been retaining ~5 mixed backups in total.
+
+### Deleting a storage entity deletes its remote backups too — and the UI keeps listing them
+**Symptom / When:** Offsite history is empty immediately after a storage reshuffle. Existing backup records lose their remote flag and their `updated_at` all change to the same second — while the Backups screen still lists the backups as though they exist.
+**Why:** Removing the storage removes the remote copies with it, logged as `storage_delete` / `Storage deleted: <name> (<type>) — N package(s) affected`. The **local records survive**, so the UI is not evidence that the archives do.
+**Fix:** Take a manual backup into the **new** storage and confirm the object exists **in the bucket** before deleting the old storage entity — otherwise there is a window with no offsite restore point at all. Verify with a bucket listing, never the plugin UI.
+**First seen:** JBM, 2026-07-30 — three remaining offsite backups were destroyed along with the old storage entity during a rebuild, leaving exactly one archive (that day's manual full) offsite.
 
 ## Email delivery
 

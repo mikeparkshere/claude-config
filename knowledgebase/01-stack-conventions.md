@@ -249,6 +249,7 @@ Project-specific vocabulary overrides come from the project record.
 ## ARIA requirements
 
 - Every `<section>` has `aria-labelledby` referencing its H2's `id`.
+- ⚠️ **Never inside a query loop.** A `_cssId` on a looped element is emitted once per iteration, so `aria-labelledby` (and `aria-describedby`, and `label[for]`) resolves to the first item for every card in the set — a Level A failure that is invisible to visual inspection. See `03`. Inside a loop, name the element from per-iteration data instead: a `.hidden-accessible` span carrying the dynamic tag.
 - An `.eyebrow` `<p>` has `aria-hidden="true"` — decorative, redundant with the heading it precedes.
 - Decorative SVGs have `aria-hidden="true"` on the wrapper.
 - Decorative dividers, quote marks, background numbers have `aria-hidden="true"`.
