@@ -30,16 +30,35 @@ Same contract as `03`: **inherited, not authored**. A lookup catalog, consulted 
 
 ## RunCloud
 
-### RunCloud hybrid (Nginx+Apache) serves static files by the file's "other"-read bit — `.htaccess` does NOT protect them
+### RunCloud hybrid (Nginx+Apache) static files — file mode is the universal control; `.htaccess` protects only what Nginx doesn't serve itself
 **Symptom / When:** Project docs left in the public web root (`docs/`, `assets/`, `notes/`, a stray `.html`/`.png`/`.csv`) stay reachable at HTTP 200 even with a per-dir `Require all denied` `.htaccess` and a root `<FilesMatch>` deny. Confusingly the protection is **partial** — most files 403, but a few static ones leak, and **not by extension** (one `.png` leaks while sibling `.png`s 403). Reads like a random misconfiguration.
-**Why:** On RunCloud's **hybrid** stack Nginx is the front and serves static assets **directly**, never consulting Apache — so `.htaccess` (an Apache mechanism) is bypassed for anything Nginx serves itself. The access decision for those files falls to the filesystem **"other" (world) read bit**: mode `644` (`o+r`) → served; mode `640`/`600` (`o-r`) → 403. Files that happen to be proxied to Apache get 403 from `.htaccess` — which is exactly why the leak looks random. **The discriminator is the permission bit, not the extension and not the `.htaccess`.**
-**Fix:** Make protection mechanism-independent with filesystem perms:
+**Why:** Two independent controls, and only one is universal. Full probe matrix (mode × extension, fresh never-requested filenames, JBM 2026-09-03):
+
+| | `.md` | `.json` | `.sql` | `.html` | `.txt` | `.css` | `.js` |
+|---|---|---|---|---|---|---|---|
+| **file mode** `600` → 403 / `644` → 200 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **`.htaccess` deny** (at mode `644`) | **403** | **403** | **403** | 200 | 200 | 200 | 200 |
+
+1. **File mode is universal.** `o-r` → 403, `o+r` → 200, for every extension. This is the control to reach for first, and the one that needs no reasoning about which layer serves what.
+2. **`.htaccess` is a real second control — for extensions Nginx does not serve itself.** Nginx fronts genuine web extensions (`.html`, `.txt`, `.css`, `.js`, images) directly and never consults Apache, so Apache rules are a true no-op **for those**. Everything else (`.md`, `.json`, `.sql`, `.daf`, `.bak`, `.csv`) is punted to Apache, where `.htaccess` applies normally.
+
+⚠️ **This entry previously said "the discriminator is the permission bit, not the extension and not the `.htaccess`." That is wrong**, and it steered projects away from a working defence. The extension determines *which* control applies; both are real. Use **both**: mode for everything, plus an `.htaccess` deny in doc directories — because **new files land `644` by default**, and mode alone protects only the files you remembered to chmod.
+
+⚠️ **Beware the cache when testing.** RunCloud Hub serves the pre-change response over a rule that is already live (`x-runcloud-cache: HIT`), so a correct fix reads as a failed one. Purge Hub **then** Cloudflare and always cache-bust (`?cb=$RANDOM`). This is how the original wrong diagnosis was produced.
+
+*(Open: the mode behaviour is verified but unexplained. On JBM both `httpd` and `nginx-rc` run workers as `runcloud`, the file owner, so the "Nginx doesn't run as the owner" explanation does not hold. Recorded as observation, not mechanism.)*
+**Fix:** Perms first, then a deny as the net that catches the next file:
 ```bash
 chmod -R o-rwx docs assets notes && chmod o-rwx CLAUDE.md
+printf 'Deny from all\n' > docs/.htaccess          # works for .md/.json/.csv, no-op for .html/.txt
+# root: extend the deny to non-web extensions that shouldn't be reachable at all
+# RedirectMatch 403 (?i)^/[^/]+\.(sql|daf|bak|orig|save|log|md)$
+wp runcloud-hub purgeall && wp eval 'jbm_cloudflare_purge_all();'
+curl -s -o /dev/null -w '%{http_code}\n' "https://<site>/docs/<file>.md?cb=$RANDOM"   # expect 403
 ```
 Owner (the PHP-FPM/Apache user) keeps full access, so the site and any Remote-SSH session are unaffected. Verify by curling each file — a `200` means it's still leaking. Note `wp-config.php` returning 200 with a **0-byte body** is fine (PHP executed, no source emitted); `.htaccess` is 403 because nginx-rc blocks dotfiles natively regardless of perms.
 **Also:** the per-webapp Nginx vhost (`/etc/nginx-rc/conf.d/*.conf`) is root-owned and unreadable to the webapp user, and the RunCloud API does not expose it — editing Nginx is not an available lever without panel or root access. Perms need none of them.
-**First seen:** TAB, 2026-06-27 — a cutover left project docs in the web root; 3 of ~100 files (two `.html` + one `.png`, all `644`) leaked at 200 while `600` favicons were already 403. `chmod -R o-rwx` flipped all to 403 with zero site impact, and superseded a planned "needs an Nginx deny rule via the panel" workaround.
+**First seen:** TAB, 2026-06-27 — a cutover left project docs in the web root; 3 of ~100 files (two `.html` + one `.png`, all `644`) leaked at 200 while `600` favicons were already 403. `chmod -R o-rwx` flipped all to 403 with zero site impact, and superseded a planned "needs an Nginx deny rule via the panel" workaround. **Mechanism corrected JBM, 2026-09-03** — the TAB incident was real and the fix was right, but the *diagnosis* over-generalised from `.html`/`.png` (genuinely Nginx-served) to all extensions. JBM then repeated the error in reverse: a 07-30 sweep concluded `.htaccess` was a no-op for `.md`, chmod'd the files it found, and left ten `/docs/` files at `644` and publicly readable for five more weeks — a per-directory `Deny from all` would have caught every one. Probe matrix run 09-03 settled it; the original 07-30 test failed to the Hub-cache trap noted above.
 
 ### RunCloud Let's Encrypt via API — `environment` is `live` (not `production`), and issuance takes minutes (poll ≥15)
 **Symptom / When:** `POST /servers/{id}/webapps/{wid}/ssl` to issue LE. (1) `"environment":"production"` → 422 "selected environment is invalid." (2) After a valid request, `validUntil` stays `null` and 443 stays closed for several minutes — which reads as failure.
