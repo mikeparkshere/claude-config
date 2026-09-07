@@ -1,0 +1,299 @@
+# SEOPress — Fleet Evaluation Brief
+
+> **Status: evaluation, not adopted.** Fleet convention is currently RankMath Pro. Oakham Trailer Sales (`app-oakham`) is the first and only SEOPress site, configured 2026-09-07 on **SEOPress Free 10.2**. The fleet decision is pending; this document accumulates everything needed to make it, and everything needed to execute it if the answer is yes.
+>
+> Two migration paths will exist if we adopt: **RankMath → SEOPress ports** (most Tier 2/3 sites) and **clean installs** (new builds). Both are covered below.
+>
+> Every claim here was verified against SEOPress 10.2 source or observed on a live site. Where something is inferred rather than tested, it says so.
+
+---
+
+## 1. Why this is worth evaluating: the CLI story
+
+**SEOPress ships zero WP-CLI commands.** I grepped the entire plugin including `vendor/` for `WP_CLI::add_command` — there are none. That sounds like a strike against it, and it is the opposite.
+
+Every setting SEOPress has lives in **eight plain `wp_options` rows holding serialized arrays**. No custom tables, no transients, no cache layer over the settings or the sitemap. That means the whole plugin is configurable with `wp option update --format=json` and `wp eval`, and a configuration is a JSON file you can diff, commit, and replay.
+
+Compare RankMath: options split across dashed names (`rank-math-options-titles`, `rank-math-options-general`, …) plus its own tables, plus `Cache::invalidate_storage()` required after any direct write or the sitemap silently serves stale content. SEOPress has no equivalent invalidation step — a plain `update_option` takes effect on the very next request.
+
+**For a fleet managed from the CLI, this is the single strongest argument in SEOPress's favour.**
+
+### The eight options
+
+| Option | Holds |
+|---|---|
+| `seopress_toggle` | Feature module on/off switches |
+| `seopress_titles_option_name` | Title/meta templates per CPT + per taxonomy, robots directives |
+| `seopress_xml_sitemap_option_name` | Sitemap enable + which CPTs/taxonomies are included |
+| `seopress_social_option_name` | OG/X card config + **Knowledge Graph (Organization schema)** |
+| `seopress_advanced_option_name` | Verification codes, admin columns, head cleanup, image alt |
+| `seopress_instant_indexing_option_name` | Bing/IndexNow key + auto-submit |
+| `seopress_google_analytics_option_name` | GA4 / Matomo / Clarity (not created until used) |
+| `seopress_db_version` | Schema marker — don't touch |
+
+### Per-post and per-term data is ordinary meta
+
+`_seopress_titles_title`, `_seopress_titles_desc`, `_seopress_robots_index`, `_seopress_robots_follow`, `_seopress_robots_canonical`, `_seopress_robots_primary_cat`, `_seopress_social_fb_title/desc/img`, `_seopress_social_twitter_title/desc/img`, `_seopress_analysis_target_kw`.
+
+All settable with `wp post meta update` / `wp term meta update`. This is what makes both bulk authoring and the RankMath port tractable from the CLI.
+
+### Settings export/import are callable services
+
+```php
+seopress_get_service( 'ExportSettings' )->handle( $exclude_categories );
+seopress_get_service( 'ImportSettings' )->handle( $array );
+```
+
+Both bypass the nonce/`admin_init` wrappers, so they run from `wp eval` with no admin context. `ExportSettings::getSiteSpecificCategories()` defines strippable groups — `knowledge_graph`, `social_profiles`, `analytics_ids`, `verification_codes`, `license`, `api_keys` — which is exactly the "build once, replay everywhere" mechanism a fleet needs.
+
+**A scrubbed Oakham baseline is committed at `seopress/seopress-fleet-baseline.json`.**
+
+### There is also a REST API
+
+`/seopress/v1/…` — `Options/SitemapsSettings`, `Options/AdvancedSettings`, `Metas/RobotSettings`, `Diagnostics/SitemapTest`, and more. Cookie/nonce authenticated, so `wp option` remains the cleaner CLI path, but it exists if we ever want remote orchestration.
+
+---
+
+## 2. Free vs Pro — the real boundary
+
+Verified by reading the front-end emitters, not the marketing matrix.
+
+### Schema is where free ends, and it ends early
+
+**SEOPress Free emits exactly two JSON-LD blocks, both on the front page only:**
+
+- `WebSite` — `inc/functions/options-social.php:88`
+- `Organization` — `src/Actions/Front/Schemas/PrintHeadJsonSchema.php`, gated on `is_front_page()` and on a Knowledge Graph type being set
+
+`src/JsonSchemas/` contains three classes total: `Organization`, `ContactPoint`, `Image`. **There is no Product, no per-page LocalBusiness, no BreadcrumbList, no FAQ, no Article schema anywhere in free.**
+
+The Knowledge Graph type selector does offer `LocalBusiness` alongside Organization, Corporation, OnlineStore, EducationalOrganization, GovernmentOrganization, NGO, NewsMediaOrganization, OnlineBusiness, and Person — with a full address block, phone, email and `contactPoint`. So free *can* put a legitimate LocalBusiness node on the homepage. Its limits:
+
+- **No industry subtypes.** No `AutoDealer`, `HomeAndConstructionBusiness`, `HealthAndBeautyBusiness`, etc. Only the ten types above.
+- **Homepage only.** No opening hours, no geo coordinates, no `priceRange`, no multi-location.
+
+### The toggle option is mostly theatre
+
+`seopress_toggle` holds 16 switches, but only **eight are read anywhere in free code**: `titles`, `social`, `xml-sitemap`, `advanced`, `google-analytics`, `instant-indexing`, `robots`, `white-label`.
+
+The other eight — `local-business`, `rich-snippets`, `breadcrumbs`, `404`, `bot`, `dublin-core`, `llms`, `ai`, `inspect-url` — are inert placeholders only Pro reads. **Do not read a toggle being "on" as evidence a feature is active.**
+
+### Other Pro gates worth knowing
+
+- **robots.txt editor** is Pro. Free only appends the `Sitemap:` line to WordPress's virtual robots.txt (`inc/functions/options-robots-txt.php`).
+- Redirections, 404 monitoring, breadcrumbs, WooCommerce integration, video/news/HTML sitemaps, and the schema builder are all Pro.
+
+### Recommendation on Pro
+
+For a brochure-plus-inventory site of the kind we build, **Pro's schema builder is the weakest reason to buy it** — we write better structured data in the core plugin, driven by real ACF data, than any form-driven UI produces. The genuine Pro value is redirections and 404 monitoring, and only on sites that have migrated URLs or accumulated link rot.
+
+**Hold off per-site. Buy Pro reactively, not as a fleet default.**
+
+---
+
+## 3. Division of labour: plugin vs `[client]-core`
+
+This is the part that should become convention regardless of which SEO plugin wins.
+
+**The SEO plugin owns** — all CLI-configurable, all fleet-portable through the export JSON:
+title/meta templates, robots directives, canonicals, XML sitemap, OG and X card tags, search-engine verification codes, IndexNow, `<head>` cleanup, admin columns.
+
+**The core plugin owns** — because it has the data and the plugin does not:
+
+- **Industry-correct LocalBusiness schema** (`AutoDealer`, etc.) with hours, geo, `areaServed`, `priceRange`, sourced from the ACF Site Options the site already maintains.
+- **Per-item `Product` / `Offer` schema** for any inventory CPT, with `availability` mapped from the site's own status vocabulary. No plugin can get this right — on Oakham, for instance, a `pulled` consignment must map to `Discontinued`, never `OutOfStock`, and no UI exposes that distinction.
+- **`BreadcrumbList`**, since Bricks renders the visual breadcrumb.
+- **Output corrections** for the plugin's wrong defaults (see §6).
+
+SEOPress gives clean seams for this: `seopress_get_json_data_organization` (filter the data array) and `seopress_schemas_organization_html` (filter the rendered JSON string). Our schema and theirs compose rather than collide.
+
+**This is a point in SEOPress's favour over RankMath**, whose schema layer is much harder to partially override without fighting it.
+
+---
+
+## 4. Clean-install playbook
+
+Order matters. Steps 1–2 must precede any content work.
+
+1. **Install + activate.** SEOPress seeds sensible defaults immediately, including auto-detecting registered CPTs and taxonomies into the title templates. **Skip the setup wizard entirely** — everything it does is reachable from CLI, and the wizard writes `'none'` string literals where the settings screen writes `''`.
+2. **Fix the sitemap.** Defaults include `post` + `category` whether or not the site uses them, and **exclude every custom post type**. On a site whose content *is* a CPT, the default sitemap advertises nothing that matters. See gotcha #2.
+3. **Set the Knowledge Graph** — needs a **raster** logo (gotcha #6).
+4. **Set archive titles** for CPT archives; the seeded template ends in a dangling separator (gotcha #4).
+5. **Apply the core-plugin correction module** (§5).
+6. **Purge page cache.** RunCloud Hub caches sitemap XML.
+7. **Verify from outside**: `/sitemaps.xml` index, each child sitemap 200s and has `<loc>` entries, `/robots.txt` advertises the sitemap, one representative page's `<head>`.
+8. **Export a scrubbed baseline** and commit it.
+
+Start from `seopress/seopress-fleet-baseline.json` rather than SEOPress's own defaults — it already has steps 2 and 4 encoded for the built-in post types.
+
+---
+
+## 5. Portable core-plugin module
+
+`inc/seo.php` in the client core plugin. The Oakham implementation is the reference; the three fixes in it are **stack-level, not site-specific**, and belong on every SEOPress site:
+
+| Fix | Why |
+|---|---|
+| `seopress_social_og_type` → `product` on inventory singulars | SEOPress hardcodes `product` for WooCommerce/EDD only and falls through to `article` for every other post type |
+| `seopress_social_twitter_card_site` / `_creator` → `''` when no X handle | Suppresses two empty meta tags SEOPress emits on every page (gotcha #3) |
+| `seopress_titles_title` / `_desc` whitespace collapse | Removes double spaces and dangling separators left by empty dynamic tags (gotcha #4) |
+
+The og:type post type is the only per-site variable.
+
+---
+
+## 6. Verified gotchas
+
+Each was hit and confirmed on 2026-09-07 unless noted.
+
+### 1. Emitters load on `wp_head` priority 0 — `remove_action` from earlier hooks is a silent no-op
+
+SEOPress does not register its social or title emitters at plugin load. `inc/functions/options.php:139` hooks `seopress_load_social_options()` on **`wp_head` priority 0**, and that callback is what `require`s `options-social.php` — the file whose top level contains the `add_action( 'wp_head', 'seopress_social_*', 1 )` calls.
+
+So nothing is hooked until `wp_head` priority 0 has already run. A `remove_action()` on `init`, `wp`, or `template_redirect` **removes nothing and reports no error**. A removal at `wp_head` priority 0 is a coin flip on plugin registration order.
+
+**Always use the output filters instead** — they're resolved by `has_filter()` at emit time, so registration order is irrelevant. Titles work the same way (`wp_head` priority 0 → `seopress_load_titles_options`).
+
+> **This cost real time to find, because it fails deceptively.** A `wp eval` test of the removal *passes* — CLI loads the file by a different path, so the actions genuinely are hooked and genuinely do get removed. It only fails on the front end. **Verify SEOPress hook surgery with `curl`, never with `wp eval`.**
+
+### 2. Default sitemap config is wrong on any CPT-driven site
+
+Out of the box: `post` and `category` included, **every custom post type and custom taxonomy excluded**. On Oakham that meant the entire 9-unit inventory — the whole point of the site — was absent, while two empty sitemaps for unused blog surfaces were advertised to Google.
+
+Canonical shape is `key => [ 'include' => '1' ]` (`SitemapOption::normalizeIncludeList`). Removing a key entirely excludes it.
+
+**Adding a CPT does not need a rewrite flush.** `Router::registerRewriteRules()` registers one generic pattern, `^([^/]+?)-sitemap([0-9]+)?\.xml$`, for all post types. Pure option write.
+
+### 3. Empty X handle ships two empty meta tags on every page — SEOPress bug
+
+`SocialOption::searchOptionByKey()` returns **`NULL`** for a key never saved. Both X attribution emitters guard with `'' !== $handle`. `'' !== null` is **`true`**, so the guard passes and SEOPress prints:
+
+```html
+<meta name="twitter:site" content="">
+<meta name="twitter:creator" content="">
+```
+
+on **every page of every install where the X username was never filled in** — which is most client sites. Not cosmetic: empty attribution tags are a validator warning and a sloppy signal.
+
+Fix with the filters (see gotcha #1 for why not `remove_action`). Note the asymmetry: `twitter:creator` checks its value is non-empty before echoing, so it's fully suppressed; `twitter:site` echoes whatever the filter returns, so an empty return leaves one stray newline and no tag. Harmless.
+
+### 4. Empty dynamic tags leave double spaces and dangling separators
+
+SEOPress substitutes `%%tag%%` variables in place and never tidies up. The stock archive template it seeds is `%%cpt_plural%% %%current_pagination%% %%sep%%` — on page 1, `%%current_pagination%%` is empty, so you get `Trailers For Sale  - Site Name` (double space), and templates ending in `%%sep%%` emit a trailing separator with nothing after it.
+
+**This ships in SEOPress's own defaults**, so it affects every archive on every clean install. Fixed generically in the core plugin via `seopress_titles_title` / `seopress_titles_desc`.
+
+### 5. `ImportSettings` silently un-autoloads every option
+
+`ImportSettings::handle()` writes with `update_option( $name, $value, false )` — autoload **false**, for all eight options. Since `update_option` also updates the autoload flag on an existing row, importing a settings JSON turns eight autoloaded options into eight extra queries on every request.
+
+**Re-assert autoload after any import.** Verify with:
+```sql
+SELECT option_name, autoload FROM wp_options WHERE option_name LIKE 'seopress%';
+```
+Both `auto` and `on` mean autoloaded; `off` is the problem.
+
+### 6. Brand SVG logos are unusable for schema
+
+Google requires the Organization/LocalBusiness `logo` to be a raster image (SEOPress's own field help: JPG/PNG/WebP/GIF, min 200×200). **Our Bricks/ACSS builds ship SVG logos as standard**, so on most fleet sites there will be no usable raster logo in the media library at all.
+
+Rasterize from the SVG rather than settling for the favicon:
+```bash
+rsvg-convert -w 600 -h <proportional> logo-dark.svg -o /tmp/logo-raw.png
+convert /tmp/logo-raw.png -background white -alpha remove -alpha off \
+        -bordercolor white -border 24 -limit memory 128MB logo-schema.png
+wp media import logo-schema.png --title="… — schema logo" --porcelain
+```
+Pick the **dark** logo variant (dark elements, meant for light backgrounds) — knowledge panels render on white. RunCloud boxes are memory-tight: keep the `-limit` flags and convert one file at a time.
+
+### 7. The whitelist sanitizer is safe to call from CLI
+
+`seopress_sanitize_options_fields()` (global function, `inc/admin/sanitize/Sanitize.php`) iterates a whitelist and modifies matching keys in place. **It does not drop unknown keys.** Safe and correct to pipe writes through it — it's exactly what the settings screen and the importer use, so it keeps CLI writes byte-identical to UI writes (notably: it prepends `@` to X handles and preserves meaningful whitespace in title templates, which `sanitize_text_field` would collapse).
+
+### 8. Method-name trap: `getSeparator()`, not `getTitleSeparator()`
+
+`TitleOption` has `getSeparator()`. Calling the plausible-sounding `getTitleSeparator()` throws a fatal that takes down every front-end page. Generally: **verify SEOPress service method names against source before shipping a filter that calls one** — a typo here is a white screen, not a warning.
+
+### 9. Page cache holds sitemap XML
+
+RunCloud Hub Native cache serves `/sitemaps.xml` and its children. Always `wp runcloud-hub purgeall` after sitemap option changes, and cache-bust (`?cb=$RANDOM`) when verifying by curl.
+
+---
+
+## 7. RankMath → SEOPress port
+
+**Not yet executed — Oakham had no SEO plugin to migrate from.** This section is read from the importer source and is the plan of record, not a tested procedure. **Dry-run it on a staging clone before any live port.**
+
+### What SEOPress's importer covers
+
+`src/Actions/Admin/Importer/RankMath.php`. Importers also exist for AIOSEO, SiteSEO and SureRank; Yoast, Squirrly, SmartCrawl, Slim SEO, WP Meta SEO, SEO Framework and Premium SEO Pack have separate handlers under `inc/admin/ajax/migrate/`.
+
+**Post and term meta map** (identical for both):
+
+| RankMath | SEOPress |
+|---|---|
+| `rank_math_title` | `_seopress_titles_title` |
+| `rank_math_description` | `_seopress_titles_desc` |
+| `rank_math_facebook_title` / `_description` / `_image` | `_seopress_social_fb_title` / `_desc` / `_img` |
+| `rank_math_twitter_title` / `_description` / `_image` | `_seopress_social_twitter_title` / `_desc` / `_img` |
+| `rank_math_canonical_url` | `_seopress_robots_canonical` |
+| `rank_math_focus_keyword` | `_seopress_analysis_target_kw` |
+| `rank_math_robots` (array) | `_seopress_robots_index` / `_follow` / `_imageindex` / `_snippet` |
+| `rank_math_primary_category` / `_primary_product_cat` | `_seopress_robots_primary_cat` |
+
+Dynamic tags are translated through a `Tags` class as values are copied, so RankMath's `%title%`-style variables become SEOPress's `%%post_title%%` form. Settings-level migration (`migrateSettings()`) additionally maps the Knowledge Graph type across.
+
+### What it does NOT cover — plan for these separately
+
+- **Schema.** RankMath's per-post schema (`rank_math_schema_*`) has no SEOPress-free destination. Anything relying on RankMath's Product/LocalBusiness/FAQ output **must be reimplemented in the core plugin before the switch**, or the site loses its rich results.
+- **Redirections.** RankMath's redirection table has no free destination at all. This alone may force Pro on any site with a redirect map — **audit `rank_math_redirections` before quoting a port.**
+- **404 log**, internal-link counters, and Analytics module data: not migrated, not replaceable in free.
+- **Per-CPT schema defaults** (`pt_<cpt>_default_rich_snippet` in `rank-math-options-titles`): no equivalent.
+
+### Running it from CLI
+
+`process()` is `check_ajax_referer` + `is_admin()` + `manage_options` gated, and the three workers (`migrateSettings()`, `migratePostQuery( $offset, $increment )`, `migrateTermQuery()`) are `protected`. So the importer is **not directly callable from `wp eval`**.
+
+Two options:
+
+1. **Reflection** into the protected methods from `wp eval`. Works, but couples us to private API that can change between releases.
+2. **Reimplement the meta copy in a CLI script.** The map above is the whole of it — roughly twenty lines, plus batching. **Preferred**, because it gives us a dry-run mode, a per-post log, and control over what happens when both plugins have a value for the same field.
+
+Either way: **run with both plugins active**, verify, then deactivate RankMath. Never uninstall RankMath before the port is verified — its meta is the only copy of the data.
+
+### Sequencing a port
+
+1. Audit first: redirections count, schema types in use, per-CPT schema defaults, focus keywords.
+2. Decide Pro / no-Pro **from the redirection audit**, not from feature preference.
+3. Build the core-plugin schema module **before** switching, so structured data never goes dark.
+4. Port meta with both plugins active. Verify a sample across every post type.
+5. Configure SEOPress from the fleet baseline + site specifics.
+6. Compare `<head>` and sitemap output against a pre-switch capture, page by page.
+7. Deactivate RankMath. Keep it installed for one indexing cycle.
+8. Resubmit the sitemap in Search Console — **the URL changes** (`/sitemap_index.xml` → `/sitemaps.xml`).
+
+---
+
+## 8. Decision inputs
+
+**For SEOPress**
+- Configuration is eight `wp_options` rows: fully CLI-driveable, diffable, replayable across the fleet. RankMath is not.
+- No cache-invalidation dance after direct writes.
+- Clean filter seams for composing our own schema alongside the plugin's.
+- Free tier covers titles/meta/sitemap/OG competently, so the Pro decision becomes per-site rather than fleet-wide.
+- A scrubbed baseline JSON makes a new site's SEO config a one-command operation.
+
+**Against**
+- Free schema is thin enough that we take on the structured-data work ourselves. That's arguably correct anyway — but it is real core-plugin work per site, and it must be built *before* any RankMath port or the site loses rich results mid-flight.
+- Redirections are Pro-only with no free fallback; any site with a redirect map either buys Pro or needs another solution.
+- Real bugs in shipping defaults (gotchas #3 and #4 affect every install untouched out of the box). Not disqualifying, and both are fixed once in the portable core-plugin module — but it means SEOPress cannot be dropped in unattended.
+- Migration cost is per-site and non-trivial for anything with schema or redirects.
+
+**Still unknown**
+- No RankMath port has been executed. Cost and fidelity are estimated from source, not measured. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
+- SEOPress Pro has not been trialled on any site.
+- No SEOPress site has been through a full indexing cycle yet, so there is no ranking or Search Console evidence either way.
+
+---
+
+*Created 2026-09-07 from the Oakham configuration session. Update as sites are added or the port is trialled.*

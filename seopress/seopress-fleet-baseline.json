@@ -1,0 +1,94 @@
+{
+    "seopress_titles_option_name": {
+        "seopress_titles_home_site_title": "%%sitetitle%%",
+        "seopress_titles_home_site_desc": "%%tagline%%",
+        "seopress_titles_sep": "-",
+        "seopress_titles_single_titles": {
+            "post": {
+                "title": "%%post_title%% %%sep%% %%sitetitle%%",
+                "description": "%%post_excerpt%%"
+            },
+            "page": {
+                "title": "%%post_title%% %%sep%% %%sitetitle%%",
+                "description": "%%post_excerpt%%"
+            }
+        },
+        "seopress_titles_tax_titles": {
+            "category": {
+                "title": "%%_category_title%% %%current_pagination%% %%sep%% %%sitetitle%%",
+                "description": "%%_category_description%%"
+            },
+            "post_tag": {
+                "title": "%%tag_title%% %%current_pagination%% %%sep%% %%sitetitle%%",
+                "description": "%%tag_description%%",
+                "noindex": "1"
+            },
+            "post_format": {
+                "title": "%%term_title%% %%current_pagination%% %%sep%% %%sitetitle%%",
+                "description": "%%term_description%%"
+            }
+        },
+        "seopress_titles_archive_titles": {
+            "post": {
+                "title": "%%cpt_plural%% %%current_pagination%% %%sep%%"
+            },
+            "page": {
+                "title": "%%cpt_plural%% %%current_pagination%% %%sep%%"
+            }
+        },
+        "seopress_titles_archives_author_title": "%%post_author%% %%sep%% %%sitetitle%%",
+        "seopress_titles_archives_author_noindex": "1",
+        "seopress_titles_archives_date_title": "%%archive_date%% %%sep%% %%sitetitle%%",
+        "seopress_titles_archives_date_noindex": "1",
+        "seopress_titles_archives_search_title": "%%search_keywords%% %%sep%% %%sitetitle%%",
+        "seopress_titles_archives_search_title_noindex": "1",
+        "seopress_titles_archives_404_title": "404 - Page not found %%sep%% %%sitetitle%%",
+        "seopress_titles_paged_rel": "1",
+        "seopress_titles_attachments_noindex": "1"
+    },
+    "seopress_social_option_name": {
+        "seopress_social_facebook_og": "1",
+        "seopress_social_twitter_card": "1",
+        "seopress_social_twitter_card_og": "1",
+        "seopress_social_twitter_card_img_size": "large"
+    },
+    "seopress_advanced_option_name": {
+        "seopress_advanced_advanced_attachments": "1",
+        "seopress_advanced_advanced_tax_desc_editor": "1",
+        "seopress_advanced_appearance_title_col": "1",
+        "seopress_advanced_appearance_meta_desc_col": "1",
+        "seopress_advanced_appearance_score_col": "1",
+        "seopress_advanced_appearance_noindex_col": "1",
+        "seopress_advanced_appearance_nofollow_col": "1",
+        "seopress_advanced_advanced_image_auto_alt_txt": "1",
+        "seopress_advanced_advanced_replytocom": "1"
+    },
+    "seopress_xml_sitemap_option_name": {
+        "seopress_xml_sitemap_general_enable": "1",
+        "seopress_xml_sitemap_img_enable": "1",
+        "seopress_xml_sitemap_post_types_list": {
+            "page": {
+                "include": "1"
+            }
+        },
+        "seopress_xml_sitemap_taxonomies_list": []
+    },
+    "seopress_toggle": {
+        "toggle-titles": "1",
+        "toggle-xml-sitemap": "1",
+        "toggle-social": "1",
+        "toggle-google-analytics": "1",
+        "toggle-instant-indexing": "1",
+        "toggle-advanced": "1",
+        "toggle-dublin-core": "1",
+        "toggle-local-business": "1",
+        "toggle-rich-snippets": "1",
+        "toggle-breadcrumbs": "1",
+        "toggle-robots": "1",
+        "toggle-llms": "1",
+        "toggle-404": "1",
+        "toggle-bot": "1",
+        "toggle-inspect-url": "1",
+        "toggle-ai": "1"
+    }
+}
