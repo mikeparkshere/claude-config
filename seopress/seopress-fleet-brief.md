@@ -46,7 +46,11 @@ seopress_get_service( 'ImportSettings' )->handle( $array );
 
 Both bypass the nonce/`admin_init` wrappers, so they run from `wp eval` with no admin context. `ExportSettings::getSiteSpecificCategories()` defines strippable groups — `knowledge_graph`, `social_profiles`, `analytics_ids`, `verification_codes`, `license`, `api_keys` — which is exactly the "build once, replay everywhere" mechanism a fleet needs.
 
-**A scrubbed Oakham baseline is committed at `seopress/seopress-fleet-baseline.json`.**
+**A scrubbed Oakham baseline is committed at `seopress/seopress-fleet-baseline.json`, produced by `seopress/export-baseline.php`.**
+
+⚠️ **`ExportSettings`'s own scrub categories are incomplete — do not trust them alone.** Every category is defined as a list of `seopress_social_*`, `seopress_google_analytics_*`, `seopress_advanced_*` or `seopress_pro_*` keys, so anything site-specific living in **`seopress_titles_option_name`** passes straight through. Confirmed leak: `seopress_titles_home_site_title_alt` — the site's alternate name, which feeds schema `alternateName` — survives a `knowledge_graph` exclusion and ships the client's business name in the "scrubbed" baseline. Registered post types and taxonomies leak the same way, since no category covers them either.
+
+`export-baseline.php` strips all of these explicitly on top of `ExportSettings`. **Always `grep -i <clientname>` the output before committing a baseline.**
 
 ### There is also a REST API
 
@@ -117,7 +121,7 @@ Order matters. Steps 1–2 must precede any content work.
 
 1. **Install + activate.** SEOPress seeds sensible defaults immediately, including auto-detecting registered CPTs and taxonomies into the title templates. **Skip the setup wizard entirely** — everything it does is reachable from CLI, and the wizard writes `'none'` string literals where the settings screen writes `''`.
 2. **Fix the sitemap.** Defaults include `post` + `category` whether or not the site uses them, and **exclude every custom post type**. On a site whose content *is* a CPT, the default sitemap advertises nothing that matters. See gotcha #2.
-3. **Set the Knowledge Graph** — needs a **raster** logo (gotcha #6).
+3. **Set the Knowledge Graph** — needs a **raster** logo (gotcha #6). **Take the schema `name` from the client's Google Business Profile, verbatim**, not from the WP site title or an ACF company-name field — those drift from GBP and are the wrong authority for an entity Google is trying to reconcile with a Knowledge Panel. Put the other form in `seopress_titles_home_site_title_alt`, which feeds `alternateName` on both the `Organization`/`LocalBusiness` and `WebSite` nodes. Left unset, `alternateName` falls back to the site title and you get `name` and `alternateName` identical — noise in both nodes.
 4. **Set archive titles** for CPT archives; the seeded template ends in a dangling separator (gotcha #4).
 5. **Apply the core-plugin correction module** (§5).
 6. **Purge page cache.** RunCloud Hub caches sitemap XML.
