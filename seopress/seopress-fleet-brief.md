@@ -127,6 +127,31 @@ SEOPress gives clean seams for this: `seopress_get_json_data_organization` (filt
 
 **This is a point in SEOPress's favour over RankMath**, whose schema layer is much harder to partially override without fighting it.
 
+### The pattern, proven on Oakham
+
+Built 2026-09-07 as `inc/schema.php`; **0 errors from validator.schema.org on every node**. Reusable shape for any local-business + inventory site:
+
+**Augment the plugin's business node, don't replace it.** `seopress_get_json_data_organization` hands you the assembled array. Set the industry `@type` there (`AutoDealer`, `HomeAndConstructionBusiness`, …) and add what free cannot express — `@id`, `image`, top-level `telephone`, `openingHoursSpecification`, `geo`, `hasMap`, `areaServed`, `priceRange`. The name, address and logo keep coming from the SEOPress UI, so the client still edits them without a deploy, and the page carries one business node rather than two competing ones.
+
+Details worth copying:
+
+- **`image` is not `logo`.** Google's Local Business guidance wants a photograph; a brand mark is a poor stand-in. Find a real photo in the media library and reference it behind a filter so it can be swapped without a file edit.
+- **`telephone` belongs on the business**, not only nested in `contactPoint` — SEOPress only writes the nested one.
+- **Derive `priceRange` from live inventory**, cached in a transient busted on save. A hardcoded range or a `"$$"` placeholder goes stale or says nothing.
+- **Resolve `geo` from the client's Google Business Profile short link** rather than geocoding the address yourself: `curl -sL -o /dev/null -w '%{url_effective}'` on a `maps.app.goo.gl` link returns a URL containing `@lat,lng`. That guarantees the schema and the GBP describe the same point, which is the whole purpose of the property.
+- **Anchor everything to one `@id`** (`home_url('/#dealer')`) and point each product's `offers.seller` at it, so the nodes form a graph instead of unlinked islands.
+
+**Map availability from the site's own status vocabulary, not from a plugin dropdown.** This is the single clearest argument for owning schema in the core plugin. On Oakham: `available` → `InStock`, `pending` → `LimitedAvailability`, `sold` → `SoldOut`, and `pulled` → `Discontinued` **with no `Offer` emitted at all**, because a consignor withdrawal is not the dealer's sale to price. No plugin UI — free or Pro — exposes that distinction. It only exists because the CPT's status vocabulary does.
+
+**Exclude data that isn't already public.** VIN is stored on Oakham's units but rendered nowhere; structured data must not be the thing that first publishes it. Audit the front end before mapping a field into schema.
+
+**Validate with the real validator, from the CLI:**
+```bash
+curl -s -X POST https://validator.schema.org/validate --data-urlencode "url=<page>" \
+  | tail -c +6 | python3 -c "import sys,json; d=json.load(sys.stdin); ..."
+```
+The response is JSON prefixed with `)]}'` — strip the first five bytes before parsing. Walk every `tripleGroups[].nodes[]`, not just the first group, or you will miss half the nodes on the page and think a type isn't being parsed.
+
 ---
 
 ## 4. Clean-install playbook
