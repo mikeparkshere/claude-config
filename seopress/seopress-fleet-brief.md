@@ -159,6 +159,24 @@ Start from `seopress/seopress-fleet-baseline.json` rather than SEOPress's own de
 
 The og:type post type is the only per-site variable.
 
+### Generated descriptions for any CPT-driven site
+
+**Check `post_excerpt` coverage before trusting SEOPress's description defaults.** The seeded template is `%%post_excerpt%%`. Where a site has no excerpts — which is every Bricks build we make, since editors never touch the classic excerpt field — WordPress auto-generates one by trimming `post_content`. Two failure modes follow, and both were live on Oakham:
+
+- **Pages with empty `post_content` emit no description tag at all.** A Bricks-only page has nothing to trim. Oakham's Service and Contact pages had no meta description whatsoever, and nothing in the SEOPress UI flags it.
+- **Everything else emits an over-length content dump.** Oakham's trailers ran 164–302 characters against a ~155 truncation point.
+
+For an inventory or catalogue CPT, **generate the description from structured fields rather than authoring per-post meta.** Authoring doesn't scale and goes stale on the first price change. The Oakham implementation (`inc/seo.php` → `oakham_seo_build_trailer_description()`) is the reference pattern:
+
+1. Assemble in ordered clauses — name → type → specs → call-to-action.
+2. **Trim from the tail inwards** until under budget, so a long product name costs detail rather than yielding a truncated sentence. A blind `substr()` produces mid-word garbage; a clause ladder always ends on a full stop.
+3. **Branch on availability status**, and never let an unavailable item advertise a price.
+4. **Bail when `_seopress_titles_desc` is set**, so a hand-written override always wins and the client keeps per-item control.
+
+Same pattern for titles: measure, and only intervene when over budget. **Measure entity-decoded** — a site name containing `&` is stored as `&amp;`, so the raw string is four characters longer than the SERP shows, and a naive `mb_strlen()` reports every title as over budget.
+
+Static pages are the opposite case: seed those as `_seopress_titles_desc` post meta rather than code, so the client can revise them in the metabox without a deploy.
+
 ---
 
 ## 6. Verified gotchas
