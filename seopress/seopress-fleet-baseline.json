@@ -55,13 +55,8 @@
     "seopress_advanced_option_name": {
         "seopress_advanced_advanced_attachments": "1",
         "seopress_advanced_advanced_tax_desc_editor": "1",
-        "seopress_advanced_appearance_title_col": "1",
-        "seopress_advanced_appearance_meta_desc_col": "1",
-        "seopress_advanced_appearance_score_col": "1",
         "seopress_advanced_appearance_noindex_col": "1",
-        "seopress_advanced_appearance_nofollow_col": "1",
-        "seopress_advanced_advanced_image_auto_alt_txt": "1",
-        "seopress_advanced_advanced_replytocom": "1"
+        "seopress_advanced_appearance_nofollow_col": "1"
     },
     "seopress_xml_sitemap_option_name": {
         "seopress_xml_sitemap_general_enable": "1",
@@ -77,7 +72,7 @@
         "toggle-titles": "1",
         "toggle-xml-sitemap": "1",
         "toggle-social": "1",
-        "toggle-google-analytics": "1",
+        "toggle-google-analytics": "0",
         "toggle-instant-indexing": "1",
         "toggle-advanced": "1",
         "toggle-dublin-core": "1",

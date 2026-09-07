@@ -76,6 +76,20 @@ The Knowledge Graph type selector does offer `LocalBusiness` alongside Organizat
 - **No industry subtypes.** No `AutoDealer`, `HomeAndConstructionBusiness`, `HealthAndBeautyBusiness`, etc. Only the ten types above.
 - **Homepage only.** No opening hours, no geo coordinates, no `priceRange`, no multi-location.
 
+### Activation switches on all six free modules — audit them, don't inherit them
+
+The free dashboard exposes six module tiles: **Titles & Metas, Social, XML Sitemap, Analytics, Instant Indexing, Advanced**. All six are enabled at activation regardless of whether the site can use them. On Oakham, two were doing nothing at all until audited:
+
+- **Analytics** — the `seopress_google_analytics_option_name` row **does not even get created**. The module is on, renders nothing, and reads as configured on the dashboard. Turn it off unless you're actually putting GA4/Matomo/Clarity in it. The baseline ships it **off** for this reason; enable it deliberately when configuring analytics.
+- **Advanced** — enables nine settings, three of which are inert or unwanted on our stack:
+  - `..._advanced_image_auto_alt_txt` hooks **`wp_content_img_tag`**, which only fires for images inside `the_content`. **Bricks renders images through its own elements, so this has almost no surface on any of our builds.** (It is *not* a filename scraper — it copies an attachment's existing alt meta onto images missing one. Benign, just idle.)
+  - `..._advanced_replytocom` is pointless on any site without comments.
+  - **Five admin columns** (title, meta desc, score, noindex, nofollow) get added to *every* post type's list table. Every MPD site has deliberately-designed custom admin columns, so this crowds a screen someone built to a shape. The **score** column is worse than cosmetic noise: it renders empty until content analysis has been run per-post, which on a Bricks site it never has been.
+
+  Baseline keeps `..._advanced_attachments` (attachment-page redirect), `..._advanced_tax_desc_editor`, and the **noindex + nofollow columns only** — those two are genuinely useful at-a-glance robots status.
+
+**Instant Indexing is the one to leave on.** It's the free module that most justifies its tile: SEOPress auto-generates the IndexNow key at activation and serves it at `/{key}.txt`, then submits on publish **and update and trash**, for any publicly viewable post type. On an inventory site where units arrive and sell, that pings Bing/Yandex/Seznam on every stock change for nothing. Verify the key file actually resolves (`curl -o /dev/null -w '%{http_code}' https://site/{key}.txt`) — the submissions silently no-op if it doesn't.
+
 ### The toggle option is mostly theatre
 
 `seopress_toggle` holds 16 switches, but only **eight are read anywhere in free code**: `titles`, `social`, `xml-sitemap`, `advanced`, `google-analytics`, `instant-indexing`, `robots`, `white-label`.
@@ -123,10 +137,11 @@ Order matters. Steps 1–2 must precede any content work.
 2. **Fix the sitemap.** Defaults include `post` + `category` whether or not the site uses them, and **exclude every custom post type**. On a site whose content *is* a CPT, the default sitemap advertises nothing that matters. See gotcha #2.
 3. **Set the Knowledge Graph** — needs a **raster** logo (gotcha #6). **Take the schema `name` from the client's Google Business Profile, verbatim**, not from the WP site title or an ACF company-name field — those drift from GBP and are the wrong authority for an entity Google is trying to reconcile with a Knowledge Panel. Put the other form in `seopress_titles_home_site_title_alt`, which feeds `alternateName` on both the `Organization`/`LocalBusiness` and `WebSite` nodes. Left unset, `alternateName` falls back to the site title and you get `name` and `alternateName` identical — noise in both nodes.
 4. **Set archive titles** for CPT archives; the seeded template ends in a dangling separator (gotcha #4).
-5. **Apply the core-plugin correction module** (§5).
-6. **Purge page cache.** RunCloud Hub caches sitemap XML.
-7. **Verify from outside**: `/sitemaps.xml` index, each child sitemap 200s and has `<loc>` entries, `/robots.txt` advertises the sitemap, one representative page's `<head>`.
-8. **Export a scrubbed baseline** and commit it.
+5. **Audit the six module tiles** — activation turns all of them on regardless of use. Analytics in particular creates no option row and renders nothing. See §2.
+6. **Apply the core-plugin correction module** (§5).
+7. **Purge page cache.** RunCloud Hub caches sitemap XML.
+8. **Verify from outside**: `/sitemaps.xml` index, each child sitemap 200s and has `<loc>` entries, `/robots.txt` advertises the sitemap, the IndexNow key file resolves, one representative page's `<head>`.
+9. **Export a scrubbed baseline** and commit it.
 
 Start from `seopress/seopress-fleet-baseline.json` rather than SEOPress's own defaults — it already has steps 2 and 4 encoded for the built-in post types.
 
@@ -187,9 +202,13 @@ SEOPress substitutes `%%tag%%` variables in place and never tidies up. The stock
 
 **This ships in SEOPress's own defaults**, so it affects every archive on every clean install. Fixed generically in the core plugin via `seopress_titles_title` / `seopress_titles_desc`.
 
-### 5. `ImportSettings` silently un-autoloads every option
+### 5. `ImportSettings` — and the dashboard module tiles — silently un-autoload options
 
 `ImportSettings::handle()` writes with `update_option( $name, $value, false )` — autoload **false**, for all eight options. Since `update_option` also updates the autoload flag on an existing row, importing a settings JSON turns eight autoloaded options into eight extra queries on every request.
+
+**The same bug is in the UI.** `inc/admin/ajax/Dashboard.php:40` writes `update_option( 'seopress_toggle', $opts, false )` — so **every time someone flips a module tile in wp-admin, `seopress_toggle` stops being autoloaded.** It's read on essentially every request via `seopress_get_toggle_option()`, so this is a permanent extra query bought with one click. Re-assert it after any dashboard visit where tiles were touched. When toggling from CLI, pass `true` explicitly.
+
+Disabled modules are stored as the string `'0'`, not removed — match that from CLI so the dashboard renders the tile correctly.
 
 **Re-assert autoload after any import.** Verify with:
 ```sql
