@@ -27,6 +27,18 @@ The knowledgebase serves new builds, through go-live. It is not for the pre-AI f
 
 **Scope note (2026-07-15).** This originally read "not for live-site maintenance… go-live ends its involvement." The TAB harvest stretched that line honestly: a cutover *is* the end of the lifecycle and belongs here, and the post-launch performance lessons (RUCSS on a lean site, PSI lab noise, a cache plugin's broken Redis flush silently reverting content writes) were bought at real cost and will be paid for again on the next launch if they aren't written down. They live in `04`. What remains out of scope: ongoing maintenance of a delivered site — that's the project's own docs, not portable stack knowledge.
 
+**Scope note (2026-09-11) — measurement is not maintenance.** The 07-15 note above drew the line at
+"ongoing maintenance of a delivered site." A post-launch SEO retainer sat squarely on the wrong side of
+it and still produced knowledge that is unmistakably portable: Search Console's query view is a
+**censored sample**, GA4 **restates closed windows**, and a metric defined in prose in one place and in
+code in another **will drift in a direction that reads as progress**. None of that is about one site's
+performance — it is about how the **instruments** behave, and they behave identically on every property.
+They now live in `03` → **Analytics & search measurement**, with the measurement-discipline rules in
+this file under Evidence discipline. ⚠️ **The line itself is unchanged and still worth holding:** a
+site's rankings, its traffic, its content calendar and its client's targets are project business. The
+test for admitting a post-launch finding is **"would this cost us again on a different client's
+property?"** — not "did we learn it after go-live."
+
 **This repo is PUBLIC.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document **mechanisms, not coordinates** — "the RunCloud panel owns the crontab" travels; an IP address does not. This matters most at harvest time, because auto-memory (the natural source) is full of coordinates, and `04` is the file most likely to attract them. Coordinates belong in auto-memory anyway: per the memory model below, they're per-machine state that goes stale. Real incidents are fine as provenance — scrub the identifying particulars (say "a $95/mo hosting order", not the client's username and order id). Scan the staged diff before committing.
 
 ---
@@ -313,6 +325,89 @@ Searching a web server's error log for mail failures returns dozens of hits on `
 > **(TAB, 2026-08-31 — first recorded.)** A lead was reported as "never sent." Four mail-related greps over the error log returned 768 hits between them and **not one was a mail error**. The actual answer came from the form plugin's gated success log plus an HTTP-level reconciliation of submit POSTs against stored rows: every submission had been accepted, and the message had in fact been delivered ~3 minutes after the complaint was raised.
 
 ---
+
+### A metric with two implementations will drift — and the drift will read as progress
+
+**Symptom / When:** A headline number ticks up, gets reported as movement, and nothing actually
+changed. The number is defined in prose in one place and executed in code in another, and the two
+have quietly disagreed for weeks.
+
+**How TAB's happened:** "non-brand organic clicks" — the retainer's primary KPI — turned entirely on
+which `tab *` queries counted as brand. Three defensible rules were in simultaneous use and on one
+window gave **8 · 3 · 6** clicks: a **3× spread on the same data**. Docs reported one rule; the
+classifier script executed another; an awk one-liner in the regeneration recipe implemented a third
+(and it was a **substring** match, so it also counted two *unrelated companies* as brand while
+missing brand queries that omitted the brand token). ⚠️ **The failure was not the ambiguity — it was
+that the ambiguity produced a false result nobody questioned:** the project file recorded *"7 this
+period, was 6 — one click of movement,"* consistent with the story everyone expected. It was a rule
+change. **The metric had been flat for seven weeks.**
+
+**How it was caught, and this is the reusable part:** pull a window that **strictly contains** the
+disputed one. Adding days cannot reduce a count — so if the longer window returns *fewer*, the
+difference is definitional, not temporal. That single test converts "these numbers disagree" into
+"these numbers were computed differently," which is a fixable problem.
+
+**Fix:** a metric that is reported externally must exist **once, in code, as a named function** —
+not as a description that each consumer re-implements. Give it the rationale, the rejected
+alternatives, and an explicit **⚠️ changing this changes the client-facing number** warning, because
+the next person to touch it will be doing so while a report is due. ⚠️ **And when you do pin it,
+restate the series** — the old numbers were computed under the old rule and are not comparable.
+
+### An untreated sibling is a free control — and a deliberate hold is the best one you will get
+**Why this matters:** Almost every change we make to a live site happens while the site is also
+moving for reasons we do not control — a seasonal swing, an algorithm update, a competitor's launch,
+a platform change. A before/after on the changed thing alone cannot separate our effect from that
+drift, so the honest read is usually "something happened" rather than "we did this."
+
+**The technique:** before attributing a result, look for a **comparable thing on the same property
+that did not get the change** — a sibling page of the same template and query shape, a second
+location, an untouched product category. Measure it over the identical window. Drift hits both; the
+treatment hits one. The difference is your effect, and it is defensible in a way a raw before/after
+never is.
+
+**It is usually already there, for free.** Anything held back for sequencing reasons — "do page B
+after we read page A" — **is the control**, and nobody planned it as one. That makes it worth
+protecting: shipping the held item destroys the baseline that makes the first result interpretable,
+which is a real cost to weigh against doing it.
+
+**Worked shape:** a content change to one page moved its impression-weighted position from **26.3 to
+16.0** while site-wide impressions rose **26%** over the same window. On its own that is ambiguous —
+a quarter of the site's lift could be most of the page's gain. The comparable page deliberately held
+back moved **1.1 positions**. Drift therefore explains the impressions and only the change explains
+the ~10 positions, which no single-page before/after could have established.
+
+⚠️ **State the windows and the control in the write-up, not just the result.** A number with its
+control attached survives the next person re-pulling it; a bare delta does not.
+
+**First seen:** TAB, 2026-09-11.
+
+### Reviewing work that closes your own open item — assume you are biased toward rejecting it
+**Why this matters:** When a finding arrives that resolves something *you* opened, flagged, or
+escalated, the incentive runs toward finding it insufficient. Conceding closes your item; objecting
+keeps it alive and looks rigorous. The bias is structural, not a character flaw, and it is strongest
+when the incoming work is a polished **document** — because a document offers a large surface of
+*prose* to criticise that has nothing to do with whether its findings are right.
+
+**What it looks like:** a review that is mostly about the artifact rather than the evidence —
+internal contradictions between its own sections, how its recommendations are framed, a filename, a
+miscount in a passing aside. Each objection is individually true. None of them changes what anyone
+should do next, which is the tell.
+
+**The test:** for every objection, ask — **would this survive if the same facts had arrived as a
+verbal report instead of a document?** A colleague saying "I looked, there's plenty of room, we're
+about fifth and three screens down" cannot contradict their own section headings or misname a file.
+Whatever the test strips out was never about the finding. Whatever survives is real and worth raising.
+
+**Then separate the gate from the fact.** An item opened as *"we must find out whether X blocks
+us"* is answered the moment X is ruled out — at which point it is no longer a gate, and keeping it
+open "narrowed" buys ceremony rather than information. If the investigation also produced something
+durable, **that belongs where the work happens** — the brief, the convention, the spec — not alive as
+a tracked blocker with a priority tag.
+
+**First seen:** TAB, 2026-09-11 — a live SERP check closed an item opened earlier the same session.
+The first review recommended keeping it open in narrowed form; applying the test above left two
+objections of roughly a dozen, and the item was closed with its one durable finding rewritten as a
+targeting rule.
 
 ## Doc/reality mismatches on built state — flag, don't fix
 

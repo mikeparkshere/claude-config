@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-189 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+208 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -51,7 +51,6 @@ awk '/^# === PROJECT/{exit} /^## /{s=$0; sub(/^## /,"",s); skip=(s ~ /^How this 
 ```
 
 Group labels below are bold rather than headings on purpose — `###` here would collide with the entry headings the generator reads.
-
 
 **WordPress + Bricks Builder**
 
@@ -135,6 +134,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
 - Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 - `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
+- A Bricks CPT template that renders `post_content` = per-page content with zero template risk
+- Bricks `altText` — an empty string is indistinguishable from unset, so you cannot force `alt=""`
+- Bricks image-as-figure puts `brxe-<id>` on the `<figure>`, not the `<img>` — naive verification greps find nothing
 
 **BricksExtras**
 
@@ -198,6 +200,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A term archive whose slug matches a CPT single 301s to that single (`redirect_canonical` collision)
 - Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
 - A `wp_mail_from` filter beats an explicit `From:` header — a form plugin's per-message From field is cosmetic
+- `default_category` still references a term with 0 posts — repoint before deleting Uncategorized
+- Updating a PARENT THEME on a live box throws a hard fatal at any request that lands inside the unpack window
 
 **Rank Math + Bricks**
 
@@ -212,6 +216,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `blog_public = 0` on staging masks per-page noindex — you cannot verify indexing config until you lift it
 - A Bricks accordion can carry FAQ **microdata** that survives the `faqSchema` toggle — "one JSON-LD block" does not prove single-source schema
 - `wp_rank_math_internal_links` is stale, and a raw HTML link count is inflated by nav/footer chrome
+- Rank Math: `wp plugin update` leaves `rank_math_version` behind the code, and a file rollback then puts it AHEAD — Pro re-runs its updater on every admin load
 
 **Mailster**
 
@@ -246,6 +251,13 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WS Form CAPTCHA (Turnstile/reCAPTCHA) keys live in the global `ws_form` option, not the field meta
 - WS Form Pro implements Turnstile natively — and Cloudflare "Turnstile Spin" is redundant on any plugin stack
 - A client-rendered form cannot be verified with `curl` — check the CAPTCHA provider's own call count instead
+- WS Form tracking meta is written whenever the form toggle is on — an empty value proves nothing
+- A populated GA4 conversion number proves nothing — WS Form does NOT push to the dataLayer
+- WS Form `.empty()`s the form on every client render — and an attribute "already done" guard survives it and lies
+- Custom WS Form trackings silently OVERWRITE the plugin's built-ins if you reuse a key name
+- WS Form submission retention hides in a JSON-inside-serialized-PHP blob — and `''` means OFF, not "unset"
+- WS Form Google Sheets: a header cell is NOT a mapping — an unmapped column looks wired and silently writes blank
+- Reading a WS Form–linked Google Sheet from the server: use the add-on's credential, not a service account
 
 **Fluent Forms**
 
@@ -282,6 +294,14 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
 - Vendor-updater products are invisible to WP-CLI — `wp plugin/theme list` prints `none` whether or not an update exists
 - An emergency plugin deactivation outlives the fix, and edge-cached HTML hides the outage
+- `wp post term remove` takes a slug/name, not a term_id — and reports success either way
+- `wp plugin list` reports "version higher than expected" for premium plugins with no wp.org slug — it is a permanent false positive, not a signal
+
+**Analytics & search measurement**
+
+- GSC's query / page / query×page views disagree — the query view silently drops ~37% of clicks
+- GA4 silently restates closed historical windows — never put a decimal on a GA4 share
+- A GSC "average position" is a window average — so a length-matched pair of windows is the only honest before/after
 
 **Diagnostic patterns**
 
@@ -289,8 +309,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A copy sweep over Bricks content misses `_attributes` values — aria-labels and alt text are copy too
 - Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
 - Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
-
-# === ESTABLISHED — "we know" ===
+- Verify link presence against BOTH absolute and relative hrefs — Bricks emits relative
 
 ## WordPress + Bricks Builder
 
@@ -1174,6 +1193,60 @@ Learn More <span class="hidden-accessible">about {post_title}</span> <span aria-
 **First seen:** JBM, 2026-09-03 — a homepage services grid emitting six identical heading ids, with all six card links announcing the first service's name. Found during a footer accessibility review; it had shipped unnoticed because it is invisible to visual inspection.
 
 
+### A Bricks CPT template that renders `post_content` = per-page content with zero template risk
+
+**Symptom / When:** A CPT's pages are near-identical because the template supplies most of the body,
+and you conclude that differentiating them means editing the Bricks template — a high-blast-radius
+change across every post of that type, with a CSS regen and a verification pass.
+
+**Often you don't have to.** If the template includes a post-content element, `post_content` renders
+**inline within the template's own heading hierarchy**, and per-page content becomes an ordinary
+block-editor edit: no `_bricks_page_*_2` write, no `wp_set_current_user(1)`, no
+`regenerate_css_files()`, no risk to the other pages.
+
+**How TAB's happened:** an audit found 12 service pages **76% byte-identical** and correctly
+identified the boilerplate as template-level — which invited a template edit. But the template
+renders `post_content` directly under its first `<h2>`, so adding seven per-city `<h3>` sections
+(+1,067 words) to **one** page was a `wp post update` and nothing else. The location pages had used
+the same mechanism weeks earlier without anyone recording that it *was* a mechanism.
+
+**Check before assuming a template edit (two commands):**
+```bash
+wp db query "SELECT meta_key FROM wp_postmeta WHERE post_id=<ID> AND meta_key LIKE '_bricks%'"
+# no rows = the page is fully template-driven, so post_content is your injection point
+wp post get <ID> --field=post_content | wc -c   # non-trivial length = it IS being rendered
+```
+Then confirm placement against the **rendered** page — map heading offsets against a known string
+from `post_content` to see exactly where it lands in the hierarchy, so your new headings nest at the
+right level. ⚠️ **What this does not solve:** anything genuinely emitted by the template — a bare H1,
+shared H2s, furniture. Those remain template-level and stay a multi-page decision. Know which half
+of the duplication you are looking at before you pick a tool.
+
+### Bricks `altText` — an empty string is indistinguishable from unset, so you cannot force `alt=""`
+
+**Symptom / When:** You want a deliberate `alt=""` on an image that sits inside a link which already carries descriptive text — the W3C WAI-correct treatment for a redundant linked image. You set the element's Alt Text to an empty string. The render comes back with the **attachment's** alt text instead (often keyword-stuffed legacy media-library copy), not an empty alt.
+**Why:** `bricks/includes/elements/image.php`:
+```php
+if ( ! empty( $settings['altText'] ) ) {
+    $this->set_attribute( 'img', 'alt', esc_attr( $this->render_dynamic_data( $settings['altText'] ) ) );
+}
+```
+`! empty('')` is false, so an empty-string `altText` takes the same branch as "never set" — Bricks skips it and the alt falls through to whatever WP resolves from `_wp_attachment_image_alt`.
+**Fix:** There is **no way to emit `alt=""` from the typed control.** The reachable options are: (a) accept the attachment alt, (b) set a meaningful value (`{post_title}`), (c) clear `_wp_attachment_image_alt` on the attachment — which affects every other place that image is used, or (d) filter the rendered attribute from the core plugin. On a card whose link already has the title, (b) costs a duplicate screen-reader announcement; weigh that against the attachment alt you would otherwise inherit.
+**The corollary that surprises:** an image whose attachment has **no** alt renders `alt=""` *correctly, by accident*. That correctness is fragile — it breaks silently the day someone fills in the media-library alt field. A "correct" empty alt and a missing one are indistinguishable in the rendered HTML.
+**First seen:** TAB, 2026-07-15 — setting alt policy on related-post / related-service / services-archive cards. The services archive was already correct **only** because its 12 attachments happened to have empty alt.
+
+### Bricks image-as-figure puts `brxe-<id>` on the `<figure>`, not the `<img>` — naive verification greps find nothing
+
+**Symptom / When:** You verify an image element by grepping rendered HTML for `<img[^>]*brxe-<id>` and get **zero hits**, so you conclude the element is not rendering — but the page looks fine and the element id *is* present in the HTML.
+**Why:** With `tag: "figure"` set (the image-as-figure pattern), Bricks renders:
+```html
+<figure class="brxe-<id> brxe-image media-cover tag"><picture>…<img class="css-filter size-medium"></picture></figure>
+```
+The `brxe-<id>` and the global classes land on the **figure**. The inner `<img>` carries only sizing/ShortPixel classes, so an `<img … brxe-<id>` pattern can never match.
+**Fix:** Match the wrapper first, then take the first `<img>` inside it. The id sits on the `<img>` only when the image element has **no** `tag` set. (Pairs with the `.tag` entries above the seam — same mechanism, different failure: those are about layout, this is about *verification lying to you*.)
+**First seen:** TAB, 2026-07-15 — alt-text audit; three elements read as un-rendered and were all fine.
+
 ## BricksExtras
 
 ### BricksExtras element `name` strips hyphens from the file basename
@@ -1676,6 +1749,25 @@ add_action( 'phpmailer_init', function( $m ) { error_log( 'FROM: ' . $m->From . 
 **First seen:** TAB, 2026-08-31 — spec'ing a submitter autoresponder on WS Form. The SMTP module hooked `wp_mail_from` at priority 99, so the form action's `sales@` had been discarded on every notification since launch without anyone noticing, because the notification reads fine either way.
 
 
+### `default_category` still references a term with 0 posts — repoint before deleting Uncategorized
+
+**Symptom / When:** You delete the `uncategorized` term because it has 0 posts and nothing appears to reference it. It deletes cleanly. Later, posts saved with no category behave oddly or the term reappears.
+**Why:** `wp_options.default_category` points at term 1. WP assigns it to any post saved without a category. Term count and object relationships both read **0**, so every obvious check says "safe to delete" — the option is the only reference.
+**Fix:** Repoint first, then delete:
+```bash
+wp option update default_category <real_term_id>
+wp term delete category 1
+```
+**"0 posts" is not "nothing references it."** Check `default_category` explicitly.
+**First seen:** TAB, 2026-07-15 — taxonomy formalization. The spec's "confirm nothing references it first" earned its keep.
+
+### Updating a PARENT THEME on a live box throws a hard fatal at any request that lands inside the unpack window
+
+**Symptom / When:** A single `PHP Fatal error: Uncaught Error: Failed opening required '.../themes/<theme>/includes/init.php'` (or any theme include) appears in the Apache error log, timestamped to the minute a theme update ran. The file exists when you go to look. The site is fine. It reads like file corruption or a botched update, and invites a restore that isn't needed.
+**Why:** WordPress updates a theme by **deleting the old directory and unpacking the new one in place** — there is no atomic swap. `functions.php` is loaded on every request via `wp-settings.php`, so any request served during that window `require_once`s a path that genuinely does not exist yet, and dies. The window is a second or two, which is why it shows up once and never reproduces.
+**Fix / rule:** **Correlate the fatal's timestamp against the theme directory mtime before treating it as an incident** — `stat -c '%y %n' wp-content/themes/<theme>/style.css`. Same minute = update-in-flight, benign, no action. Confirm by checking the named file now exists and the front end returns 200. It is only a real fault if the file is *still* missing. Prefer updating parent themes off-peak; on a single-webapp box with a live client there is no way to make the window zero without maintenance mode.
+**First seen:** TAB, 2026-09-11. Bricks 2.3.8 → 2.3.13 at 11:49–11:51 UTC; a fatal at `11:50:15` on `themes/bricks/functions.php:204` for a missing `includes/init.php`, referer `wp-admin/admin.php?page=bricks-license`. The file was present at 5,047 bytes with mtime 11:50, Bricks reported 2.3.13, and all six checked URLs returned 200. It hit `admin-ajax`, not a visitor page.
+
 ## Rank Math + Bricks
 
 ### Rank Math `%excerpt%` description template produces junk on Bricks-built Pages
@@ -1815,6 +1907,18 @@ print(len(re.findall(r'href=\"[^\"]*<target-path>/?\"', pre)))"
 Then check each match's byte offset against the header and footer offsets to confirm it is genuinely in-content.
 **First seen:** JBM, 2026-09-03 — diagnosing a service page's authority gap. Rank Math reported 1 inbound link (from a post with zero in its HTML); rendered HTML reported 7. The true in-content count was **zero** — every link was menu or footer chrome.
 
+
+### Rank Math: `wp plugin update` leaves `rank_math_version` behind the code, and a file rollback then puts it AHEAD — Pro re-runs its updater on every admin load
+
+**Symptom / When:** You update (or roll back) Rank Math with WP-CLI or by swapping the plugin directory. Nothing errors. But `wp option get rank_math_version` disagrees with `RANK_MATH_VERSION`, and if Rank Math SEO **Pro** is installed it silently decides it needs to run its update routine on **every** wp-admin page load. Rolling the files back *after* someone has loaded wp-admin leaves the option **higher** than the installed code — the inverse of the usual mismatch, and the one nothing in the UI will tell you about.
+**Why:** Rank Math runs its migrations from `Updates::hooks()` → `$this->action( 'admin_init', 'do_updates' )` (`includes/class-updates.php:58`). **WP-CLI never fires `admin_init`**, so a CLI update installs new code and leaves the option untouched. The next genuine wp-admin request fires `perform_updates()`, which walks the migration map and finishes with `update_option( 'rank_math_version', rank_math()->version )` (`:101`). That request can land *between* your update and your rollback. Pro gates its own updater on a bare inequality, not a version comparison — `return $reactivating || ( function_exists('rank_math') && rank_math()->version !== get_option('rank_math_version') );` (`rank-math-pro.php:263`) — so option-ahead-of-code is just as "true" as option-behind-code.
+**Fix / rule:** After **any** Rank Math file-level change — CLI update, rollback, directory swap, Version Control rollback — read both and realign explicitly:
+```bash
+wp eval 'echo "code=".RANK_MATH_VERSION."  option=".get_option("rank_math_version")."\n";'
+wp option update rank_math_version <the installed code version>
+```
+Two riders: **(1)** check `$rank_math_min_version` in `rank-math-pro.php` before updating free — Pro declares a hard floor (3.0.117 → `1.0.274`) and will deactivate itself below it. **(2)** Read the pending migration files in `includes/updates/` before running them on production; they are small and occasionally destructive — `update-1.0.277.2.php` deletes WordPress Application Passwords by name.
+**First seen:** TAB, 2026-09-11. RM 1.0.274.1 → 1.0.278 applied via WP-CLI, then rolled back on instruction. Straight after the CLI update: code 1.0.278 / option 1.0.274.1. After an intervening wp-admin hit: option 1.0.278. After restoring the 1.0.274.1 files: code 1.0.274.1 / option **1.0.278**. Realigned by hand. **Rendered titles, meta descriptions, canonicals, robots and the full JSON-LD `@type` census were byte-identical before and after the whole round trip** — the desync is a control-plane fault, not a rendering one, which is exactly why nothing surfaces it.
 
 ## Mailster
 
@@ -2064,6 +2168,271 @@ curl -s https://challenges.cloudflare.com/turnstile/v0/siteverify -d 'secret=<ke
 **Also — position the CAPTCHA field ABOVE the submit button.** WS Form sorts by `wp_wsf_field.sort_index` and will happily place it after submit; the challenge then renders below the button and invites a click before it is solved, turning a lead into a validation error. Fix it by dragging in the WS Form UI, **not** by patching `sort_index` in the database — WS Form DB edits do not take effect until the form is republished.
 **First seen:** Highland, 2026-08-04 — grepping the live pages returned `challenges.cloudflare.com: 0` on both forms and briefly read as a broken integration; the forms are client-rendered. The same inspection found the turnstile field sorted *after* submit on both forms.
 
+
+### WS Form tracking meta is written whenever the form toggle is on — an empty value proves nothing
+
+**Symptom / When:** You add a WS Form tracking variable (UTM, referrer, or a custom `query_var` one),
+then try to verify it end-to-end by checking the submission meta. You reason that a present-but-empty
+row means "the browser sent an empty value" and an absent row means "the JS never ran". **Both
+inferences are wrong**, and the check silently gives false confidence.
+
+**Cause:** `ws-form-pro/includes/core/class-ws-form-submit.php:2589` gates on the *form's* meta
+toggle, not on the payload:
+```php
+if(WS_Form_Common::get_object_meta_value($this->form_object, $meta_key, false)) {
+    // ...
+    $meta_value = isset($tracking['server_query_var'])
+        ? WS_Form_Common::get_query_var_nonce($tracking['server_query_var']) : '';
+```
+`get_query_var_nonce()` returns `''` when the key is absent from the request, and the row is written
+regardless. So while the toggle is on, **the row always exists** — empty is the default, not a signal.
+
+**Consequence:** an empty value is ambiguous (no param on the URL *or* the client JS never ran, and
+you cannot tell which), and "row missing" is not a diagnosable state at all. **Only a populated value
+proves the chain works.** Pre-existing empty rows from before a feature shipped prove only that the
+toggle was already enabled — they are not evidence the JS was ever executing.
+
+**Verify it properly, without sending a submission:** the client injects the hidden field during
+**form init**, not on submit (`ws-form-public-tracking.js:57`, reached from `form_tracking()` on page
+load). So just load the page with the parameter and inspect the DOM:
+```js
+// on /your-form-page/?svc=decks-porches
+document.querySelector('input[name="wsf_svc"]').value   // -> 'decks-porches'
+```
+No submission, no notification email, no row to clean up. Note the client and server names differ
+(`client_query_var` on the URL → `server_query_var` as the hidden input name).
+
+**Also worth knowing:** the JS gate is the mirror of the PHP one — `ws-form-public-tracking.js:75`
+skips any tracking id whose form meta is off, so a config block present in the page's inline
+`$.WS_Form.tracking` does **not** mean that tracking is active for that form. Check the form's
+published config (`wp_wsf_form.published`) for `"tracking_service":"on"`, not just the page source.
+
+### A populated GA4 conversion number proves nothing — WS Form does NOT push to the dataLayer
+
+**Symptom / When:** GA4 shows a healthy `generate_lead` count, it is marked a Key Event, and every
+report treats it as leads. Nothing looks wrong. In fact **nothing is measuring form submissions at
+all**, and the number is unrelated traffic.
+
+**How TAB's happened:** `generate_lead` was a GA4 **custom event rule** (Admin → Events → Custom
+configurations) matching `page_path` starts-with `/contact` + `event_name` equals `page_view` —
+contact-page **pageviews**. It read as a real conversion for 8 weeks. **70 events vs 36 actual form
+submissions**, and the main lead path (quote form → redirect to `/thank-you/`) was never counted at
+all. The rule predated the rebuild, so `/contact` also matched the OLD site's
+`/contact-tab-property-enhancement/` — the "conversion rate improved after the rebuild" claim was
+comparing different URL sets on different sites.
+
+**The three assumptions that let it survive — check all of them before trusting any form conversion:**
+1. ⚠️ **WS Form's `trigger()` dispatches jQuery events on `document` (`wsf-<slug>`), NOT dataLayer
+   pushes.** There is no native `wsf-submit` dataLayer entry to build a GTM trigger on. Its Google
+   Analytics *action* would push, but that is a per-form action you must switch on
+   (`analytics_google` in form meta — empty here).
+2. ⚠️ **GA4 enhanced-measurement `form_submit` never fires for WS Form**, because it submits over
+   AJAX rather than doing a native form submit. Enhanced measurement will not save you.
+3. ⚠️ **Check the GTM container's actual tag list.** TAB's held exactly two tags (GA4 base +
+   `click_to_call`) — there was no `generate_lead` tag at all, which alone should have been
+   conclusive.
+
+**Verify a conversion event by provenance, not by magnitude.** Ask *what line of code fires this?*
+and follow it to a tag. A number that exists and looks plausible is the failure mode, not evidence.
+Cross-check against the source of truth — here, `SELECT COUNT(*) FROM wp_wsf_submit` — the moment
+the counts disagree by more than a rounding error, stop using the metric.
+
+**The fix pattern:** push your own namespaced event from the plugin's post-accept lifecycle event
+(`wsf-submit-success` — see the entry below for why that one), carry the form ID so GTM can filter,
+and make it idempotent against re-renders. Then cut over deliberately: publish the new tag, verify
+in a live browser, and delete the old rule **the same day** — overlap double-counts, a gap
+zero-counts, and the changeover date becomes a permanent seam in the data that every later report
+has to respect.
+
+**First seen:** TAB, 2026-08-19. Seam logged in `project-context.md`; pre-2026-08-19 `generate_lead`
+is contact pageviews, post- is real submissions, and 2026-08-19 itself is dirty.
+
+### WS Form `.empty()`s the form on every client render — and an attribute "already done" guard survives it and lies
+
+**Symptom / When:** You append hidden inputs to a WS Form `<form>` on DOM ready. They are there in
+view-source and in your tests, but on the live page
+`document.querySelectorAll('input[name^="your_prefix"]').length` returns **0**, and the values
+arrive empty server-side. Meanwhile WS Form's *own* trackings (e.g. `#tracking_service`) populate
+fine, which makes it look like a server problem rather than a timing one.
+
+**Why:** WS Form renders client-side after page load and calls `form_canvas_obj.empty()` at the top
+of every render (`ws-form-public.js:860`). On this install the form element carries **both**
+`wsf-form` and `wsf-form-canvas`, so `form_obj === form_canvas_obj` and the wipe takes your
+appended inputs with it. WS Form's own tracking survives only because `form_tracking()` runs at
+`ws-form-public.js:394`, i.e. **after** the render, not before it.
+
+⚠️ **The part that turns a one-render bug into a permanent one:** jQuery's `.empty()` removes
+**children but not attributes**. So an idempotency guard written as `form.setAttribute('data-done','1')`
+outlives the very inputs it vouches for. A MutationObserver watching for re-renders then fires,
+calls your inject function, sees the guard, and returns — for the rest of the page's life.
+**Never store "already injected" on the parent. Test for the child.**
+
+**Fix — hook WS Form's own lifecycle.** Events are jQuery events on `document`, named `wsf-<slug>`,
+dispatched with `[form, form_id, form_instance_id, form_obj, form_canvas_obj, group_index]`, so the
+DOM form is the **4th extra argument**:
+
+```js
+jQuery(document).on('wsf-rendered wsf-submit-before-ajax', function (e, form, id, inst, formObj) {
+    inject(formObj[0]);            // re-add only what is actually missing
+});
+```
+- **`wsf-rendered`** — fires after each render, the same moment WS Form re-runs its own tracking.
+- **`wsf-submit-before-ajax`** — fires immediately before `new FormData(this.form_obj[0])`
+  (`ws-form-public.js:3223`). This is the **guarantee**: the payload is built from the DOM form, so
+  anything present at this instant is posted. Bind here and render timing stops mattering.
+
+`wsf-submit` also exists but fires earlier in `form_post()`; `-before-ajax` is the one adjacent to
+serialization. WS Form posts over AJAX, so a native `submit` listener may never fire — do not rely
+on it as the primary path.
+
+**Test it against a render cycle, not against server markup.** The class of bug is invisible to
+`curl` + grep, which is exactly how it shipped. A shim that runs
+`inject → form.empty() → trigger('wsf-rendered') → trigger('wsf-submit-before-ajax')` and asserts
+the inputs exist at the end reproduces it in a second:
+`~/bin/tests/test_injection_lifecycle.js` (run it against the old code first — if it doesn't fail,
+the test is wrong).
+
+**First seen:** TAB, 2026-08-19 — first-touch attribution build. Caught by Mike's live browser
+submission (41), not by any server-side check.
+
+### Custom WS Form trackings silently OVERWRITE the plugin's built-ins if you reuse a key name
+
+**Symptom / When:** Registering attribution trackings through `wsf_config_tracking` with the
+obvious names — `tracking_utm_source`, `tracking_utm_medium`, `tracking_utm_campaign`,
+`tracking_referrer`. There is **no warning and no error**. The filter array is keyed by tracking
+name, so your definition simply replaces WS Form's, and the form UI still shows "UTM Source" as if
+it were the stock feature. Anyone who later ticks it gets *your* semantics instead of WS Form's,
+with nothing to explain why.
+
+**Why it matters here:** WS Form's built-ins are **last-touch** (`client_source: query_var` reads
+the current URL at submit). A first-touch implementation reusing those keys makes the two
+irreconcilable — and the collision is invisible until someone compares numbers months later.
+
+**Fix:** namespace them. TAB uses `tracking_tab_*` (which also satisfies the `tab_` prefix rule),
+leaving all built-ins intact and separately usable. Email vars follow the key: `#tracking_tab_lead_source`.
+
+**Check before shipping any new tracking:**
+```php
+remove_all_filters( 'wsf_config_tracking' );
+$builtin = WS_Form_Config::get_tracking( false );   // is your key already in here?
+```
+On this install the built-ins that collide are exactly those four; `tracking_gclid`,
+`tracking_lead_source` and `tracking_landing_page` were free.
+
+**Two more things worth knowing about the tracking API:**
+- **`client_source` is a fixed switch** (`query_var`/`referrer`/`href`/`hostname`/`pathname`/
+  `query_string`/`hash`/`os`/`agent`/`geo_location`) — **no cookie or localStorage option**. So
+  anything persisted client-side cannot be read by WS Form's own client tracking. Register the
+  tracking with **no `client_source` at all** and a `server_source: 'query_var'`; WS Form then
+  skips it client-side and reads your POSTed var server-side. Adding a `client_source` would let
+  WS Form overwrite your stored value with a live one.
+- **Trackings automatically become CSV export columns** via
+  `WS_Form_Submit::get_keys_tracking()` → `class-ws-form-submit-export.php:223`, labelled with the
+  tracking's `label`. Nothing extra to wire for exports.
+- ⚠️ **`get_query_var_nonce()` enforces a nonce as soon as `is_user_logged_in()` is true.** From
+  WP-CLI that means a script doing `wp_set_current_user(1)` (required for the WS Form API — see
+  below) must also mint `wp_create_nonce( WS_FORM_POST_NONCE_ACTION_NAME )` into
+  `$_POST[ WS_FORM_POST_NONCE_FIELD_NAME ]`, or every read returns a bare `403` JSON blob with no
+  stack trace.
+
+**First seen:** TAB, 2026-08-19 — first-touch attribution build (plugin 0.9.19). Caught before
+shipping; the first implementation did collide on all four.
+
+### WS Form submission retention hides in a JSON-inside-serialized-PHP blob — and `''` means OFF, not "unset"
+
+**Symptom / When:** Looking for WS Form's submission auto-delete / data-retention setting. The
+obvious places are all dead ends: it is **not** in the global `ws_form` option, and **not** a
+`wp_wsf_form_meta` key you can grep for (there is no `submit_delete`, `delete_expire` or
+`data_retention` key — the full form-5 meta key list contains nothing matching `delete|expire|retain|purge|day`).
+
+**Where it actually lives:** on the **"Save to Submissions" (database) action**, at
+`wp_wsf_form_meta` `parent_id=<form_id>`, `meta_key='action'`. That column is **PHP-serialized**
+(`unserialize()`, *not* `json_decode()` — decoding it as JSON fails silently and returns null), and
+the action's own config is a **JSON string nested inside it** at
+`$d->groups[0]->rows[$i]->data[1]`. So it is JSON inside serialized PHP, two decodes deep. Keys:
+`action_database_expire` (checkbox) and `action_database_expire_duration` (number, days).
+
+⚠️ **The trap that makes this actively misleading:** a duration can sit there looking armed while
+the feature is off. TAB's quote form read `expire=''` / `duration='60'` — the `60` is visible in the
+UI and reads as "deletes after 60 days", but `''` is an **unchecked checkbox**
+(`class-ws-form-action-database.php:68` gates on `if($this->expire)`), so every submission gets
+`date_expire = NULL` and nothing ever expires. **Read the toggle, not the number.**
+
+**Also worth knowing before anyone panics about lost submissions:**
+- Expiry is stamped in `post()` **at submission time only** — enabling it is **not retroactive**, so
+  existing rows can never be caught by switching it on.
+- `db_delete_expired()` sets `status='trash'`; it does **not** hard-delete, and nothing in WS Form
+  Pro purges trash on a schedule.
+- Blanking the duration does **not** mean "never" — `get_config` falls back to the plugin default of
+  **90**. The checkbox is the only real off switch.
+- `count_submit` on `wp_wsf_form` is the **non-trashed** count. It will disagree with `COUNT(*)`
+  whenever anything sits in trash (TAB: 23/10 reported vs 25/11 actual, 3 launch-day test rows
+  trashed) — that is correct behaviour, not a broken counter.
+- Fastest ground truth, no decoding needed: `SELECT COUNT(*), SUM(date_expire IS NOT NULL) FROM
+  wp_wsf_submit`. All-NULL means nothing is armed, whatever the UI shows. Contiguous `id` values
+  with no gaps additionally prove nothing has ever been hard-deleted.
+
+### WS Form Google Sheets: a header cell is NOT a mapping — an unmapped column looks wired and silently writes blank
+**Symptom / When:** A field is captured correctly, the database proves it, and the Google Sheets
+backup shows an **empty column** for it. The column header exists in the sheet, so the integration
+reads as configured — nothing in the UI flags a gap.
+
+**Why:** The add-on matches sheet columns to form fields by **column name**, but the name match only
+tells it *where* to write. The write itself comes from a **mapping row on the Google Sheets action**.
+Add a header cell without adding the mapping and you get a column that is present, correctly named,
+permanently blank, and silently so. The same mechanism retires columns: a header left behind after a
+form change keeps its slot and stops receiving data.
+
+**How it presented:** a first-touch lead-attribution field was added to a live quote form and its
+column appended to the sheet. Every row carried the value in the database; every row was blank in the
+sheet. Counted at audit: the action held **10 mappings against a 15-column tab**, and the newest
+field was one of the five unmapped.
+
+🔴 **The consequence is worse than a blank cell.** A reader who trusts the sheet sees all-blanks and
+concludes *"unattributed traffic"* — a wrong answer that looks like a real one — rather than *"not
+wired"*. And if the sheet is the **backup**, that field has **no backup at all**: it exists only in
+the database, which is usually the surface whose restore has never been tested.
+
+**Fix:** after adding any field that must reach the sheet, verify the **round trip on a real
+submission**, not the schema — submit, then read the cell. Count mappings against columns as a
+standing check (`mappings < columns` is normal because of retired columns, but every *live* field
+must appear on both sides). ⚠️ **Do not write a verification step that checks the sheet cell for a
+field you have not confirmed is mapped** — a blank then proves nothing about the capture, and such a
+step will condemn a working chain. Verify capture at the database, and treat the sheet as a separate
+delivery question.
+
+**First seen:** TAB, 2026-09-11 — found while verifying the sheet for an unrelated row-count audit.
+The project's own lead-source verification recipe had step 2 pointed at exactly this column.
+
+### Reading a WS Form–linked Google Sheet from the server: use the add-on's credential, not a service account
+**Symptom / When:** You need to read the spreadsheet a form writes to — to audit rows, reconcile
+counts, or check what actually landed — and the project already has a Google service-account key for
+Search Console or GA4. It will not work, and the error names the wrong problem.
+
+**Why:** A service account reaches a Sheet only if **(a)** the Sheets API is enabled on *its* cloud
+project and **(b)** the file is explicitly shared with the service-account address. An analytics key
+satisfies neither, and the failure is `403 PERMISSION_DENIED / SERVICE_DISABLED` naming a project
+number — which reads as a quota or billing problem rather than "wrong credential entirely". Sharing
+the file is also the wrong instinct: it widens access to client data for a one-off read.
+
+**Fix:** the add-on already holds a working credential with exactly the right scope. It stores a
+**refresh token** in the plugin's options and proxies renewal through the vendor's own endpoint (the
+vendor holds the OAuth client secret, so there is nothing to configure locally). Instantiate the
+action class, call its **`access_token_check()`** to force a refresh, then reach the Sheets service
+object — typically a **private** property, so Reflection — and issue the read.
+
+⚠️ **Two operational rules.** (1) Keep the entire read inside **one** `wp eval-file` so the token is
+never interpolated into a shell command or printed — a token that reaches stdout reaches the
+transcript and the scrollback. (2) Pin the **site's** PHP binary rather than the CLI default if they
+differ; the bundled Google client is the vendor's, not yours, and is only tested against the version
+the site runs.
+
+**Generalises:** any plugin that maintains its own OAuth connection is a better credential source for
+reading that third-party service than a fresh service account — it is already scoped, already
+authorised on the specific resource, and already has a refresh path. Look for the plugin's own
+token-check method before provisioning anything.
+
+**First seen:** TAB, 2026-09-11.
 
 ## Fluent Forms
 
@@ -2326,6 +2695,119 @@ In-house plugins and mu-plugins legitimately appear (they have no updater). Ever
 **First seen:** JBM, 2026-07-15 — an SEO plugin update fataled, was deactivated, the files were re-replaced eleven minutes later, and the reactivation was missed. Caught ~45 minutes on by a cache-busted title check; settings and all 34 stored redirects had survived the deactivation.
 
 
+### `wp post term remove` takes a slug/name, not a term_id — and reports success either way
+
+**Symptom / When:** `wp post term remove 14951 category 14` prints **`Success: Removed term.`** and the term is still attached. A PHP warning appears (`Trying to access array offset on value of type null` in `wp-includes/taxonomy.php`).
+**Why:** The command resolves terms by **slug/name** by default. `14` is looked up as a term *named* "14", which does not exist → nothing is removed → the command still reports success.
+**Fix:** Pass the slug (`wp post term remove 14951 category outdoor-living`) or add `--by=id`. **Verify the term list afterward — "Success" is not evidence.**
+**First seen:** TAB, 2026-07-15 — trimming a post to one category; the false success was caught only by a follow-up count.
+
+### `wp plugin list` reports "version higher than expected" for premium plugins with no wp.org slug — it is a permanent false positive, not a signal
+
+**Symptom / When:** The `update` column on a commercial plugin reads `version higher than expected` and never clears, however many times you refresh update transients. It looks like a corrupted install or a downgrade.
+**Why:** WP-CLI resolves the update column against the **wp.org repository by directory slug**. A premium plugin distributed outside wp.org has no matching entry, so the comparison is meaningless and WP-CLI reports the installed version as "higher" than the nothing it found. It is not evidence of anything.
+**Fix / rule:** Confirm and then ignore it permanently — `curl -s -o /dev/null -w '%{http_code}' https://api.wordpress.org/plugins/info/1.0/<slug>.json` returning **404** proves the slug is unclaimed. Also check the plugin header for an `Update URI:` line: core honours it and will **refuse** any wp.org plugin claiming that slug, which closes the one real risk here (a squatter publishing under the same slug and being auto-installed over your paid plugin). A premium plugin with **no** `Update URI` and a slug that **does** exist on wp.org is the genuinely dangerous combination — that one is worth acting on.
+**First seen:** TAB, 2026-09-11. `duplicator-pro` 4.6.7 flagged on every `wp plugin list`. `api.wordpress.org` → 404 (`{"error":"Plugin not found."}`), and the header declares `Update URI: https://duplicator.com/`. Benign on both counts; logged so it stops being re-investigated at each audit.
+
+## Analytics & search measurement
+
+> **Scope note (2026-09-11).** Added as a deliberate expansion, recorded in `00`. The knowledgebase's
+> line is that ongoing maintenance of a delivered site is the project's business, not portable stack
+> knowledge — but *measurement* is not maintenance. Search Console and GA4 behave the same way on
+> every property, their traps are counter-intuitive and expensive, and we will pay for them again on
+> the next engagement that reports a number to a client. Entries here are about the **instruments**,
+> not about any site's performance.
+
+### GSC's query / page / query×page views disagree — the query view silently drops ~37% of clicks
+
+**Symptom / When:** You compute anything from Search Console's **Queries** view — a brand/non-brand
+split, a long-tail analysis, a "top terms" report — and treat it as the site's search performance.
+It is a **censored sample**, and nothing in the UI or the API says so.
+
+**Measured on TAB, same property, same 28-day window (2026-07-24 → 08-21):**
+
+| Aggregation | Clicks | Impressions |
+|---|---:|---:|
+| **Page** (`gsc-pages`) | **56** | **4,206** |
+| Query × page | 36 | 2,925 |
+| Query (`gsc-queries`) | 35 | 2,468 |
+
+The query dimension sees **~63% of clicks and ~59% of impressions**. ⚠️ **Cause:** Google withholds
+rare/anonymised queries entirely to protect user privacy — they are not aggregated into an "other"
+bucket, they are simply absent. **The withheld tail is disproportionately long-tail, which on any
+local-services site is disproportionately non-brand** — i.e. the censoring bites hardest on exactly
+the segment you are usually trying to measure.
+
+**The bind, and there is no way out of it:** only the **page** view gives a true click total, and
+only the **query** view can split brand from non-brand. You cannot have both. So any
+"non-brand clicks" figure is an **estimate from a censored sample, not a count.**
+
+**Fix:** don't try to reconcile the views — they will never agree. Instead (1) pull **both** every
+time, so the gap is visible rather than discovered later; (2) define the metric **operationally**
+("as reported in GSC's Queries view, 28 days, brand = <explicit rule>") so it is at least
+*reproducible*; and (3) if it is going in front of a client as a target, **disclose the censoring in
+the document.** A metric two people cannot recompute identically is not a metric. ⚠️ On TAB this had
+gone unnoticed across two baselines because the regeneration recipe pulled queries and **never
+pulled pages at all** — if your recipe only has one of the two, that is the bug.
+
+### GA4 silently restates closed historical windows — never put a decimal on a GA4 share
+
+**Symptom / When:** A figure recorded weeks ago from GA4 will not reproduce today, and two documents
+written days apart disagree about a window that closed long before either was written. It reads like
+someone made an arithmetic error. Nobody did.
+
+**How TAB's happened:** two docs recorded the same fortnight as **75/266 = 28.2%** and
+**75/265 = 28.3%**, and a session was booked to "re-pull and settle it." The re-pull settled it in
+the opposite direction — **neither reproduces.** The numerator 75 now appears on exactly one
+candidate window and the denominator on **none**; it reads **263**. GA4 had restated it downward by
+2–3 sessions. The original figure was *right when taken*.
+
+⚠️ **Two distinct traps here, and they compound.** (1) **Restatement** — GA4 reprocesses (bot
+filtering, session stitching, consent modelling) well after a window closes. (2) **Window
+ambiguity** — "06-30 → 07-14" is read four different ways by four different tools, and on a small
+site a one-day boundary shift moves the share by half a point. Together they make a two-decimal
+figure unfalsifiable.
+
+**Fix:** **round to the precision the data can actually support** — "about 28%" is true on every
+candidate window and immune to the next restatement. Never carry a GA4 percentage to one decimal
+into a client document, and never spend a session reconciling one. **Bigger consequence: do not put
+a GA4-derived number in a contract.** It will not hold still for twelve months. If a metric has to
+be contractual, source it from GSC, which does not retroactively restate.
+
+**Technique, if you must isolate a historical window and your puller only takes `days`:** GA4
+sessions are **additive across disjoint date ranges**, so `range(A→C) − range(B→C) = range(A→B)`.
+Two pulls reconstruct any closed window without adding date-range support. Cheap and exact — and it
+is also how you *detect* restatement, by rebuilding a window you already have a recorded figure for.
+
+### A GSC "average position" is a window average — so a length-matched pair of windows is the only honest before/after
+**Symptom / When:** You ship a change, pull 28 days, and compare it to the baseline 28 days. The
+number moves and you attribute it to the change. Two distinct errors are usually baked in.
+
+**(1) The lag.** Search Console data is **~3 days behind**, so "the last 28 days" silently means a
+window ending three days ago. Immediately after a change, the available clean post-change window is
+*shorter than the pre-change one* — and comparing an 18-day post window against a 28-day baseline is
+not a delta, it is two different measurements. **Match the lengths**, even when that means throwing
+away baseline days you already have.
+
+**(2) The average hides the event.** Position is averaged across the window, so a window that
+**straddles** the change reports a blend of both states. A 28-day window containing a change on day
+10 will understate it; the same query can read 5.1 on a post-change window and 9.2 on a window that
+merely *includes* the pre-change days — with no contradiction and no error.
+
+**Fix:** define both windows explicitly, end them both before the lag boundary, make them equal
+length, and **start the post window the day AFTER the change** (exclude the ship day itself — it is
+partially both states). Then say which windows you used in the write-up, because the next person will
+otherwise compare your figure against a different pair and find a "discrepancy" that is only arithmetic.
+
+⚠️ **Corollary worth its own line: a GSC position and a live SERP check can disagree and both be
+right.** The live check is one searcher, one place, one moment; the GSC figure is an average over
+everyone who saw the result. Query-level positions are also contaminated by non-blue-link surfaces
+(local pack, AI Overview citations), so a strong "position" may not be a listing at all. When they
+conflict, neither is the error — **they are measuring different things**, and the reconciliation is
+the finding.
+
+**First seen:** TAB, 2026-09-11.
+
 ## Diagnostic patterns
 
 ### Diagnostic JS via a Bricks code element
@@ -2387,6 +2869,27 @@ grep -ciE "fatal error|critical error" /tmp/.o
 They answer different questions, and only the second is evidence the screen works.
 **First seen:** MBC, 2026-08-25 — after moving an options page to `acf_add_options_page()`, the CLI check reported zero menu entries; an authenticated request returned 200 with every tab rendering. Trusting the CLI would have meant rolling back a correct migration.
 
+
+---
+
+### Verify link presence against BOTH absolute and relative hrefs — Bricks emits relative
+
+**Symptom / When:** A link-presence check (`grep 'href="https://site.tld/path/"'`) reports a required link **missing** from a page that plainly has it.
+**Why:** Bricks templates/components emit **relative** hrefs (`/request-a-quote/`) when the link is built from a dynamic tag or site setting, while inline editorial links written into `post_content` are usually **absolute**. A verifier matching one form silently misses the other — and a false negative on a checklist item costs more time than the check saved.
+**Fix:**
+```bash
+grep -oE 'href="(https://site\.tld)?/path/"' page.html | wc -l
+```
+**Related:** rendered HTML is frequently **one long line**, so `grep -c` returns `1` for "present at all" and `0`/`1` never means occurrences. Use `grep -o … | wc -l`, or parse. Three false readings in one session traced to this.
+**First seen:** TAB, 2026-07-15 — a required CTA link read as absent on the Medina page; the template's Dark CTA had it relative.
+
+---
+
+> Project copy of the canonical knowledgebase gotcha catalog. This file holds **only TAB-discovered entries** (below the seam) that were candidates for harvest into the master at TAB go-live.
+>
+> For the established / inherited gotcha catalog, read `~/claude-config/knowledgebase/03-stack-gotchas.md`. Do NOT duplicate established entries here — the canonical file is the source of truth.
+>
+> Restructured 2026-05-28. The seam structure follows the convention in `~/claude-config/knowledgebase/00-operating-rules.md` "Write protocol."
 
 ---
 
