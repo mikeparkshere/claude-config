@@ -174,6 +174,11 @@ Then triage explicitly, per the memory model and the write protocol below:
 - New project decisions or completed milestones → `CLAUDE.md`.
 - New project-specific findings → `project-context.md`.
 - Fast-changing in-flight state → auto-memory, not a committed file.
+- Client-visible blockers and shipped work → the project's status board, if CLAUDE.md
+  has a `## Status board` section: `client-status-board` skill, `push` (items the session
+  was blocked on, translated out of build vocabulary) and `log` (what shipped). This is
+  the write that replaces composing a status email; it is also the one most likely to be
+  skipped, because its audience is not in the room.
 
 The closer is where the workflow compounds. The write protocol below says *what* earns a place and *where* it goes; the closer is *when* it happens.
 
