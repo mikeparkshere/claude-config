@@ -35,7 +35,22 @@ If `CLAUDE.md` exists, read it and acknowledge the project context before procee
 
 > "No CLAUDE.md found for this webapp. I have environment context but no project context. You may want to create one before we proceed — or tell me about the project now."
 
-Do not proceed with any tasks until all three steps above are complete.
+**4. If CLAUDE.md has a `## Status board` section, report board state before anything else:**
+
+Fetch with the master token from that section (contract and details: `client-status-board` skill):
+
+```bash
+curl -s "https://status.michaelparksdesign.com/api/board.php?slug=<slug>&k=<master token>"
+```
+
+Report outstanding items and what changed since the last session (most recent dated entry in this CLAUDE.md's session log/changelog; fall back to 7 days). Target shape:
+
+> Status board: 4 outstanding, oldest 9 days (headshots, with the committee).
+> Since Tuesday: logo files cleared by Jus B Media — "Dropbox link went out Thursday".
+
+Nothing open and nothing changed → one line: `Status board: clear.` A 404 means the token in CLAUDE.md no longer matches (rotated?) — flag it, do not retry other tokens. No `## Status board` section → skip silently; `set-phase.sh` owns the create-one nudge for DEV projects.
+
+Do not proceed with any tasks until the steps above are complete.
 
 ---
 

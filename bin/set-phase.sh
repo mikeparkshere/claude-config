@@ -88,6 +88,19 @@ install_settings() {
   echo "verify:   run /permissions in a fresh session — a file on disk is not a file that parsed"
 }
 
+# Status board check (build brief §9): a DEV project with no board section in
+# CLAUDE.md gets a PROMPT, never an auto-created board — some DEV sites are
+# throwaway. Fires on set/install/report whenever the resolved phase is DEV.
+board_nudge() {
+  case "${1%%+*}" in DEV) ;; *) return 0 ;; esac
+  [ -f "$CLAUDE_MD" ] || return 0
+  grep -q '^## Status board' "$CLAUDE_MD" 2>/dev/null && return 0
+  echo
+  echo "Board:    none — DEV project, no '## Status board' section in CLAUDE.md."
+  echo "          If this build has a client or agency audience, create one now:"
+  echo "          client-status-board skill -> init. Skip freely for throwaway sites."
+}
+
 case "$MODE" in
   set)
     WANT="$(printf '%s' "$WANT" | tr '[:lower:]' '[:upper:]')"
@@ -121,6 +134,7 @@ case "$MODE" in
     echo
     echo "This session is not yet covered by the new file. Either /clear and re-open,"
     echo "or add the ask rules live with /permissions."
+    board_nudge "$WANT"
     ;;
   uninstall)
     if [ -f "$SETTINGS" ]; then
@@ -138,6 +152,7 @@ case "$MODE" in
       P="LIVE"
     fi
     install_settings "$P"
+    board_nudge "$P"
     ;;
   report)
     ST="$(phase_status)"; P="$(read_phase)"; DRIFT=0
@@ -172,6 +187,7 @@ case "$MODE" in
     else
       echo "Gate:     none required (DEV)"
     fi
+    board_nudge "${P:-LIVE}"
     [ "$DRIFT" -eq 0 ] || exit 4
     ;;
 esac
