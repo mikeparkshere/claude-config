@@ -500,10 +500,13 @@ Circle (author photo): wrapper `_aspectRatio: "1"` + `_border.radius` = `var(--r
 Any ACF **Relationship** or **Post Object** field on the current post is auto-exposed as a query loop:
 
 ```json
-{ "hasLoop": true, "query": { "objectType": "acf_post_related_service" } }
+{ "hasLoop": true, "query": { "objectType": "acf_<field_name>" } }
 ```
 
-- Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item. **LINK tags do not** — see `03`.
+**`objectType` is exactly `acf_<field_name>` — no fixed infix.** Bricks registers the loop tag as literally `'acf_' . $field['name']` (`provider-acf.php`). A field named `performers` is `acf_performers`, full stop — do not pattern-match a longer field name (e.g. a project's own `post_related_service` field, which is `acf_post_related_service` only because that's its literal name) into a perceived `acf_post_related_<x>` convention. When in doubt, grep `provider-acf.php`'s tag-registration line rather than inferring from an example.
+
+- Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{post_url}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item — **including LINK-type settings** (a `link: {type:'meta', useDynamicData:'{post_url}'}` control resolves correctly per item), provided the loop is anchored correctly (see the `hasLoop` placement note below). An earlier version of this entry said LINK tags do not resolve per-item; that was a misdiagnosis of the placement bug, not a real limitation — corrected th-members, 2026-08-30, see `03`.
+- **`hasLoop` only works on `block` / `div` / `section`** (anything extending `Element_Container` — that's the only code path that actually dispatches a `\Bricks\Query` and repeats the element). Setting `hasLoop` on a leaf element (`text-link`, `heading`, `text-basic`, etc.) is silently accepted and persists in the DB, but does nothing — the element renders once, in the *parent* loop's context. Nest the tag-bearing leaf element one level inside a looped container instead; it inherits the correct context automatically. Full incident: `03`.
 - **Repeater** loops work too (`objectType: acf_<repeater>`), but subfield tags are namespaced: `{acf_<repeater>_<subfield>}`. The bare subfield tag prints literally.
 - **`gallery` and `image` fields are NOT loopable** — they aren't `CONTEXT_LOOP`. Use a custom query type. See `03`.
 
