@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# wp-remote — run WP-CLI on a remote box for a site defined in a per-machine map.
+#
+#   wp-remote <alias> <wp args…>     e.g.  wp-remote th-tour option get siteurl
+#   wp-remote <alias> --shell        interactive shell in that site's docroot
+#   wp-remote --list                 show the aliases this machine knows
+#
+# Site map: ~/.config/wp-remote/sites.conf (override with $WP_REMOTE_SITES), one site
+# per line:   alias|ssh-host|docroot|php-binary     — php-binary optional.
+# The map is deliberately NOT in this repo: docroots, hosts and client domains are
+# coordinates, and this repo is public (knowledgebase 00). Mechanism travels; map stays home.
+#
+# Why the php-binary column exists: on a box whose default `php`/`wp` is older than
+# the site's plugins require (a cPanel-style host defaulting to 7.4 while the vhost
+# runs 8.3 FPM), plain `wp` fatals the moment plugins load. Naming the FPM-matching
+# CLI binary per site makes that impossible to forget.
+#
+# Never needs sudo. Root-requiring steps (chown, deleting root-owned files) are run by
+# a human in their own terminal — STAGING/LIVE contract, knowledgebase 00.
+
+set -euo pipefail
+MAP="${WP_REMOTE_SITES:-$HOME/.config/wp-remote/sites.conf}"
+WP_BIN="${WP_REMOTE_WP:-/usr/local/bin/wp}"
+
+[ -r "$MAP" ] || { echo "no site map at $MAP — create it (alias|host|docroot|php)" >&2; exit 2; }
+
+lookup() { grep -vE '^\s*(#|$)' "$MAP" | awk -F'|' -v a="$1" '$1==a {print; exit}'; }
+
+[ $# -ge 1 ] || { sed -n '2,12p' "$0"; exit 2; }
+if [ "$1" = "--list" ]; then
+  grep -vE '^\s*(#|$)' "$MAP" | awk -F'|' '{printf "%-14s %-12s %s  %s\n", $1, $2, $3, $4}'; exit 0
+fi
+
+ALIAS="$1"; shift
+ROW="$(lookup "$ALIAS")" || true
+[ -n "$ROW" ] || { echo "unknown site alias: $ALIAS (try --list)" >&2; exit 2; }
+IFS='|' read -r _ HOST DOCROOT PHP <<<"$ROW"
+
+if [ "${1:-}" = "--shell" ]; then
+  exec ssh -t "$HOST" "cd '$DOCROOT' && exec \$SHELL -l"
+fi
+[ $# -ge 1 ] || { echo "no wp arguments given" >&2; exit 2; }
+
+REMOTE_ARGS=""
+for a in "$@"; do REMOTE_ARGS+=" $(printf '%q' "$a")"; done
+if [ -n "${PHP:-}" ]; then CMD="$PHP $WP_BIN$REMOTE_ARGS"; else CMD="$WP_BIN$REMOTE_ARGS"; fi
+exec ssh -o BatchMode=yes "$HOST" "cd '$DOCROOT' && $CMD"
