@@ -20,6 +20,28 @@ Then wait.
 
 There is a WP-CLI at `/opt/homebrew/bin/wp` on this machine. It runs under Homebrew's PHP and has no route to Local's MySQL socket. It will not fail loudly — it will return empty or misleading results that look like WordPress problems. Never use it for a Local site.
 
+**The Site Shell's own `wp` has the mirror-image trap: it reaches only THIS site's database.** Running
+`wp` from a sibling site's `app/public` (or with `--path=` pointing there) silently connects to the
+shell's site, not the sibling's — every Local site's DB is named `local` on `localhost`, and PHP takes
+the socket from the shell's `php.ini`, which is pinned to the site the shell was opened for. The wrong
+site returns perfectly normal-looking output (`option get siteurl` just prints the wrong URL), and a
+write lands on the wrong site with no error. `MYSQL_HOME` and `WP_CLI_PHP_ARGS` do not help: Local's
+`wp` is the phar launched by `env php` directly. (Found 2026-09-15 applying settings to the stack
+template from the SLVPR shell — three attempts hit SLVPR's DB before the cause was clear.)
+
+To reach a sibling that is running in Local, invoke PHP yourself with that site's socket, and guard
+every cross-site write on `siteurl` first:
+
+```bash
+# site id from ~/Library/Application Support/Local/sites.json
+S="$HOME/Library/Application Support/Local/run/<siteId>/mysql/mysqld.sock"
+WP=/Applications/Local.app/Contents/Resources/extraResources/bin/wp-cli/posix/wp
+wpx() { php -d "mysqli.default_socket=$S" -d "pdo_mysql.default_socket=$S" "$WP" "$@"; }
+( cd "/Users/parkshere/Local Sites/<sibling>/app/public" && wpx option get siteurl )   # must print the SIBLING's URL
+```
+
+Plain `mysql -S "$S" -uroot -proot local` also reaches the sibling directly for reads.
+
 ---
 
 ## Step 2 — read the knowledgebase
