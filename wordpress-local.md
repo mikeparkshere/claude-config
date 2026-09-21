@@ -65,7 +65,11 @@ If context is compacted, or if /clear is used at any point, re-read all of these
 I'm working on a WordPress site using Local (by Flywheel). The environment is fully configured with WP-CLI available.
 
 CRITICAL - CURRENT SETUP:
-- You are at the PROJECT ROOT: not in the WordPress directory
+- **Expected position is the PROJECT ROOT**, not the WordPress directory — that is what the
+  `cd ../..` in step 1 is for. Local's Site Shell itself opens in `app/public`, so a session
+  started without that `cd` sits one level down and every relative path below is off by two.
+  `pwd` first. This matters unevenly: the `cd app/public` forms below fail **loudly** from the
+  wrong position, but the log paths fail **silently** — see "Reading the logs".
 - WordPress installation is in: ./app/public/
 - PHP error logs are in: ./logs/php/error.log — **created lazily, on the first PHP error.** A site
   that has never errored has no such file. See "Reading the logs" below before concluding anything
@@ -106,17 +110,28 @@ so does `grep` against a log with no matches** — one means "I could not look",
 looked and it is clean", and they are indistinguishable in the scrollback. Establish which you have
 before reporting "no errors":
 
+⚠️ **Anchor the path to the site root — do not write it relative to `pwd`.** From `app/public`,
+a cwd-relative `[ -f logs/php/error.log ]` is false because the path is wrong, not because the log
+is absent, and the `||` branch then prints a confident "nothing has errored yet" over a log full of
+fatals. That is the exact false-clean this section exists to prevent, produced by the check itself.
+
 ```bash
+# anchor to the site root, wherever this shell opened (Local's layout: <site-root>/app/public)
+S=$PWD; until [ -d "$S/logs" ] && [ -d "$S/app/public" ]; do
+  [ "$S" = / ] && { echo "ABORT: no Local site root above $PWD — you cannot report on logs"; return 2>/dev/null || exit 2; }
+  S=$(dirname "$S")
+done; echo "site root: $S"
+
 # list what this site actually has, rather than assuming
-find logs -type f ! -name '.DS_Store'
+find "$S/logs" -type f ! -name '.DS_Store'
 
 # then read, with existence proven and a count that prints even at zero
-L=logs/php/error.log
+L="$S/logs/php/error.log"
 [ -f "$L" ] && { echo "$(wc -l < "$L") lines"; grep -icE 'PHP (Fatal|Parse|Warning)' "$L"; } \
              || echo "no error.log — nothing has errored yet on this site"
 ```
 
-Web-server logs live under `logs/nginx/` **or** `logs/apache/` depending on the site; `apache/` sites
+Web-server logs live under `$S/logs/nginx/` **or** `$S/logs/apache/` depending on the site; `apache/` sites
 also carry a `site-error.log`. Do not hardcode either — `find` first.
 
 EXAMPLES:
