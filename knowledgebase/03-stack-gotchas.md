@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-208 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+211 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~24,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -77,6 +77,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks — author rules with equal specificity lose to `@layer bricks` framework rules
 - Bricks — `*{border-color}` plus a default 1px border on native inputs = "ghost" borders on every form
 - Bricks — where CSS actually lives: global-class CSS is INLINE, element-typed CSS is in `post-{id}.min.css`
+- Bricks never rebuilds `style-manager.min.css` — on an upgraded site it is a fossil that outranks current tokens
+- Bricks' palette option is `bricks_color_palette` — SINGULAR, and the wrong name fails differently in PHP than in WP-CLI
 - Bricks emits a Global Class's CSS ONLY when an element on that page references it
 - Bricks file-mode CSS never externalizes global-class CSS — architecture, not a CLI limitation
 - Bricks `_typography.font-family` quotes the value — use `custom_font_<id>`, not a CSS string
@@ -310,6 +312,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
 - Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
 - Verify link presence against BOTH absolute and relative hrefs — Bricks emits relative
+- Headless Chrome clamps the layout viewport to a ~500px minimum — a `--window-size=375` screenshot is a CROP of a 500px layout
 
 ## WordPress + Bricks Builder
 
@@ -567,6 +570,7 @@ Pair with a brand-aligned input fill so borderless fields stay visible.
 **Symptom / When:** Two mirror-image false alarms. (1) You grep `post-{id}.min.css` for a Global Class selector after a DB write + regen and find nothing — even though the class clearly renders styled. (2) You add typed settings to a *specific element* (`_border`/`_objectFit`/`_aspectRatio`), regen, then `curl | grep '\.brxe-<id>'` the page and find no CSS — looks like the typed settings didn't emit.
 **Why:** Bricks splits CSS by scope. **Global Class** CSS is emitted inline in the document head (`<style id="bricks-frontend-inline-css">`). **Element-id-scoped** CSS (typed settings on an individual element) is written to the per-post file `wp-content/uploads/bricks/css/post-{ID}.min.css` and loaded via `<link>`. The per-post file carries only element-base + element-id CSS, never the global classes.
 **This holds in `cssLoading='file'` mode too** — file mode does not move global classes into a file, because no such file target exists. Source-verified 2.3.10; see "Bricks file-mode CSS never externalizes global-class CSS."
+**The full set of compiled artifacts** in `wp-content/uploads/bricks/css/`: `color-palettes.min.css`, `global-variables.min.css` (emitted only when `bricks_global_variables` is non-empty), `theme-style-<name>.min.css`, `post-<id>.min.css`, and `style-manager.min.css`. A regen rebuilds every one of these **except `style-manager.min.css`** — see "Bricks never rebuilds `style-manager.min.css`". Verified SLVPR, 2026-09-21, Bricks 2.3.13.
 **Fix:** Verify each in its own home.
 ```bash
 # Global class → rendered page (this is the canonical 02 recipe)
@@ -576,6 +580,36 @@ grep -r '<element-id>' wp-content/uploads/bricks/css/
 ```
 Element typed CSS uses `#brxe-<id>` ID selectors, and for images the dual-route `#brxe-<id>:not(.tag), #brxe-<id> img{…}`. Useful corollary: Bricks' own image default is `:where(.brxe-image) img{height:100%;width:100%}` at **zero specificity**, so an ID-scoped typed `_aspectRatio` on a figure-image wins and renders.
 **First seen:** TAB, 2026-05-29 — Single Service hero; a bronze CTA rule was absent from `post-15486.min.css` but present in the page's inline head CSS. **And** TAB, 2026-06-09 — overview image typed settings; `.brxe-psomd0` rules were in `post-15582.min.css`, not inline.
+
+### Bricks never rebuilds `style-manager.min.css` — on an upgraded site it is a fossil that outranks current tokens
+**Symptom / When:** After emptying `bricks_global_variables` or editing the colour palette, tokens fail to resolve or resolve to dead values — `getComputedStyle` returns a `var(--retired-name)` pointer to a variable that exists nowhere in the build. Everything in the DB reads clean. The overriding declarations trace to a file in `wp-content/uploads/bricks/css/` whose mtime predates the change by weeks or months.
+**Why:** Bricks compiles several artifacts into `wp-content/uploads/bricks/css/` — `color-palettes.min.css`, `global-variables.min.css`, `theme-style-<name>.min.css`, `post-<id>.min.css` and `style-manager.min.css`. `\Bricks\Assets_Files::regenerate_css_files()` and the admin "Regenerate CSS files" button rebuild all of them **except `style-manager.min.css`**, which only a builder session writes. A DB-side cleanup therefore leaves that one file enqueued, re-declaring retired variables at a cascade position that beats ACSS Global CSS. The DB reads clean; the fossil lives only on disk.
+⚠️ **Version-scoped, and this is the part that matters.** On Bricks 2.3.13 `style-manager.min.css` is **empty** — the palette and global-variable output now lives in the two dedicated files, and those regenerate correctly. So this is a **carried-forward** hazard: it bites a site whose file was compiled by an older Bricks and survived the upgrade. On a fresh current build the file is inert, and grepping it returns nothing.
+**Fix:** Do not grep one filename — the artifact that holds the fossil moves between Bricks versions. List the directory and find the file that **did not** move across a regen:
+```bash
+stat -f '%Sm %z %N' wp-content/uploads/bricks/css/*.min.css   # macOS
+stat -c '%y %s %n' wp-content/uploads/bricks/css/*.min.css    # Linux
+# run the regen, list again — anything whose mtime did not change is not managed by regen
+```
+Then confirm the palette option is clean (`bricks_color_palette` — singular, see its own entry), park a backup of the suspect file, and delete it. Bricks recreates it, empty, on the next builder load or save.
+**First seen:** Nametank (ext-mem), 2026-08-13 — after the BRAND v1.1 reconciliation emptied `bricks_global_variables` and moved the pinned brand tokens to ACSS Global CSS, the tokens stopped resolving on the front end. Root cause was a `style-manager.min.css` compiled in April, before the cleanup, re-declaring the pinned tokens as `var(--ms-*)` pointers to the deleted globals. Deleting it fixed it, and the file has stayed empty since. Sessions in between debugged the *convention* — which token home was correct — instead of the stale compiled artifact.
+**Mechanism corrected:** SLVPR, 2026-09-21 — verified on Bricks 2.3.13 by running `regenerate_css_files()` and diffing mtimes: `color-palettes`, `global-variables` and `theme-style-mpd` all rebuilt; `style-manager.min.css` did not. But it is 0 bytes on all three installs checked (SLVPR, the `stack-0626` template, and Nametank's own since its fix), so the palette/token output has moved and the original "it carries the tokens" mechanism no longer describes a current install. Reframed as a carried-forward hazard and the detection generalised, because grepping the named file on a modern site returns nothing and reads as "not my problem."
+
+### Bricks' palette option is `bricks_color_palette` — SINGULAR, and the wrong name fails differently in PHP than in WP-CLI
+**Symptom / When:** A read of the Bricks colour palette comes back empty, and the conclusion drawn is "this install has no palette" or "the palette got wiped." In PHP the read returns `false` and flattens silently to nothing in any `foreach` or `json_encode`; from WP-CLI the same wrong name errors instead.
+**Why:** The option is registered singular — `bricks_color_palette`. `bricks_color_palettes` has never existed. WordPress's `get_option()` returns `false` for an unregistered key with no notice, so in PHP a typo is indistinguishable from a genuinely empty palette. WP-CLI is the loud path: `Error: Could not get 'bricks_color_palettes' option. Does it exist?`
+**Fix:** Singular, always.
+```bash
+wp option get bricks_color_palette --format=json | jq '.[0].colors | length'
+```
+In PHP, separate absent from empty rather than trusting a falsy read:
+```php
+$raw = get_option( 'bricks_color_palette', null );
+if ( null === $raw ) { /* option absent — you are reading the wrong key, not an empty palette */ }
+```
+This is generic `get_option()` behaviour rather than a Bricks quirk, and it is the `00` Evidence-discipline trap in option form: an empty result that means "I looked in the wrong place," not "there is nothing there."
+**First seen:** Nametank (ext-mem), 2026-08-13 — surfaced while verifying the palette was clean during the `style-manager.min.css` investigation, where a wrong-key read would have falsely confirmed the palette as the culprit.
+**Refined:** SLVPR, 2026-09-21 — the original wording ("the plural name reads empty silently") holds in PHP but not from WP-CLI, which errors loudly. Corrected because the silent branch is the one a CLI session never hits and the loud branch is the one it always will.
 
 ### Bricks emits a Global Class's CSS ONLY when an element on that page references it
 **Symptom / When:** You need to know whether grepping a rendered page for `.my-class{…}` is a valid check, or whether Bricks dumps every global class onto every page (which would make grep useless — false positives everywhere).
@@ -2878,6 +2912,15 @@ grep -oE 'href="(https://site\.tld)?/path/"' page.html | wc -l
 **Related:** rendered HTML is frequently **one long line**, so `grep -c` returns `1` for "present at all" and `0`/`1` never means occurrences. Use `grep -o … | wc -l`, or parse. Three false readings in one session traced to this.
 **First seen:** TAB, 2026-07-15 — a required CTA link read as absent on the Medina page; the template's Dark CTA had it relative.
 
+### Headless Chrome clamps the layout viewport to a ~500px minimum — a `--window-size=375` screenshot is a CROP of a 500px layout
+**Symptom / When:** Verifying mobile layout headlessly: an element that should be visible at 375px is absent from every screenshot, and probing finds a phantom "mobile overflow" — body `scrollWidth` reads ~485–500, elements sit at x > 375, and even a page reduced to a bare skip-link still measures 500px wide.
+**Why:** `--headless=new --window-size=375,…` enforces a ~500px minimum window width for *layout* while the screenshot canvas honours the requested 375 — so the page lays out at 500px and the PNG is a left-edge crop. Media queries keyed at ≥500px (e.g. ≤991 mobile rules) still match, so mid-size breakpoints behave normally and the artifact only bites at true-phone widths — exactly when you are least likely to suspect the tool.
+The general form, which outlives any Chrome version: **a screenshot is evidence about the harness as much as about the page.** A tool that silently substitutes its own viewport converts "I could not measure this" into "this is broken" — the same false-conclusion shape as the empty-grep trap in `00` → Evidence discipline.
+**Fix:** For sub-500 viewports, embed the page in an iframe of the target width inside a wider headless window (`<iframe src="…" style="width:375px">` — cross-origin blocks script probes into it, but the screenshot is honest), or drive a real browser with proper device emulation. Before trusting a negative, sanity-check the harness: render a page you know is correct at the same width, and if that looks broken too, the tool is the problem.
+Companion diagnostic when no CDP tooling is available: save the page locally, append a `<script>` that writes `getComputedStyle` / `getBoundingClientRect` results into `document.title`, and read it back via `--dump-dom` — a poor man's headless evaluate. Same family as "Diagnostic JS via a Bricks code element".
+**First seen:** Nametank (ext-mem), 2026-08-13 — the new header burger appeared "missing" in every 375px screenshot after the offcanvas build; an hour of cascade archaeology chased a phantom overflow (solo body children each "measuring" ~500) before the clamp was identified. The layout had been correct all along; an iframe-embedded 375px viewport showed the burger rendering perfectly.
+⚠️ **UNVERIFIED SINCE.** The ~500px figure is a claim about a tool, not about the stack, and Chrome moves. Re-verify against the current Chrome before relying on the number. Consider also whether raw headless-Chrome CLI is still the house method for visual verification — if a real-browser driver with `resize_window` has replaced it, this entry's audience is narrower, though the principle and the `--dump-dom` fallback both survive.
+
 ---
 
 > Project copy of the canonical knowledgebase gotcha catalog. This file holds **only TAB-discovered entries** (below the seam) that were candidates for harvest into the master at TAB go-live.
@@ -2891,15 +2934,3 @@ grep -oE 'href="(https://site\.tld)?/path/"' page.html | wc -l
 # === PROJECT SECTION — "we learned" ===
 
 *Empty at kickoff. New gotchas discovered during this project's build append below, in the entry format above. At go-live these are reviewed and the validated ones fold into the established section of the master.*
-
-### Bricks `style-manager.min.css` is NOT rebuilt by `regenerate_css_files()` or the admin Regenerate button — a stale compiled copy silently overrides current tokens
-**Symptom / When:** After emptying `bricks_global_variables` or editing the color palette, tokens fail to resolve or resolve to dead values — `getComputedStyle` shows a token whose value is a `var(--retired-name)` pointer to a variable that no longer exists anywhere in the build. The overriding declarations trace to `wp-content/uploads/bricks/css/style-manager.min.css`, whose mtime predates the change by weeks or months.
-**Why:** Bricks compiles Style Manager output (global variables, palette-derived CSS) into `style-manager.min.css`, but neither `\Bricks\Assets_Files::regenerate_css_files()` nor the admin "Regenerate CSS files" button rebuilds it — only a builder session does. So a DB-side cleanup of `bricks_global_variables` or the palette leaves the stale compiled file enqueued, re-declaring the retired variables at a cascade position that beats ACSS Global CSS. Everything in the DB reads clean; the fossil lives only on disk.
-**Fix:** Verify the palette option is clean first (`bricks_color_palette` — singular; the plural name reads empty silently), park a backup of the file, then delete it — the builder rebuilds it on the next builder load/save. Detection on any suspect install: grep the file for retired variable names, e.g. `grep -c 'ms-' wp-content/uploads/bricks/css/style-manager.min.css`.
-**First seen:** Nametank (ext-mem), 2026-08-13 — after the BRAND v1.1 reconciliation emptied `bricks_global_variables` (D3) and moved the pinned brand tokens to ACSS Global CSS, the tokens stopped resolving on the front end. Root cause was a `style-manager.min.css` compiled in April — before the cleanup — that re-declared the pinned tokens as `var(--ms-*)` pointers to the deleted globals, overriding ACSS Global CSS by cascade position. Removing the file fixed it (fossil parked at `/tmp/style-manager.fossil.bak`; palette option verified clean). Sessions in between debugged the *convention* — which token home was correct — instead of the stale compiled artifact.
-
-### Headless Chrome clamps the layout viewport to a ~500px minimum — a `--window-size=375` screenshot is a CROP of a 500px layout
-**Symptom / When:** Verifying mobile layout headlessly: an element that should be visible at 375px is absent from every screenshot, and probing finds a phantom "mobile overflow" — body `scrollWidth` reads ~485–500, elements sit at x > 375, and even a page reduced to a bare skip-link still measures 500px wide.
-**Why:** `--headless=new --window-size=375,…` enforces a ~500px minimum window width for layout while the screenshot canvas honours the requested 375 — the page lays out at 500px and the PNG is a left-edge crop. Media queries keyed at ≥500px (e.g. ≤991 mobile rules) still match, so mid-size breakpoints behave normally and the artifact only bites on true-phone widths, which is exactly when you're least likely to suspect the tool.
-**Fix:** For sub-500 viewports, embed the page in an iframe of the target width inside a wider headless window (`<iframe src="…" style="width:375px">` — cross-origin blocks script probes into it, but the screenshot is honest), or use a real browser / proper device emulation. Companion diagnostic worth keeping: save the page locally, append a `<script>` that writes `getComputedStyle` / `getBoundingClientRect` results into `document.title`, and read it back via `--dump-dom` — a poor man's headless evaluate with no CDP tooling.
-**First seen:** Nametank (ext-mem), 2026-08-13 — the new header burger appeared "missing" in every 375px screenshot after the offcanvas build; an hour of cascade archaeology chased a phantom overflow (solo body children each "measured" ~500) before the clamp was identified. The layout had been correct all along; an iframe-embedded 375px viewport showed the burger rendering perfectly.
