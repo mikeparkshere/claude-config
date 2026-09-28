@@ -26,6 +26,16 @@ cd /home/runcloud/webapps/[confirmed-app-name]/
 pwd
 ```
 
+**2a. Check the phase gate actually loaded:**
+```bash
+ls .claude/settings.json 2>/dev/null
+```
+Claude Code reads project settings **only from the directory the session was launched in**. A `cd` part-way through a session does not load them. If this webapp has a `.claude/settings.json` and the session was launched anywhere else (e.g. `/home/runcloud`, which is the Remote-SSH default), **the phase gate is not in force**: none of its `defaultMode`, `ask` or `deny` rules apply. The giveaway is a LIVE/STAGING project running in auto or default mode instead of `plan`. Stop and say:
+
+> "This webapp has a phase gate (`.claude/settings.json`), but this session was launched from [launch dir], so it isn't loaded. Relaunch from the webapp root: `cd /home/runcloud/webapps/[app]/ && claude` (or open that folder in Remote-SSH), then run `/wordpress-runcloud` again."
+
+Do not continue under the unloaded gate. If Michael explicitly chooses to stay in this session, re-add the gate's `ask` and `deny` rules with `/permissions` before touching anything (`knowledgebase/00-operating-rules.md` → phase contract). Found 2026-09-28 on app-mpdclient: a LIVE+TXN session had been running in auto mode.
+
 **3. Check for a CLAUDE.md project context file:**
 ```bash
 cat CLAUDE.md
