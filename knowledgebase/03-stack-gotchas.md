@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-248 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
+250 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title.
 
 **Do not read this file cover to cover.** At ~31,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -305,6 +305,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Walling Rank Math to admins — deny `rank_math_*` caps; the editor role ships with the metabox cap
 - `current_user_can('assign_terms')` is a false negative — check the taxonomy's MAPPED capability
 - A CPT registered `capability_type => 'post'` makes the "blog" caps load-bearing — do not drop them on a site with no blog
+- SEOPress adds noindex/nofollow/redirection bulk actions to every CPT list — a scoped client role inherits them
+- `bricks_template` is `capability_type => 'post'` — a client role with post caps reaches the template editor by URL
 
 **CSS general**
 
@@ -3109,6 +3111,42 @@ add_action( 'admin_menu', function () {
 ```
 **⚠️ HARVEST ACTION — this amends `~/claude-config/business-manager-role-playbook.md`.** Its "Stack assumptions" and "Customization checklist per project" both say to drop blog caps when there is no blog, with no CPT caveat. That instruction is wrong for any brochure site whose content is a CPT — which is most of them. Amend the playbook at harvest; flagged here rather than edited at master mid-build.
 **First seen:** Highland, 2026-08-04 — building the Business Manager role. Highland has 0 posts and no posts page, but `project` is `capability_type => 'post'`, so following the checklist literally would have shipped a client login with no editable content.
+
+
+### SEOPress adds noindex/nofollow/redirection bulk actions to every CPT list — a scoped client role inherits them
+**Symptom / When:** A locked-down client role (Business/Site Manager) on a SEOPress site, with SEOPress's metaboxes removed for the role. The CPT list screens still offer *Enable noindex*, *Enable nofollow* and *Enable/Disable redirection* in Bulk actions, and the media library gets an alt-text bulk action. One wrong pick de-indexes a batch of pages.
+**Why:** SEOPress registers `bulk_actions-edit-{type}` and `bulk_actions-upload` filters **after default priority**, gated on nothing a content role lacks. Removing the `seopress_cpt` / `seopress_content_analysis` metaboxes removes only the metaboxes. A role's own `bulk_actions-*` filter at priority 10 runs *before* SEOPress re-adds its entries, so it looks written and does nothing.
+**Fix:** Filter at `PHP_INT_MAX` for the role, per list screen:
+```php
+foreach ( array( 'edit-project', 'upload' ) as $screen ) {   // every CPT list the role sees, plus media
+    add_filter( "bulk_actions-{$screen}", function ( $actions ) {
+        return prefix_is_business_manager() ? array() : $actions;   // or unset only the seopress_* keys
+    }, PHP_INT_MAX );
+}
+```
+Verify by fetching the list screen **as the role** over HTTPS and grepping for `bulk-action-selector-top`. The `handle_bulk_actions-*` handler is still registered, so this removes the UI rather than building a hard wall. The same audit applies to any SEO plugin: check list screens, not just the editor.
+**First seen:** WCDP, 2026-09-30 — Site Manager role; SEOPress bulk actions were still in the Events list after the metaboxes were gone.
+
+### `bricks_template` is `capability_type => 'post'` — a client role with post caps reaches the template editor by URL
+**Symptom / When:** A scoped client role keeps the post caps (because the site's CPTs map onto them — see the load-bearing blog caps entry). Bricks' own menu is admin-only and builder access is denied, so templates look unreachable.
+**Why:** Bricks registers `bricks_template` with `show_in_menu => false` but the default `capability_type => 'post'`. So `edit.php?post_type=bricks_template`, `post-new.php?post_type=bricks_template` and `post.php?post=<template id>` all resolve for anyone with `edit_posts`: header, footer, every archive and single template, plus their titles, status and trash. `remove_menu_page()` on anything is cosmetic for the same reason.
+**Fix:** An `admin_init` guard for the role that redirects those screens to the dashboard. Use the same list for any post type whose menu you hide (Posts, a switched-off CPT):
+```php
+add_action( 'admin_init', function () {
+    if ( ! prefix_is_business_manager() || wp_doing_ajax() ) return;
+    global $pagenow;
+    $blocked = array( 'post', 'bricks_template' );
+    $type = null;
+    if ( in_array( $pagenow, array( 'edit.php', 'post-new.php' ), true ) ) {
+        $type = isset( $_GET['post_type'] ) ? sanitize_key( $_GET['post_type'] ) : 'post';
+    } elseif ( 'post.php' === $pagenow && isset( $_GET['post'] ) ) {
+        $type = get_post_type( absint( $_GET['post'] ) );
+    }
+    if ( $type && in_array( $type, $blocked, true ) ) { wp_safe_redirect( admin_url() ); exit; }
+} );
+```
+Verify as the role: `edit.php?post_type=bricks_template` should 302 to `/wp-admin/`.
+**First seen:** WCDP, 2026-09-30 — Site Manager role built from the Business Manager playbook.
 
 
 ## CSS general

@@ -48,6 +48,8 @@ Related: **do not reach for `manage_categories` to let the client assign terms.*
 
 *Amended at the Highland harvest, 2026-08-11 — Highland has 0 posts and no posts page, but `project` is `capability_type => 'post'`, so the original instruction would have shipped a client login with no editable content. Found 2026-08-04 during that build and flagged rather than edited mid-build.*
 
+*Amended 2026-09-30 (WCDP "Site Manager" build): Step 2 gains a direct-URL guard (`bricks_template` is `capability_type => 'post'`, so the post caps reach the template editor by URL) and a `PHP_INT_MAX` bulk-actions filter (SEOPress re-adds noindex/nofollow/redirection bulk actions after default priority); the OPcache note is corrected. Both entries are in `03` → Roles & Capabilities.*
+
 ---
 
 ## Find & replace before you paste
@@ -322,6 +324,58 @@ add_action( 'admin_menu', function() {
 		return;
 	}
 	remove_menu_page( 'ws-form' );
+}, 9999 );
+
+/**
+ * Block hidden screens by direct URL. remove_menu_page() only hides a link; the
+ * caps behind it still resolve. bricks_template is capability_type 'post', so
+ * without this the Bricks header/footer/template editor is one typed URL away.
+ * Add any post type whose menu you hide (Posts on a no-blog site, a switched-off CPT).
+ */
+add_action( 'admin_init', function() {
+	if ( ! prefix_is_business_manager() || wp_doing_ajax() ) {
+		return;
+	}
+	global $pagenow;
+	$blocked = array( 'bricks_template' );
+	$type    = null;
+	if ( in_array( $pagenow, array( 'edit.php', 'post-new.php' ), true ) ) {
+		$type = isset( $_GET['post_type'] ) ? sanitize_key( wp_unslash( $_GET['post_type'] ) ) : 'post'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+	} elseif ( 'post.php' === $pagenow && isset( $_GET['post'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$type = get_post_type( absint( $_GET['post'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	}
+	if ( $type && in_array( $type, $blocked, true ) ) {
+		wp_safe_redirect( admin_url() );
+		exit;
+	}
+} );
+
+/**
+ * No bulk actions on the role's list screens. PHP_INT_MAX is load-bearing: SEOPress
+ * adds noindex / nofollow / redirection bulk actions AFTER default priority, so a
+ * priority-10 filter runs first and SEOPress puts them back. List every CPT screen
+ * the role sees, plus 'upload' (SEOPress also adds an alt-text bulk action there).
+ */
+foreach ( array( 'edit-post', 'upload' ) as $prefix_screen ) {
+	add_filter( "bulk_actions-{$prefix_screen}", function( $actions ) {
+		return prefix_is_business_manager() ? array() : $actions;
+	}, PHP_INT_MAX );
+}
+unset( $prefix_screen );
+
+/**
+ * SEO plugin metaboxes. Rank Math: see the user_has_cap wall in 03. SEOPress: drop
+ * its metaboxes here (and list columns via manage_{type}_posts_columns if shown).
+ * Removing the metabox does NOT remove SEOPress's bulk actions; the filter above does.
+ */
+add_action( 'add_meta_boxes', function() {
+	if ( ! prefix_is_business_manager() ) {
+		return;
+	}
+	foreach ( get_post_types( array( 'show_ui' => true ) ) as $type ) {
+		remove_meta_box( 'seopress_cpt', $type, 'normal' );
+		remove_meta_box( 'seopress_content_analysis', $type, 'normal' );
+	}
 }, 9999 );
 
 /** Admin-bar trim: drop the wp-logo + updates nodes, strip "Howdy,". */
@@ -681,11 +735,17 @@ wp eval 'foreach(["prefix_view_submissions"=>"YES","read_form"=>"no","read_submi
 # 4. Functionally render the page AS that user (no fatal, real data)
 wp eval 'wp_set_current_user(9); ob_start(); prefix_render_submissions_page(); echo (strlen(ob_get_clean())>0 ? "render OK\n" : "EMPTY\n");'
 
-# 5. Create the client account when ready
+# 5. Verify over HTTPS AS the role, not just from CLI: a throwaway user + auth cookies
+#    (both secure_auth and logged_in, or wp-admin 302s you off). Expect:
+#      edit.php?post_type=bricks_template  -> 302 to /wp-admin/
+#      a CPT list screen                   -> 200 with NO 'bulk-action-selector-top'
+#    Delete the throwaway user afterwards.
+
+# 6. Create the client account when ready
 wp user create kim kim@example.com --role=prefix_business_manager --first_name=Kim --send-email
 ```
 
-**OPcache note (OpenLiteSpeed / lsphp on RunCloud):** defaults are `opcache.validate_timestamps=On`, `revalidate_freq=2`, so edited files are picked up within ~2s and no reset is needed. Role caps live in the DB (via the object cache), so the CLI sync is authoritative immediately. If a host runs `validate_timestamps=0`, reset OPcache / restart PHP after deploying.
+**OPcache note (OpenLiteSpeed / lsphp on RunCloud):** `opcache.validate_timestamps=On`, so no reset is needed. But **web workers were observed taking 10–60s to pick up an edited file** (WCDP, 2026-09-30), not the ~2s `revalidate_freq=2` implies, while WP-CLI sees the change at once. Poll the page with a cache-buster until the change appears before concluding an edit failed. Role caps live in the DB (via the object cache), so the CLI sync is authoritative immediately. If a host runs `validate_timestamps=0`, reset OPcache / restart PHP after deploying.
 
 ---
 
@@ -699,6 +759,7 @@ wp user create kim kim@example.com --role=prefix_business_manager --first_name=K
 | `prefix_view_submissions` | ✅ | Custom read-only Submissions page |
 | `prefix_manage_site_options` | ✅ | Custom-scoped options page |
 | `edit_pages` / any `*_pages` | ❌ | **Bricks builder + built pages unreachable** |
+| (`edit_posts` → `bricks_template`) | ⚠️ | Resolves by URL. Blocked by the Step 2 `admin_init` guard, not by caps |
 | `read_form` / `edit_form` / `read_submission` (WS Form) | ❌ | Native WS Form UI never exposed |
 | `manage_options`, `activate_plugins`, `switch_themes`, `edit_users`, `manage_options_wsform` | ❌ | Settings/plugins/themes/users all hidden |
 
@@ -725,6 +786,8 @@ WS Form data model the viewer relies on:
 - [ ] Drop blog caps + the Posts/Media cards if the site has no blog.
 - [ ] If **not** WS Form Pro: replace `inc/submissions.php`'s reads with the target plugin's read API (the role + admin-experience layers are form-agnostic). Gravity Forms → `GFAPI::get_entries()`; Fluent Forms → its submission model; etc. Keep it read-only + gated on `prefix_view_submissions`.
 - [ ] Set `PREFIX_ROLES_VERSION` and bump it whenever you edit `$caps`.
+- [ ] Fill the bulk-actions screen list (Step 2) with every CPT list the role can see. If the site runs **SEOPress**, check a list screen as the role: its noindex/redirect bulk actions must be gone.
+- [ ] Add every post type whose menu you hide to the `admin_init` URL guard. `bricks_template` is always on it.
 - [ ] Verify with the Step 5 commands, then create the client account.
 - [ ] If wp-login.php is not redirected on this build, add login branding.
 
