@@ -53,9 +53,18 @@ Two steps, in this order. Getting them the wrong way round means rebuilding a sy
 
 **1. Ask whether ACSS already owns this surface.** ACSS covers more third-party UI than its name suggests — most importantly it ships a **first-class WS Form layer**, gated by the `option-forms` setting: roughly 240 rules driven by a dedicated `--f-*` token namespace, made context-aware by the `.form--light` / `.form--dark` utility classes, covering inputs, labels, legends, help, placeholders, focus, the required marker, every button role, checkboxes, radios, selects, ranges, progress bars and tabs. Both context classes are registered as Bricks global classes by the ACSS import, so they are already in the picker.
 
-Where ACSS covers it, **brand through `--f-*` and put the context class on the wrapper.** Do not remap the plugin's own root variables as well: ACSS's rules sit at `(0,2,0)` and above, a `.wsf-form` remap is `(0,1,0)`, and ACSS wins wherever the two touch the same property — so a parallel bridge is dead code that looks live. Starting point: `knowledgebase/assets/acss-form-brand.css`.
+Where ACSS covers it, **ACSS is the form layer's one owner, configured at framework level:**
 
-⚠️ **A form wrapper with neither context class gets none of it** and renders the plugin's stock skin. Every form needs one.
+- **Brand values live in ACSS's native form settings, not in any CSS file.** `automatic_css_settings` exposes ~200 form keys — `f-light-*` and `f-dark-*` per context, plus shared ones like `f-label-font-weight`, `f-btn-font-weight` and the `f-*-size-min` / `-max` pairs. Set them through the same `save_settings()` pass as palette and type (ACSS configuration, below). They compile into `automatic.css` as each token's **fallback** — `var(--f-light-input-border-color, var(--neutral))` — so the setting is the site-wide value.
+- **That leaves the `--f-*` custom properties free as per-instance hooks.** Setting a `--f-*` token in CSS is legitimate only scoped to one form instance (a wrapper class such as a footer signup), where it overrides the compiled fallback exactly where it applies. A site-wide `:root { --f-* }` block is a second source of truth for values the settings already own — don't write one.
+- **Per form, the only decision is the context class** — `form--light` or `form--dark` on the wrapper, chosen by the form's own look (below). Configure **both** contexts in the settings, even if the site uses one today.
+- **WS Form's own styler is retired:** `css_style` off, `css_layout` and `css_compile` on, `css_inline` off. No `--wsf-*` remaps anywhere — ACSS's rules sit at `(0,2,0)`+ against a `.wsf-form` remap's `(0,1,0)`, and once the skin is off its `--wsf-*` consumers are gone too, so a remap is dead code that looks live.
+- **The child theme keeps two things only:** font-family rules (no `f-*` key sets it — ACSS sets font-family only on radio and checkbox labels) and the base-chrome resets that `css_style` off takes with it (the section fieldset, `.wsf-hidden-element`, `.wsf-inline`; `03`).
+- **A CLI regen must carry the platform flags.** ACSS compiles its WS Form layer only when the platform enabler is injected, and that happens only in an admin context; a plain WP-CLI `save_settings()` silently ships `automatic.css` without the form layer (`03`). Regenerate with the admin-context bootstrap, and after any regen confirm the served CSS still contains `var(--f-` consumers.
+
+Reference and child-theme remainder: `knowledgebase/assets/acss-form-brand.css`. Per-brand a11y gate, every time: input border ≥ 3:1 against its field, placeholder opacity 1 (compositing breaks contrast math), focus visible in both contexts, required marker ≥ 3:1.
+
+⚠️ **A form wrapper with neither context class gets none of it** and renders the plugin's stock skin — or, with the styler retired, next to no skin at all. Every form needs one.
 
 ⚠️ **The context class describes the FORM, not the section behind it.** `.form--dark` means a dark form — dark fills, light text. A white-fielded form sitting on a navy band is still a *light* form and takes `.form--light`, with only the label/legend/help text — which render outside the field, on the dark surface — overridden. Choose by the class's own defaults, not by the background: pick the opposite and you spend the build overriding them back one token at a time, since every state (background, text, placeholder, border, and their hover twins) is an independent token that surfaces separately. That reads as the framework fighting you and is not.
 
@@ -91,6 +100,8 @@ Scroll reveal on this stack is the in-house toolkit, **not** Bricks' or Advanced
 
 **Anything whose resting state is invisible needs a fail-safe gate.** The hidden state is scoped under a class set by an inline `<head>` script, so no-JS means nothing is hidden. This generalises past animation: any technique that hides content and reveals it with script must fail open, or a script failure becomes invisible content for users and crawlers alike.
 
+⚠️ **Gating the hidden rule re-scopes the revealed rule too.** The hidden/revealed pair is a specificity *relationship*, not two independent rules: adding `html.js-anim` to the hidden selector lifts it to `(0,2,1)`, above an ungated `.anim-visible` reveal at `(0,2,0)`, and the reveal goes inert — content flashes, then hides for good. Carry the same prefix on both blocks (`html.js-anim :is(…).anim-visible`, `(0,3,1)`). A syntax check proves nothing here: the broken file parses perfectly. Assert revealed > hidden directly, and validate that assertion against a known-good control and a known-broken one, or the checker can be wrong in the same direction as the code. WCDP + JBM, 2026-08-11 — shipped to a live site, rolled back from backups; the hardened pair is in `assets/animations/animations.css`.
+
 **Anything applied by JS needs an RUCSS exclusion.** Used-CSS tooling cannot see a class that only ever appears at runtime, strips the rule, and leaves the content hidden for good. Same failure as the gate, arriving from the other direction.
 
 **Restraint is the brand.** One reveal per section; stagger for card grids; never on header, nav, sticky elements, footer utility rows, form fields or anything above the fold. Roll out template-by-template so a vocabulary mistake surfaces on one page.
@@ -110,7 +121,7 @@ SECTION (Bricks Section element, BEM block class)
 - The `__inner` wrapper is dead. The ACSS Container class replaces it entirely — it handles max-width and centering.
 - Padding is stripped from BEM container elements. Section-level spacing is handled by ACSS section spacing — set it on the Section, do not write it into the BEM CSS.
 
-**Bricks Theme Style requirements** — set per project:
+**Bricks Theme Style requirements** — set per project (where each lives, and the unset-tag default of h3: `02` → Theme Style keys):
 
 - HTML font-size = `var(--root-font-size)`
 - Container width = `var(--content-width)`
@@ -158,9 +169,9 @@ The authoritative values live in the project's ACSS token map, extracted per pro
 
 **Typography.** Font sizes: `--h1` through `--h6`, and `--text-xxl` / `--text-xl` / `--text-l` / `--text-m` / `--text-s` / `--text-xs` (same `xs` floor — no `2xs`). Global heading variables: `--heading-font-family`, `--heading-color`, `--heading-line-height`, `--heading-font-weight`, `--heading-letter-spacing`, `--heading-text-transform`. Per-level overrides: `--h1-color`, `--h1-font-weight`, etc. Global text: `--text-font-family`, `--text-color`, `--text-line-height`, `--text-font-weight`. To resize a heading visually without changing its tag, set `font-size: var(--h4)` on an `h2`. No hardcoded `font-family` or `font-size`.
 
-ACSS heading and text sizes are fluid by default — the rendered values come from `clamp()` declarations in an `@supports` block in `automatic.css`, not from the rem fallbacks in `automatic-variables.css`. When auditing or overriding sizes, read the right file and preserve fluid scaling (see `03`).
+ACSS heading and text sizes — and the `--space-*` scale — are fluid by default: the rendered values come from `clamp()` declarations in an `@supports` block in `automatic.css`, not from the rem fallbacks in `automatic-variables.css`, which read up to ~2× too large at the small end of the space scale. When auditing or overriding sizes, or judging whether a token step is right for a component, read the right file and preserve fluid scaling (see `03`).
 
-**Colors.** Utility classes `.text--{color}`, `.bg--{color}`, `.link--{color}`. Shades: `-ultra-light`, `-light`, `-mid`, `-dark`, `-ultra-dark`. Variables: `var(--{color})`, `var(--{color}-{shade})`. Semantic colors: `--warning`, `--info`, `--success`, `--danger`. Color partials for computed work: `--{color}-hex`, `-hsl`, `-h`, `-s`, `-l`, `-rgb`, `-r`, `-g`, `-b`. Local override pattern: `.my-card--alt { --base-dark: var(--secondary); }`. Every color value in output is an ACSS variable — no hex, no rgb(), no named colors.
+**Colors.** Utility classes `.text--{color}`, `.bg--{color}`, `.link--{color}`. Shades: `-ultra-light`, `-light`, `-mid`, `-dark`, `-ultra-dark`. Variables: `var(--{color})`, `var(--{color}-{shade})`. Semantic colors: `--warning`, `--info`, `--success`, `--danger`. Color partials for computed work: `--{color}-hex`, `-hsl`, `-h`, `-s`, `-l`, `-rgb`, `-r`, `-g`, `-b`. The `-rgb` partial is space-separated, so compose it with slash syntax — `rgb(var(--x-rgb) / a)`, never legacy `rgba(var(--x-rgb), a)`, which invalidates the whole declaration (`03`); prefer a ready-made `-trans-N` token where one exists. Local override pattern: `.my-card--alt { --base-dark: var(--secondary); }`. Every color value in output is an ACSS variable — no hex, no rgb(), no named colors.
 
 ACSS ships `.bg--ultra-light` / `.bg--light` / `.bg--dark` / `.bg--ultra-dark` but no `.bg--primary` — a brand-color section system is project-defined. ACSS auto-derives intermediate color shades at full saturation, which can be off-brand; treat auto-derived intermediates as needing design review before use.
 
@@ -285,6 +296,8 @@ foreach ($bad as $bk) {
 ```
 
 Correct keys: `_widthMax` / `_widthMin` / `_heightMax` / `_heightMin` (suffix, not prefix), `_border.radius` (nested, side keys map to corners), `_objectFit` (leading underscore). When hits are found, migrate in one sweep — read the value, write it to the correct key, unset the old one.
+
+Two limits on the snippet. **It does not see bare (non-underscored) keys** — `width`, `height`, `color` on a class — so a clean 0 from it says nothing about them, and a bare key is not automatically wrong: element-specific controls are bare (`nav-menu` genuinely owns `menuGap` / `menuTypography`, `divider` owns `width` / `height` / `color`). Resolve which element types wear the class and read the rendered CSS before judging one (`03`). **And where the correct key already holds a different, deliberate value, delete the wrong-key setting rather than migrating it** — migrating overwrites live design with a stale number (WCDP, 2026-08-18: a bare `1.5rem` would have replaced a deliberate 44px touch target).
 
 The migration is a pure win: settings that did nothing become settings that do something. The values were already in the DB, just dormant — no element-tree restructure, no DOM change. Expect the layout to *gain back* constraints it was always supposed to have (max-widths capping content, min-heights setting card floors, radii rounding corners). Spot-check afterward; if one restored constraint produces an unwanted shift, unset that class rather than reverting the sweep.
 

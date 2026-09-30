@@ -79,7 +79,7 @@ The knowledgebase on disk does nothing. It only governs behavior while it sits i
 At the start of any build session:
 
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
-2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. `03` opens with an **Index** of every entry title — scan that first, then grep the file for the exact title you need. Never read `03` whole: at ~24,000 words it triggers the compaction described above, evicting the very canon that sent you to it. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
+2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. `03` opens with an **Index** of every entry title — scan that first, then grep the file for the exact title you need. Never read `03` whole: at ~31,000 words it triggers the compaction described above, evicting the very canon that sent you to it. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
 3. **Read back the project phase.** Phase is not informational and it is not a note. It is the contract that governs how freely you act for the rest of the session, and like a Bricks schema it is discovered, never assumed.
 
    Read it from hard rule 0 at the top of the project's `CLAUDE.md` (`grep -m1 '^0\. \*\*PHASE:' CLAUDE.md`). Cross-check `project-context.md` Current Status and the presence of `.claude/settings.json`. Then state the readback before touching anything:
@@ -213,7 +213,7 @@ When you discover something during a build, capture it. The knowledgebase only r
 
 - A **build-stack gotcha** — a non-obvious behavior, a silent failure, a thing that bit you in Bricks/ACSS/ACF/WS Form/Rank Math — goes in `03`. It has a symptom and an incident.
 - A **hosting/cutover/performance gotcha** — the box, the CDN, the caches, the migration — goes in `04`. Same format, same bar. If you're unsure which: ask whether the fix is in the build or in the infrastructure.
-- A **verified schema** — a Bricks element or setting shape discovered via the golden rule — goes in the schema library in `02`. It is reference, not an incident.
+- A **verified schema** — a Bricks element or setting shape discovered via the golden rule — goes in the schema library in `02`. It is reference, not an incident. **Projects carry no copy of `02`**, so a schema found mid-build goes in the project's `03` below the seam, tagged `[for 02 harvest]` (the gotcha stays in `03`, the shape moves to `02` at harvest step 3; `grep -n 'for 02 harvest'` collects them). Settled at the WCDP harvest, 2026-09-30, after the convention had carried a dozen schemas through one build without loss.
 - A **convention** — a settled "this is how we build it" decision — goes in `01`. Conventions are rare mid-build; most of the time a discovery is a gotcha or a schema. A convention usually arrives by promotion (see harvest below), not by mid-build capture.
 
 **Where it goes.** New entries append to **the project's copy** of the file, never to the master in `claude-config`. Each project runs on its own copy, inherited at kickoff. The master changes only at harvest — with one exception, for corrections: see "The correction exception" below.
@@ -328,6 +328,14 @@ Searching a web server's error log for mail failures returns dozens of hits on `
 - **Prefer the application's own gated log to the server's.** A form plugin that logs success only inside `if ( $wp_mail_return )` is telling you the relay returned a 250 accept — which cleanly separates "the app failed to send" from "it sent and something downstream ate it." Two different investigations.
 
 > **(TAB, 2026-08-31 — first recorded.)** A lead was reported as "never sent." Four mail-related greps over the error log returned 768 hits between them and **not one was a mail error**. The actual answer came from the form plugin's gated success log plus an HTTP-level reconciliation of submit POSTs against stored rows: every submission had been accepted, and the message had in fact been delivered ~3 minutes after the complaint was raised.
+
+### A third shape — a real result that measures the wrong property
+
+The false negative misreads an empty result, and its mirror is a keyword count that turns out to be all false positives. In this third shape, the result is **real**, but it measures a property the conclusion isn't about. A defect is reported from `querySelectorAll(…).length` ("two extra arrows at every width below 1279"), and the elements turn out to have been `display:none` the whole time. They did exist. The question was whether they *rendered*, and nothing had measured that.
+
+**The rule: when the claim is about what a user sees, measure what a user sees.** Use `getComputedStyle(el).display`, a non-zero `getBoundingClientRect()`, and `el.offsetParent !== null` for focusability. Check whose rule wins, too: `CSS.getMatchedStylesForNode` over CDP names the exact selector. **The tell is a report whose evidence is a count and whose conclusion is visual.** Corollary: before writing a CSS rule to suppress third-party output, check whether the vendor already suppresses it. A redundant rule looks load-bearing to the next person and never gets removed.
+
+> **(WCDP, 2026-09-14 — first recorded.)** A slider plugin's auto-generated arrows were reported as a live defect on two carousels, and a CSS rule was written to hide them. The plugin's own stylesheet had been hiding them all along; they had never been visible or focusable at any width.
 
 ---
 

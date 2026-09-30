@@ -1,130 +1,124 @@
 /* =========================================================================
-   Branding WS Form through ACSS's own form system
-   Starting artifact. Copy into the child theme and change the right-hand side.
+   WS Form on ACSS — the child-theme remainder, plus the settings it assumes
+   Reference artifact for `01` → "Skinning third-party UI", step 1.
 
-   READ THIS FIRST
-   ACSS ships a first-class WS Form layer, gated by the `option-forms` setting:
-   roughly 240 rules driven by a dedicated `--f-*` token namespace, made
-   context-aware by the `.form--light` / `.form--dark` utility classes. It
-   already covers inputs, labels, legends, help text, placeholders, focus, the
-   required marker, every button role (primary, secondary, next, prev, save,
-   reset, clear, upload), checkboxes, radios, selects, ranges, progress bars
-   and tabs.
+   READ THIS FIRST — THE BRAND VALUES DO NOT LIVE IN THIS FILE.
+   ACSS ships a first-class WS Form layer, gated by `option-forms`: ~240 rules
+   on the `--f-*` token namespace, made context-aware by `.form--light` /
+   `.form--dark`. It covers inputs, labels, legends, help, placeholders, focus,
+   the required marker, every button role, checkboxes, radios, selects, ranges,
+   progress bars and tabs.
 
-   So do NOT remap WS Form's own `--wsf-form-*` root tier to brand a form on
-   this stack. That rebuilds a system the framework already owns, and it loses:
-   ACSS's rules sit at (0,2,0) and above, while a `.wsf-form` remap is (0,1,0),
-   so ACSS wins wherever the two touch the same property. Brand through `--f-*`
-   instead, and put `form--light` or `form--dark` on the form's wrapper.
+   The house convention (WCDP, 2026-08-18):
 
-   The generic token-tier bridge — remapping a plugin's own root variables — is
-   still the right move for a plugin ACSS does NOT cover. See `01`.
+   1. BRAND IN ACSS'S NATIVE FORM SETTINGS. `automatic_css_settings` exposes
+      ~200 form keys: `f-light-*` / `f-dark-*` per context, plus shared keys
+      (`f-label-font-weight`, `f-btn-font-weight`, the `f-*-size-min` / `-max`
+      px pairs). The setting keys are the token names without the leading
+      dashes — `f-light-btn-background` compiles to `--f-light-btn-background`
+      — and each value lands in automatic.css as that token's FALLBACK:
+          var(--f-light-input-border-color, var(--neutral))
+      Script them in the same save_settings() pass as palette and type:
 
-   ⚠️ A form wrapper carrying NEITHER class gets none of this and renders WS
-   Form's stock skin. Every form needs one. Both classes are registered as
-   Bricks global classes by the ACSS import, so they are already in the picker.
+        wp_set_current_user( 1 );
+        $db   = \Automatic_CSS\Model\Database_Settings::get_instance();
+        $vars = array_merge( $db->get_vars(), [
+            'f-light-input-border-color'        => 'var(--neutral)',
+            'f-light-input-placeholder-opacity' => '1',
+            // … the rest of the set below, both contexts
+        ] );
+        $db->save_settings( $vars, true );   // FULL merged set, never deltas
 
-   NOTE — five size tokens carry a malformed fallback, `font-size:
-   var(--f-input-size, --text-m)`, where the fallback is a bare custom-property
-   name rather than a var() call. It is LATENT, not live: ACSS declares all
-   five at :root in automatic.css, so the fallback branch is never reached.
-   Setting them below is belt-and-braces, not a fix. (A malformed fallback is
-   only a bug if the fallback is reachable — check for a declaration before
-   calling it one.)
+      ⚠️ Run it in an admin context (`03` → ACSS headless save_settings). A
+      plain WP-CLI regen compiles WITHOUT the WS Form platform layer and
+      reports success. After any regen, grep the served CSS for `var(--f-`.
 
-   VERIFY VISUALLY. WS Form builds its fields client-side from a JSON blob, so
-   curl returns an empty <form> and proves nothing about the rendered result.
+   2. `--f-*` IN CSS = PER-INSTANCE HOOKS ONLY. Because the settings supply the
+      fallback, a `--f-*` custom property set on one form's wrapper overrides it
+      exactly there. That is the only legal `--f-*` CSS. No site-wide
+      `:root { --f-* }` block — it would be a second source of truth for values
+      the settings already own.
+
+   3. PER FORM, CHOOSE THE CONTEXT CLASS: `form--light` or `form--dark` on the
+      wrapper. Both are registered as Bricks global classes by the ACSS import.
+      A wrapper with neither gets nothing. Configure BOTH contexts in the
+      settings regardless of which one the site uses today.
+
+   4. WS FORM'S STYLER IS RETIRED: css_style off, css_layout on, css_compile
+      on, css_inline off. No `--wsf-*` remaps anywhere — ACSS out-specifies
+      them, and with the skin off their consumers are gone.
+
+   What stays in the child theme is below: one per-instance hook example,
+   font family, and the base chrome that css_style off takes with it.
+
+   Sizes need nothing here. They are `f-*-size-min` / `-max` settings, and
+   ACSS declares the resulting `--f-*-size` tokens itself. (Five of those
+   tokens carry a malformed bare-name fallback, `var(--f-input-size,
+   --text-m)`; it is latent, never reached while ACSS declares the tokens.)
+
+   VERIFY VISUALLY. WS Form builds its fields client-side from a JSON blob,
+   so curl returns an empty <form> and proves nothing about the render.
    ========================================================================= */
 
-:root {
-	/* --- structural, both contexts ------------------------------------ */
-	--f-input-size:    var(--text-m);   /* all five required — see the bug above */
-	--f-label-size:    var(--text-s);
-	--f-help-size:     var(--text-s);
-	--f-legend-size:   var(--text-l);
-	--f-btn-text-size: var(--text-m);
 
-	--f-label-font-weight: 600;
-	--f-btn-font-weight:   700;
+/* === THE SETTINGS SET TO PIN — both contexts, every state ================
+   Not CSS: this is the checklist of `f-light-*` keys to write in step 1.
+   Repeat it for `f-dark-*`. Values are illustrative; measure per brand.
 
-	/* Left at ACSS's defaults deliberately: --f-input-height is 3.125rem
-	   (50px), already past SC 2.5.8's 44px, and --f-input-border-radius /
-	   --f-btn-border-radius already resolve to var(--btn-radius). */
+   ⚠️ EVERY STATE IS ITS OWN KEY, AND THEY DEFAULT INDEPENDENTLY. Background,
+   text, placeholder and border each have a hover twin that falls back to an
+   ACSS default chosen for a different surface. Set a base and skip its twin
+   and the control changes colour under its own text on hover.
 
-	/* --- LIGHT: forms on white / paper surfaces ----------------------- */
-	/* ACSS defaults the border to --neutral-light. Check it: on white that is
-	   commonly around 1.4:1 and fails SC 1.4.11's 3:1 for a control boundary.
-	   The mid neutral usually clears it comfortably. */
-	/* ⚠️ EVERY STATE IS ITS OWN TOKEN, AND THEY DEFAULT INDEPENDENTLY.
-	   Background, text, placeholder and border each have a `-hover` twin that
-	   falls back to an ACSS default chosen for a different surface. Set a base
-	   and skip its twin and the control changes out from under its own colours
-	   on hover — which is how you get text on a background nobody checked it
-	   against. Pin the whole set, both states. */
-	--f-light-input-background:             var(--white);
-	--f-light-input-color-background-hover: var(--white);
-	--f-light-input-border-color:           var(--neutral);
-	--f-light-input-border-color-hover:     var(--neutral);
-	--f-light-input-text-color:             var(--base);
-	--f-light-input-text-color-hover:       var(--base);
-	--f-light-input-placeholder-color:       var(--neutral);
-	--f-light-input-placeholder-color-hover: var(--neutral);
+     f-light-input-background              var(--white)
+     f-light-input-color-background-hover  var(--white)
+     f-light-input-border-color            var(--neutral)   ACSS default
+     f-light-input-border-color-hover      var(--neutral)   (--neutral-light)
+                                                            is ~1.4:1 on white
+     f-light-input-text-color              var(--base)
+     f-light-input-text-color-hover        var(--base)
+     f-light-input-placeholder-color       var(--neutral)
+     f-light-input-placeholder-color-hover var(--neutral)
+     f-light-input-placeholder-opacity     1      ⚠️ defaults to 0.5 — see
+                                                  checklist item 7
+     f-light-label-text-color              var(--base)
+     f-light-legend-text-color             var(--base)
+     f-light-help-text-color               var(--neutral)
+     f-light-focus-color                   var(--primary)
+     f-light-required-color                (defaults to --action; measure it)
 
-	/* ⚠️ ACSS renders ::placeholder at `opacity: 0.5`. Opacity is a separate
-	   property from colour, so the token you set composites against the field
-	   fill before anyone sees it — a mid neutral at 50% on white lands around
-	   2:1 while DevTools still reports the token value and every contrast sum
-	   done from that token says it passes. Take it to 1 and control legibility
-	   through the colour, which is the only value a contrast check can see. */
-	--f-light-input-placeholder-opacity: 1;
-	--f-light-label-text-color:         var(--base);
-	--f-light-legend-text-color:        var(--base);
-	--f-light-help-text-color:          var(--neutral);
+     The primary button's BORDER is a separate key from its fill, and
+     --btn-border-width is 2px — change only the fill and a 2px ring in the
+     old colour survives. Pin them together, every state. (ACSS couples
+     border to fill for the secondary / next / prev / save / reset / clear
+     roles; primary is the one it decouples.)
+     f-light-btn-background         / f-light-btn-border-color
+     f-light-btn-background-hover   / f-light-btn-border-color-hover
+     f-light-btn-text-color         / f-light-btn-text-color-hover
 
-	/* Focus defaults to --primary. Override only if the brand specifies a
-	   different focus colour; check the ratio against the page surface. */
-	--f-light-focus-color: var(--primary);
+     The dark tier's focus colour and required marker default to light-
+     surface brand colours and routinely fail 3:1 on a deep background.
+   ========================================================================= */
 
-	--f-light-btn-text-color:       var(--white);
-	--f-light-btn-text-color-hover: var(--white);
 
-	/* The primary button's BORDER is a separate token from its fill, and
-	   --btn-border-width is 2px by default — so changing only the background
-	   leaves a 2px ring in the old colour. Pin them together, in every state.
-	   (ACSS couples border to background for the secondary / next / prev /
-	   save / reset / clear roles. Primary is the one it decouples.) */
-	--f-light-btn-background:         var(--primary);
-	--f-light-btn-border-color:       var(--primary);
-	--f-light-btn-background-hover:   var(--primary-hover);
-	--f-light-btn-border-color-hover: var(--primary-hover);
-	/* The required marker already defaults to --action. */
-
-}
-
-/* === A LIGHT FORM ON A DARK SECTION =====================================
+/* === PER-INSTANCE HOOK: A LIGHT FORM ON A DARK SECTION ====================
    ⚠️ THE CONTEXT CLASS DESCRIBES THE FORM, NOT THE SECTION BEHIND IT.
    `.form--dark` means a DARK form — dark fills, light text. A white-fielded
-   form sitting on a navy band is still a LIGHT form: it takes `.form--light`.
+   form on a navy band is still a LIGHT form and takes `.form--light`. Pick
+   the opposite and you spend the build overriding every default back, one
+   independent token at a time.
 
-   Get this backwards and you spend the build overriding ACSS's dark defaults
-   back to light one token at a time — fill, then hover fill, then placeholder,
-   then hover placeholder, then border, then the button — each surfacing
-   separately, because every state is its own token. That is not the framework
-   being awkward. It is a class being asked to render its own opposite.
-
-   With the right class the field needs nothing at all: `.form--light` already
-   gives a light fill with dark text and a dark placeholder. Only what renders
-   OUTSIDE the field, directly on the dark section, has to change. Put these on
-   your own wrapper class, applied alongside `form--light`: */
+   With the right class the field needs nothing. Only what renders OUTSIDE
+   the field, directly on the dark section, changes — scoped to this one
+   instance, on your own wrapper class applied alongside `form--light`. */
 .form-on-dark {
 	--f-light-label-text-color:  var(--white);
 	--f-light-legend-text-color: var(--white);
 	--f-light-help-text-color:   var(--white);
 
-	/* The submit too: a mid brand colour picked against a light page will
-	   usually fail 3:1 against a dark section even while its own label passes
-	   4.5:1 — the fill and the label are separate checks. Border tracks fill;
-	   it is a separate token, 2px, and the outermost edge. */
+	/* The submit too: a mid brand colour picked for a light page usually
+	   fails 3:1 against a dark section even while its own label passes 4.5:1.
+	   Border tracks fill — separate token, 2px, the outermost edge. */
 	--f-light-btn-background:         var(--tint-on-dark);
 	--f-light-btn-border-color:       var(--tint-on-dark);
 	--f-light-btn-text-color:         var(--dark-surface);
@@ -133,20 +127,43 @@
 	--f-light-btn-text-color-hover:   var(--dark-surface);
 }
 
-/* `.form--dark` is for a genuinely dark form — dark fill, light text on it. If
-   that is the design, brand the --f-dark-* tier the same way, remembering that
-   its focus colour and required marker default to light-surface brand colours
-   and routinely fail 3:1 on a deep background. Just do not reach for the class
-   because the section is dark. */
+
+/* === FONT FAMILY =========================================================
+   No `f-*` key sets it: ACSS sets font-family only on radio and checkbox
+   labels. Set the faces directly — not through `--wsf-*` variables, whose
+   declarations left with the retired styler skin. */
+.wsf-form,
+.wsf-form :is(input, select, textarea, button) {
+	font-family: var(--text-font-family);
+}
+.wsf-form button.wsf-button {
+	font-family: var(--heading-font-family);
+}
 
 
-/* The one surface ACSS's form layer does not reach is font family — it sets
-   font-family only on radio and checkbox labels, so WS Form's own family
-   variables still own everything else. This is the legitimate remainder of the
-   token-tier bridge. Keep it this small. */
-.wsf-form {
-	--wsf-form-font-family:         var(--text-font-family);
-	--wsf-field-button-font-family: var(--heading-font-family);
+/* === BASE CHROME THAT css_style OFF TAKES WITH IT ========================
+   css_style off dequeues WS Form's whole base stack, not just the skin; only
+   the layout CSS survives. ACSS styles legends but neither hides them nor
+   resets fieldsets. Without these: every section <fieldset> shows the UA
+   2px groove border, a section label set not to render prints anyway, and
+   horizontal choice rows stack. (`03` → WS Form css_style.) */
+.wsf-form .wsf-section {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-inline-size: 0;
+}
+.wsf-form .wsf-hidden-element {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+.wsf-form .wsf-inline {
+	display: inline-block;
+	margin-inline-end: var(--space-s);
 }
 
 
@@ -166,21 +183,19 @@
         happens to a mid-brand-blue button on navy.
      3. Focus ring vs every surface a form sits on. ACSS's dark default is the
         light-surface brand colour and commonly fails on a dark band.
-     4. Required marker on a dark surface — same failure, same cause.
+     4. Required marker on a dark surface — same failure, same cause. 3:1.
      5. Placeholder vs the field fill, in both contexts. It flips with the
         context class, so it needs checking twice.
      6. Label and help text vs the section surface, in both contexts.
      7. OPACITY, before you trust any of the numbers above. A contrast sum
         done from a colour token is only valid if that colour reaches the
-        screen undiluted. ACSS renders ::placeholder at opacity 0.5, which
-        composites it against the field fill and can turn a 5.4:1 token into
-        2.1:1 on screen. Nothing in DevTools' computed `color` shows this —
-        it reports the token. Grep the cascade for `opacity` on any element
-        you have colour-checked, and set it to 1 rather than compensating
-        with a darker token.
+        screen undiluted. ACSS renders ::placeholder at opacity 0.5 by
+        default, which composites it against the field fill and can turn a
+        5.4:1 token into 2.1:1 on screen. DevTools' computed `color` reports
+        the token, not the result. Set the opacity key to 1 rather than
+        compensating with a darker colour, and grep the cascade for
+        `opacity` on anything you have colour-checked.
      8. Every check above, in the HOVER state as well as the base state.
-        Background, text, placeholder and border each have an independent
-        `-hover` token, so a control can be compliant at rest and illegible
-        on hover. Build the matrix — context × state × role — and resolve it
-        from the SERVED stylesheet, not from what you think you set.
+        Build the matrix — context × state × role — and resolve it from the
+        SERVED stylesheet, not from what you think you set.
    ========================================================================= */

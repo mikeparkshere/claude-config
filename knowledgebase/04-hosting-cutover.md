@@ -69,6 +69,19 @@ Owner (the PHP-FPM/Apache user) keeps full access, so the site and any Remote-SS
 **Also:** the per-webapp Nginx vhost (`/etc/nginx-rc/conf.d/*.conf`) is root-owned and unreadable to the webapp user, and the RunCloud API does not expose it — editing Nginx is not an available lever without panel or root access. Perms need none of them.
 **First seen:** TAB, 2026-06-27 — a cutover left project docs in the web root; 3 of ~100 files (two `.html` + one `.png`, all `644`) leaked at 200 while `600` favicons were already 403. `chmod -R o-rwx` flipped all to 403 with zero site impact, and superseded a planned "needs an Nginx deny rule via the panel" workaround. **Mechanism corrected JBM, 2026-09-03** — the TAB incident was real and the fix was right, but the *diagnosis* over-generalised from `.html`/`.png` (genuinely Nginx-served) to all extensions. JBM then repeated the error in reverse: a 07-30 sweep concluded `.htaccess` was a no-op for `.md`, chmod'd the files it found, and left ten `/docs/` files at `644` and publicly readable for five more weeks — a per-directory `Deny from all` would have caught every one. Probe matrix run 09-03 settled it; the original 07-30 test failed to the Hub-cache trap noted above.
 
+### A static `.webmanifest` is served as `application/octet-stream` — nginx and Apache ship no mapping for the extension
+**Symptom / When:** You add `site.webmanifest` as a file and reference it with `<link rel="manifest">`. It returns `200`, but `content-type: application/octet-stream`. Install prompts and home-screen icons behave inconsistently, and nothing errors loudly.
+**Why:** Neither nginx nor Apache carries a default MIME mapping for `.webmanifest`. WordPress's `mime_types` filter does **not** help: it governs uploads and WP-served files, not static assets the web server hands back directly. On RunCloud's hybrid stack this is worse than it looks — nginx serves genuine static files without ever consulting Apache, so an `.htaccess` `AddType` never runs (same mechanism as the static-file entry above).
+**Fix:** Render the manifest through PHP instead of shipping it as a file — a rewrite endpoint that sets the header itself. Correct on every environment with no server config to remember, and it lets `start_url` / `scope` / icon URLs derive from `home_url()` so the manifest survives being cloned to staging or production:
+```php
+header( 'Content-Type: application/manifest+json; charset=' . get_bloginfo( 'charset' ) );
+echo wp_json_encode( $manifest, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT );
+exit;
+```
+**Watch for:** `redirect_canonical` runs on `template_redirect` before your handler and treats the unrecognised path as a trailing-slash candidate — a dot in the path does not exempt it — so every request first eats a `301` to `/site.webmanifest/`, and user agents that don't follow it see no manifest. Suppress it for that request only, gated on your own query var: `add_filter( 'redirect_canonical', fn( $r ) => get_query_var( 'my_var' ) ? false : $r );`.
+**Verify:** `curl -sk -o /dev/null -D - <url>` — the FIRST response must be `200` (following redirects hides the 301) with `content-type: application/manifest+json`.
+**First seen:** WCDP, 2026-08-08 — verified the static file served as octet-stream on Local (nginx) before switching to a PHP endpoint; the canonical 301 surfaced on the endpoint the same day (WP 7.0.3).
+
 ### RunCloud Let's Encrypt via API — `environment` is `live` (not `production`), and issuance takes minutes (poll ≥15)
 **Symptom / When:** `POST /servers/{id}/webapps/{wid}/ssl` to issue LE. (1) `"environment":"production"` → 422 "selected environment is invalid." (2) After a valid request, `validUntil` stays `null` and 443 stays closed for several minutes — which reads as failure.
 **Why:** RunCloud's LE env enum is `live`/`staging`. And issuance (HTTP-01 validation + nginx deploy) is an **async background job** that commonly takes ~8–10 minutes, not seconds — a 5-minute poll times out before the cert lands.
@@ -146,11 +159,15 @@ Verify all four states with cache-busters: bare → 401, creds → 200, an ACME 
 - nginx front end → `/home/runcloud/logs/nginx/app-<name>_{access,error}.log`
 **First seen:** 2026-07-14.
 
-### Cross-server — `runcloud@<other-box>` is already key-authed; just rsync
-**Symptom / When:** You're about to set up a GitHub mirror, SFTP-via-local, or a RunCloud Git Pull integration purely to move files between two servers in the same account.
-**Why:** The `runcloud` user already has SSH key auth configured between RunCloud-managed servers in the account (`~/.ssh/` holds the keypair and the relevant `authorized_keys`).
-**Fix:** `rsync -az source/ runcloud@<dest>:dest/`. No key dance. Destination addresses come from the `/servers` API listing; the current box's own is `curl -s ifconfig.me`.
-**First seen:** 2026-07-14, on a cross-server migration.
+### Cross-server — test `runcloud@<other-box>` key auth first; if refused, grant a dedicated dated key through the API and revoke it at handoff
+**Symptom / When:** You're about to set up a GitHub mirror, SFTP-via-local, or a RunCloud Git Pull integration purely to move files between two servers in the same account — or a direct `rsync`/`ssh` to the other box fails with `Permission denied (publickey)`.
+**Why:** Inter-box trust exists **only where someone installed it**. It is not an account-wide RunCloud default: one pair of boxes had working `runcloud`→`runcloud` key auth (2026-07-14), but another destination's `authorized_keys` held a single entry — the developer's laptop. ⚠️ This entry previously said `runcloud` "already has SSH key auth configured between RunCloud-managed servers in the account"; that generalised one observed pair into a default and was wrong. Separately, the **v3 API does manage SSH keys** (it is not panel-only): `POST /servers/{id}/ssh/credentials` with `{"label","username":"runcloud","publicKey"}` returns an `id`; `DELETE /servers/{id}/ssh/credentials/{credId}` revokes it.
+**Fix:**
+```bash
+ssh -o BatchMode=yes runcloud@<dest-ip> true && echo trusted   # test first — BatchMode fails fast instead of prompting
+```
+If trusted: `rsync -az source/ runcloud@<dest>:dest/`. If refused: generate a **dedicated** key (`~/.ssh/<project>_migrate`, an `~/.ssh/config` alias with `IdentitiesOnly yes`), register it via `POST …/ssh/credentials` with a **dated** label, use it, and `DELETE` it at handoff — then confirm a refused login. The key logs in as `runcloud`, which owns **every** webapp on the destination box, so it **cannot be scoped technically**: write the scope ("this webapp only, not even read-only elsewhere") into the project `CLAUDE.md` as a hard rule, and delete any staging dir of dumps on the destination *before* revoking. Destination addresses come from the `/servers` API listing; the current box's own is `curl -s ifconfig.me`.
+**First seen:** 2026-07-14, on a cross-server migration (a pair that happened to be trusted). **Corrected WCDP, 2026-09-30** — staging → production push refused with `Permission denied (publickey)`; a dedicated key was registered via the API, used for the migration and revoked the same day (API 200, then a refused login confirmed it).
 
 ### A `GET` 404 on a RunCloud v3 route does not mean the route is absent — OPTIONS-probe before concluding
 **Symptom / When:** `GET /webapps/{id}/settings/<thing>` returns 404, and the obvious reading is that the API doesn't expose the feature. Reporting that sends the work to the panel unnecessarily.
@@ -159,7 +176,7 @@ Verify all four states with cache-busters: bare → 401, creds → 200, an ACME 
 ```bash
 curl -s -X OPTIONS -i "$URL" | grep -i '^allow:'
 ```
-Write-only routes confirmed this way: `PATCH /webapps/{id}/settings/php` (PHP version), `PATCH /webapps/{id}/settings/fpmnginx` (FPM process manager, PHP-INI, per-app security headers — partial PATCH is fine and idempotent on no-change), `PATCH /servers/{id}/services` (`start|stop|restart|reload` only).
+Write-only routes confirmed this way: `PATCH /webapps/{id}/settings/php` (PHP version), `PATCH /webapps/{id}/settings/fpmnginx` (FPM process manager, PHP-INI, per-app security headers — partial PATCH is fine and idempotent on no-change), `PATCH /servers/{id}/services` (`start|stop|restart|reload` only), `GET/POST /servers/{id}/ssh/credentials` (OPTIONS `GET,HEAD,POST`; body `{"label","username","publicKey"}`) and `DELETE /servers/{id}/ssh/credentials/{credId}` — SSH keys are **not** panel-only (see the cross-server entry above).
 **The inverse also holds:** `GET /webapps/{id}/settings` answers `OPTIONS` with `GET,HEAD` — genuinely read-only, despite returning a body that lists writable-looking fields.
 **First seen:** JBM, 2026-05-01 — `settings/fpmnginx` was dismissed as missing after a `GET` 404 and the work was pivoted to a manual panel checklist. Mike pushed back ("I've seen RunCloud's own example code use this endpoint"); the OPTIONS probe returned `allow: GET,HEAD,PATCH` and the PATCH worked first try.
 
@@ -201,6 +218,34 @@ curl -s --resolve dom:443:<CF_ANYCAST_IP> https://dom/robots.txt | wc -c   # e.g
 Then disable it in the **Cloudflare dashboard** (it has shipped under both *Security → Settings* and *AI Crawl Control*; the label moves). ⚠️ **A DNS+ZoneSettings-scoped token cannot reach the control** — `/bot_management`, `/managed_headers` and `/rulesets` all return **403**, while `/managed_robots_txt`, `/ai_crawl_control` and `/content_signals` return **400 "could not route"** (they do not exist under those names), and it is absent from all 56 zone settings. Do not burn time probing for an endpoint; it is a dashboard toggle or a broader token. Verify after: the edge byte count should drop to match origin exactly, with no `BEGIN Cloudflare Managed content` marker.
 **First seen:** Highland, 2026-08-04 — found during the post-cutover verification sweep. Directly contradicted the documented reason for publishing `FAQPage` on that build. Disabled; edge went 1969 → 133 bytes, byte-identical to origin.
 
+### Cloudflare Email Address Obfuscation silently rewrites every `mailto:` and visible address
+**Symptom / When:** A page that should show `office@example.org` as a link renders `[email protected]` instead, and `grep 'href="mailto:'` on the delivered HTML returns **zero matches** even though the element and its data are correct. The markup that arrives is:
+```html
+<a href="/cdn-cgi/l/email-protection#01626e6c6c68..."><span class="__cf_email__" data-cfemail="fa999597…">[email&#160;protected]</span></a>
+```
+It reads as a broken dynamic tag or a failed conditional, and the origin is innocent — the rewrite happens at the edge, so nothing on the box or in the CMS explains it.
+**Why:** Cloudflare's **Scrape Shield → Email Address Obfuscation** (on by default on many zones) rewrites both `mailto:` hrefs and email addresses appearing in HTML text, then restores them client-side with an injected `/cdn-cgi/scripts/…/email-decode.min.js`. It is per-zone, not per-page.
+**Fix / decide:** Confirm it is the cause, then choose deliberately — it is a real trade-off, not a bug to squash reflexively.
+```bash
+curl -skI "https://<site>/<page>/?cb=$RANDOM" | grep -i '^server'
+H=$(curl -sk "https://<site>/<page>/?cb=$RANDOM")
+echo "obfuscated: $(echo "$H" | grep -oc '__cf_email__')  real mailto: $(echo "$H" | grep -oc 'href=\"mailto:')"
+echo "decoder js: $(echo "$H" | grep -oc 'email-decode')"
+```
+- **Keep it** where the addresses are the organisation's own and scraping is the bigger worry. Accept that the address is not readable or copyable on the page — give the link its own text (`Email this office`) rather than printing the address, or the visible label is the placeholder.
+- **Turn it off** where the addresses are **already-published third-party contacts** and the whole point of listing them is that a visitor can read, copy or click them. Obfuscating a public office address protects nobody and costs the page its usefulness.
+
+⚠️ **It introduces a JS dependency on a page that otherwise needs none.** With a delay-JS optimiser (Perfmatters et al.) the decoder is deferred, so every address on the site reads `[email protected]` until the visitor interacts — and if the script is mishandled by the optimiser, the href resolves to a Cloudflare interstitial instead of the mail client. **Add `email-decode` to the delay-JS exclusions at launch, or turn the feature off.** Same failure family as the delay-JS entries under Performance.
+
+⚠️ **Check the zone before you change the setting — a dev subdomain does not have its own zone.** A dev site on a subdomain of a shared dev parent zone lives in that zone alongside every other dev subdomain, so switching Email Obfuscation off there changes behaviour on other clients' sites. Two ways out: a **Configuration Rule** scoped to the single hostname (Email Obfuscation is one of the settings a Configuration Rule can override), or defer to cutover, when the production domain is its own zone and the setting is genuinely site-specific. Deferring is usually right on a noindexed dev site — and record it as a launch task, not an open question.
+**First seen:** WCDP, 2026-08-18 — a block was converted from hardcoded markup to an ACF repeater with per-entry `mailto:` links, and the read-back showed every email missing. The data was correct and the conditions were firing; the addresses were being rewritten at the edge. It had never surfaced before because this was the first `mailto:` on the site to actually render.
+
+### A Cloudflare API token with a future start date passes `/tokens/verify` and fails every zone call as "Invalid access token"
+**Symptom / When:** A freshly created, zone-scoped token: `GET /user/tokens/verify` → `success: true, status: active`, but `GET /zones` and every zone route → `9109 Invalid access token`. It looks like a wrong zone scope or IP filter.
+**Why:** The token's TTL **start date** (`not_before`) is in the future (here start = end = the same day two months out). `/verify` reports the token as structurally active and puts the real reason only in `messages`: `10002 This API Token can not be used before <date>`.
+**Fix:** Always print the `/verify` `messages` and `not_before`/`expires_on`, not just `success`. Editing the token's TTL in the dashboard keeps the same secret, so nothing needs re-sending. (Ruled out first: the IP filter, via `curl -4` and the box's egress IP.) See also the Secrets entry — this is a second cause of "fails while it verifies as active", besides narrow scope.
+**First seen:** WCDP, 2026-09-30.
+
 
 ## Cutover
 
@@ -213,8 +258,8 @@ curl --resolve domain:443:<NEW_ORIGIN_IP> https://domain/   # the new origin dir
 curl --resolve domain:443:<CF_ANYCAST_IP> https://domain/   # the public/edge path
 getent hosts domain                                          # what the box actually resolves
 ```
-`resolvectl flush-caches` clears it, but `--resolve` is the reliable habit — use it for **every** cutover verification regardless of which box you are on. Note the inverse also matters post-launch: once the cache clears, bare curl becomes trustworthy again — re-verify rather than carrying the workaround forever.
-**First seen:** TAB, 2026-06-27 — a long false-alarm "RunCloud/Cloudflare is serving a stale homepage" investigation; the box's resolver simply still pointed the apex at the old box. **Highland, 2026-08-04** — same trap from a *third* box: immediately after the flip, a bare `curl` from jbm003 (staging, neither old nor new origin) returned `server: Squarespace` with the departing host's July LE cert while the edge was already serving the new site correctly. Believing it would have triggered a rollback of a cutover that had already succeeded. Folded at the Highland harvest with the framing broadened from "the origin box" to "any box".
+`resolvectl flush-caches` clears it, but `--resolve` is the reliable habit — use it for **every** cutover verification regardless of which box you are on. Note the inverse also matters post-launch: once the cache clears, bare curl becomes trustworthy again — re-verify rather than carrying the workaround forever. **Read the `server:` header to tell which origin answered** — `server: Squarespace` or `server: Pepyaka` (= Wix) means you are looking at the departing host, not a broken launch.
+**First seen:** TAB, 2026-06-27 — a long false-alarm "RunCloud/Cloudflare is serving a stale homepage" investigation; the box's resolver simply still pointed the apex at the old box. **Highland, 2026-08-04** — same trap from a *third* box: immediately after the flip, a bare `curl` from the staging box (neither old nor new origin) returned `server: Squarespace` with the departing host's July LE cert while the edge was already serving the new site correctly. Believing it would have triggered a rollback of a cutover that had already succeeded. Folded at the Highland harvest with the framing broadened from "the origin box" to "any box". **WCDP, 2026-09-30** — same again after a Wix DNS edit (TTL 3600): a plain curl showed `server: Pepyaka` and failed every check until pinned with `--resolve`.
 
 ### Verify a served static asset via its `?ver=` URL — the BARE file URL is served from a stale static cache
 **Symptom / When:** You edit the child theme `style.css`, `curl` the plain file URL to verify, and get the OLD content — even though the on-disk file is correct and the page itself shows the new styling.
@@ -226,6 +271,12 @@ getent hosts domain                                          # what the box actu
 **Symptom / When:** Post-migration, automatic subscription renewals are created but never charged; the gateway is never called.
 **Why / Fix:** WCS's duplicate-site guard still points at the pre-migration URL, so production is treated as a clone. Full mechanism, the CLI fix and the verification step: `03` → **WooCommerce** → "the staging-site lock silently SKIPS all automatic renewals after a Local→production migration". **Belongs on the deploy checklist for any migration carrying subscriptions.**
 **First seen:** VMG, 2026-06-07 — cross-referenced here at the 2026-07-15 harvest because the trigger is the cutover, while the mechanism is WCS's.
+
+### Premium plugin licences stay bound to the OLD domain after a migration — version checks still work, so "no update available" is not proof of health
+**Symptom / When:** Post-migration, a licensed plugin reports an available update and then fails it with `Download failed. "Unauthorized"` (HTTP 401). Meanwhile the plugin's own `*_license_status` option still reads `valid`, and every *other* premium plugin reports no update at all — which reads as "everything is current."
+**Why:** Two independent mechanisms. The **version check** is licence-agnostic, so the store answers it from any domain — that is why updates appear to be detected normally. The **download** is a signed URL carrying the requesting site's domain (visible base64 in the EDD package URL), and the store rejects it because the activation is still registered against the pre-migration hostname. The stored `license_status` is cached state copied over in the database; it reflects the *old* domain's activation and is never re-validated by the version check.
+**Fix:** Re-activate every premium licence against the new domain as a migration step, before concluding anything about update state. Until then, treat "no update available" on the other premium plugins as unverified: the check is genuinely working, but the moment any of them *does* have an update it will 401 the same way. A `valid` status option is not evidence — decode the download URL or attempt one update to find out.
+**First seen:** WCDP, 2026-08-11 — ACSS 3.3.6 → 3.3.7 failed 401 while its status option read `valid`; the signed URL decoded to the new dev hostname.
 
 ### `google-site-verification` TXT records must be carried into the new DNS zone — and they may not be Search Console at all
 **Symptom / When:** Planning a platform migration (Squarespace/Wix/Shopify → WordPress) where DNS moves to a new provider. The apex carries one or more `google-site-verification=…` TXT records, often several, and often nobody at the client remembers creating them. The temptation is to drop them and "start fresh".
@@ -243,10 +294,22 @@ dig +short TXT example.com | grep google-site-verification
 **Fix:** Three sources, not one. (1) The platform sitemap. (2) A depth-limited crawl from the homepage to catch what the sitemap omits. (3) **Search Console / analytics top-pages export**, which is the only source that surfaces URLs nothing links to any more. Do (3) *before* DNS moves, while access still exists. Also check which paths the new CMS already canonicalises — WordPress 301s a missing trailing slash natively, so `/about` → `/about/` needs no rule, and writing one only masks a future slug change.
 **First seen:** Highland, 2026-08-04 — the Squarespace `sitemap.xml` listed 4 URLs; a crawl found 6; only 3 needed rules, because WordPress already handled the slash-only differences. Analytics-sourced legacy URLs were flagged as the remaining gap.
 
+### A child page's slug makes the old flat URL resolvable — map legacy redirects ungated, and switch off WP's guess redirect
+**Symptom / When:** A legacy redirect map for a move to a new IA that nests pages (`/volunteer` → `/get-involved/volunteer/`) is gated on `is_404()`. Some legacy URLs never reach the map, and typos never reach the 404 log.
+**Why:** The new child page's slug is `volunteer`, so WordPress can match or *guess* `/volunteer` itself. `redirect_guess_404_permalink` (inside `redirect_canonical`, priority 10) sends slug-prefix matches to whatever page it finds. The 404 gate then never fires, or fires after WP has already redirected somewhere of its own choosing. The guess redirect also turns every typo into a 301 to a plausible page, so genuine misses never show up in a 404 log.
+**Fix:** When none of the legacy paths is a live URL on the new site, match the exact path **without** an `is_404()` gate at `template_redirect` priority 1: case-insensitive, trailing slash optional, query string carried over. Add `add_filter( 'do_redirect_guess_404_permalink', '__return_false' );`. Check collisions first: `SELECT post_name, post_type FROM wp_posts WHERE post_name IN (<legacy slugs>)`. Verify every row by request, including trailing-slash, case and UTM variants. This is a different `redirect_canonical` branch from 03's "`redirect_canonical` 301s requests you meant to serve — a term archive to a same-slug CPT single, and a custom rewrite endpoint to a trailing slash".
+**First seen:** WCDP, 2026-09-30 — Wix → WordPress legacy map. ⚠️ When MMHN is harvested, fold in its attachment-slug entry (same family, different collider).
+
+### A Wix-registered domain cannot change nameservers — moving DNS means a registrar transfer, and Cloudflare Registrar can't be the first hop
+**Symptom / When:** Wix → WordPress migration where the domain was bought through Wix. The plan is "add the zone to Cloudflare, paste its two nameservers at the registrar". Wix's domain screen no longer offers a nameserver change at all.
+**Why:** Wix only lets you edit records inside Wix DNS for domains it registers. The only way out is a registrar transfer, and **Cloudflare Registrar only accepts transfers of zones already active on Cloudflare nameservers**, which is exactly what Wix blocks.
+**Fix:** Surface it at **kickoff**, not at cutover. If DNS must move: (1) create the Cloudflare zone first so the records wait there; (2) transfer to a registrar that accepts **custom nameservers during the transfer**, and set Cloudflare's there so the domain arrives already on CF; (3) check the registrant email is an inbox someone reads, because the approval mail goes there. A .org/.com transfer takes up to 5–7 days and adds a year. If launch can't wait, launch on the existing Wix DNS by editing the A/`www` records there (see the fallback path in the HSTS entry below) and treat the transfer as the client's decision.
+**First seen:** WCDP, 2026-09-30 — the Cloudflare zone was built and audited, then Wix refused the nameserver change on launch day.
+
 
 ### The departing host's HSTS header dictates your cutover order — check it BEFORE planning one
 **Symptom / When:** Planning a platform migration where the new origin has no TLS certificate yet. The obvious order is: flip DNS → run Let's Encrypt HTTP-01 → done, accepting "a few minutes of 404s". In practice returning visitors get a **full-page certificate interstitial** for the whole window, and there is no http fallback to soften it.
-**Why:** Three facts compound. (1) **LE HTTP-01 cannot validate until DNS already points at the new box**, so the cert can never be pre-issued on that method — DNS genuinely must move first. (2) A RunCloud webapp with no SSL has **no HTTPS vhost**, so every `https://` request falls through to the catch-all (which answers **200** with "Website Unavailable" under a mismatched cert — see the RunCloud entry above). (3) The departing host is very likely sending **HSTS**: Squarespace sends `max-age=15552000` (180 days), so every browser that visited in the last six months is pinned to HTTPS-only and **will refuse to fall back to http**. Every indexed URL is an https URL too. So the "soft" window is actually a hard failure for exactly the people most likely to visit.
+**Why:** Three facts compound. (1) **LE HTTP-01 cannot validate until DNS already points at the new box**, so the cert can never be pre-issued on that method — DNS genuinely must move first. (2) The new origin has no **trusted** cert. As of 2026-08 a RunCloud webapp with no SSL had **no HTTPS vhost**, so every `https://` request fell through to the catch-all (which answers **200** with "Website Unavailable" under a mismatched cert). ⚠️ **Corrected 2026-09:** a webapp created in 2026-09 **ships a self-signed placeholder** (`CN = RunCloud Web Certificate`, issuer `RunCloud WebSSL Root CA`), so HTTPS answers for the right site before DNS moves — test it pre-DNS with `curl -k --resolve <host>:443:<origin-ip>`. The conclusion is unchanged: HSTS browsers reject a self-signed cert exactly as they reject a mismatched one. (3) The departing host is very likely sending **HSTS**: Squarespace sends `max-age=15552000` (180 days), so every browser that visited in the last six months is pinned to HTTPS-only and **will refuse to fall back to http**. Every indexed URL is an https URL too. So the "soft" window is actually a hard failure for exactly the people most likely to visit.
 **Fix:** Check first, then choose the order:
 ```bash
 curl -sI https://the-old-domain.com/ | grep -i strict-transport-security
@@ -259,7 +322,12 @@ If HSTS is present (assume it is), go **proxy-first** and the gap disappears ent
 5. `always_use_https` → on, so the http→https hop terminates at the edge.
 **Reduce the apex to ONE record before flipping**, then PATCH that record in place — an atomic switch, rather than deleting three records and creating a fourth while resolvers round-robin across a mixed old/new set. The old host keeps serving on its remaining IP throughout.
 **Set both records to TTL 60 well ahead of the cutover.** It makes propagation ~1 minute and, more importantly, makes rollback ~1 minute — which is what actually bounds your worst case.
-**First seen:** Highland, 2026-08-04 — Squarespace → RunCloud/jbm001. Proxy-first was chosen after finding the 180-day HSTS; the cert then issued in **30 seconds**, but the decision was correct regardless, because the downside was a cert interstitial and not a 404. Zero user-visible interruption; verified at every step.
+**When proxy-first is impossible** (DNS can't reach a CDN — e.g. a registrar-locked domain, see the Wix entry above), a plain flip is unavoidable, so **bound the window to minutes** instead of avoiding it:
+1. Build and verify fully pre-DNS against the origin with `--resolve` (pages, 301 map, robots, sitemap) — the placeholder cert in fact (2) makes this possible with `-k`.
+2. **Reduce the apex to ONE A record** at the registrar (delete every old-host IP, or resolvers round-robin into the old site) and point `www` at the apex (CNAME) or the same IP. Leave MX and TXT alone.
+3. Watch the **authoritative** nameservers (`dig @<registrar-ns> <domain> A`), not a resolver. The moment they answer the new IP, issue LE — HTTP-01 validates against the authoritative answer, not cached resolvers. It took about a minute.
+4. Keep testing with `--resolve` afterwards — the box's own resolver holds the old answer for the record's TTL (see "Verifying a cutover *from ANY box*…" above).
+**First seen:** Highland, 2026-08-04 — Squarespace → RunCloud (an OpenLiteSpeed production box). Proxy-first was chosen after finding the 180-day HSTS; the cert then issued in **30 seconds**, but the decision was correct regardless, because the downside was a cert interstitial and not a 404. Zero user-visible interruption; verified at every step. **WCDP, 2026-09-30** — the fallback path: Wix DNS (registrar-locked), Wix HSTS `max-age=31556952` (one year); apex reduced to one A record, LE issued in the panel within about a minute of the authoritative answer flipping. Same launch corrected fact (2): the new webapp served RunCloud's self-signed placeholder, not the catch-all.
 
 
 ## RunCache (RunCloud Hub successor)
@@ -315,7 +383,7 @@ Writes the consts and installs `object-cache.php`. Redis password = `/etc/redis/
 
 ## LiteSpeed Cache / OpenLiteSpeed
 
-*New section at the MBC harvest, 2026-08-25. OpenLiteSpeed boxes run LiteSpeed Cache rather than RunCache, and its optimisation features fail in ways that look like application bugs. All three entries below cost real debugging time before the cache was suspected.*
+*New section at the MBC harvest, 2026-08-25. OpenLiteSpeed boxes run LiteSpeed Cache rather than RunCache, and its optimisation features fail in ways that look like application bugs. All three LSCache entries below cost real debugging time before the cache was suspected.*
 
 ### LSCache ESI never works on OpenLiteSpeed — every `<esi:include>` ships raw to the browser
 **Symptom / When:** Any ESI-dependent LSCache feature breaks, each wearing a different disguise. Observed: cart Update / remove-item forms silently no-op with no error anywhere (the nonce in the form input was an unresolved ESI tag); a ~32px empty strip above the header **for logged-in users only** (LSCache replaces the admin bar with an ESI block, so WP's `html{margin-top:32px}` bump CSS renders with no bar under it — reads convincingly as a body/root layout bug); a raw `wp_rest` nonce placeholder leaking into guest-cacheable HTML.
@@ -354,6 +422,18 @@ curl -s "https://example.com/?cb=$RANDOM" | grep -c 'src="data:text/javascript;b
 ```
 Sibling to the Perfmatters entry below — Delay JS and Defer JS each independently break things. Two different plugins, same class of failure: **a JS optimisation silently relocating correct code.**
 **First seen:** MBC, 2026-08-25 — a dismissable homepage announcement bar shipped with its dismissal script deferred, so anyone who had dismissed it would have watched it render and disappear on every subsequent visit. Caught only because the served HTML was checked rather than the PHP.
+
+### Moving a hybrid build to an OpenLiteSpeed box — `.htaccess` access controls don't carry; file mode is the control, and `setfacl` silently re-widens it
+**Symptom / When:** A site developed on an nginx→Apache hybrid box goes live on an **OpenLiteSpeed** box — even though the RunCloud API reports "hybrid" for both. The build's protections include Apache `.htaccess` directives: a Cloudflare-only origin lock (`<RequireAny>` + `Require ip <CF ranges>`, which only Apache enforces on the hybrid stack) and deny blocks on `/docs/`, `CLAUDE.md` and the like.
+**Why:** OLS reads `.htaccess` for rewrites. ⚠️ **UNVERIFIED:** that it does **not** enforce Apache `Require` authorization there was stated during cutover planning but never canary-tested. If true, both controls silently stop protecting anything, and copying the dev `.htaccess` over wholesale carries dead rules that look live. Test it with a `.php` canary behind a `Require all denied` (a static canary can mislead — see the static-file entry under RunCloud) before relying on, or writing off, any `.htaccess` access rule on OLS. What **is** proven: file mode locks project files on OLS.
+**Fix:** Treat access controls as re-implementation work on the OLS box, not a copy. For project docs, **file mode is the control** — dirs `700`, files `600` — then curl every sensitive path cache-busted and expect 403/404. ⚠️ **`setfacl -m g:users-rc:---` after a `chmod 600` re-widens the ACL mask** (`getfacl` showed `group::r-x`; mode read back as 650/750), so order matters:
+```bash
+setfacl …                        # any ACL change first
+chmod -R go-rwx CLAUDE.md docs assets .claude
+getfacl -R docs | grep effective # expect #effective:---
+```
+Any file added later must be locked the same way; the mode is the only proven control. An origin lock needs an OLS-native or Cloudflare-side mechanism, proved with a `.php` canary direct to the origin IP. **Also: don't carry the dev `.claude/settings.local.json` to production** — a dev allowlist (it held `Bash(cd *)`) outlives the move and pre-approves commands that the live-site gate exists to stop.
+**First seen:** WCDP, 2026-09-30 — project docs (`CLAUDE.md`, `docs/`, `assets/`, `mockups/`, `.claude/`) copied into the OLS web root at 700/600 → `/CLAUDE.md` 403, every other path 404 (cache-busted); the ACL mask re-widening was caught by `getfacl` after the `users-rc` `setfacl`.
 
 ## Performance
 
@@ -447,6 +527,13 @@ add_filter( 'perfmatters_defer_js', $off );
 **Fix:** Take a manual backup into the **new** storage and confirm the object exists **in the bucket** before deleting the old storage entity — otherwise there is a window with no offsite restore point at all. Verify with a bucket listing, never the plugin UI.
 **First seen:** JBM, 2026-07-30 — three remaining offsite backups were destroyed along with the old storage entity during a rebuild, leaving exactly one archive (that day's manual full) offsite.
 
+### Duplicator Pro leaves the installer log and BOTH wp-config copies in the web root — the log is publicly readable
+**Symptom / When:** After a Duplicator migration the site works and looks clean, but `wp-content/duplicator-backups/installer/` is still there. `dup-installer-log__*.txt` serves **HTTP 200** to anyone, and next to it sit `installer_host_wpconfig` (the *destination* server's live DB credentials) and `source_site_wpconfig` (the source install's credentials and all eight salts).
+**Why:** Duplicator writes an `orig_files/` directory holding the pre-install configs plus a verbose install log, and does not remove them. The log obscures passwords but still leaks the DB name, the full server paths, and the source machine's directory tree. The wp-config copies are protected only by a `Deny from All` `.htaccess` in that folder — which works where Apache serves those paths (on a hybrid RunCloud webapp it is honoured for these extensions — see the static-file entry under RunCloud) and is one stack change from not working. That is a property of the stack, not of Duplicator.
+**Fix:** After any Duplicator install, move the whole `installer/` directory out of the web root (`~/backups/…`, mode 700) rather than trusting the deny. Then sweep for the rest of the residue: a stale `building_lock_*.tmp` can block later builds, and `wp-content/upgrade-temp-backup/` is often left behind. Verify with `curl`, not `ls` — the point is what is reachable.
+**Also check `WP_ENVIRONMENT_TYPE`.** A Local-blueprinted install arrives carrying `'local'`, which survives the migration and makes `wp_get_environment_type()` lie to every plugin that branches on it.
+**First seen:** WCDP, 2026-08-11 — the log was serving 200 at 44 KB on a fresh dev migration; found by sweeping the web root rather than by anything failing.
+
 ## Email delivery
 
 ### Mailster/Mailgun — `mailgun_track` overrides the Mailgun DASHBOARD toggle and breaks SSL on the tracking subdomain
@@ -457,6 +544,13 @@ add_filter( 'perfmatters_defer_js', $off );
 **Only if the client actually wants Mailgun analytics:** enable HTTPS on the tracking domain in the Mailgun dashboard; confirm the `email.mg` CNAME is **DNS-only / grey cloud** in Cloudflare (Mailgun cannot provision LE certs through CF's proxy — same class as the Cloudflare entry above); wait up to ~24h for the cert; then disable Mailster's own tracking to avoid double-counting.
 **First seen:** NLTA, 2026-04-29 — client reported an SSL error clicking a campaign link.
 
+### Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails
+**Symptom / When:** Porting the fleet core plugin's `phpmailer_init` Mailgun module to a site whose forms (e.g. WS Form) send as `#blog_admin_email`.
+**Why:** SMTP auth alone does not align SPF/DKIM with the visible From. A From on an address the Mailgun domain does not cover fails DMARC once the domain publishes a policy, and PHPMailer's envelope sender otherwise defaults to the From.
+**Fix:** In `phpmailer_init`, set `From`, `FromName` **and** `Sender` to `MAILGUN_FROM_EMAIL` (on the verified Mailgun domain), and leave Reply-To alone so replies still reach the form-filler. Keep the module inert until its constants exist (`MAILGUN_SMTP_*`, `MAILGUN_FROM_*`), and log `wp_mail_failed` to the error log, since failures are otherwise silent. Then repoint every form's notification To and send one test per form. Related in `03`: "A `wp_mail_from` filter beats an explicit `From:` header" (why a form's own From field is cosmetic) and "WooCommerce — Woo overrides `wp_mail_from`…" (the one sender that bypasses this).
+**Verify without mailing anyone:** send one `wp_mail()` with the header `X-Mailgun-Drop-Message: yes`, then read `GET /v3/<domain>/events` — `accepted` + `delivered` / "Delivered in test mode" proves SMTP auth, the forced From and Mailgun acceptance, and nothing is delivered. Check the domain first with `GET /v4/domains/<domain>` (`state: active`, every sending record `valid`); a 404 on `api.mailgun.net` with a 200 on `api.eu.mailgun.net` means the EU region and `smtp.eu.mailgun.org`. **Mailgun's DNS doesn't have to wait for a nameserver move** — the records go wherever DNS lives today.
+**First seen:** WCDP, 2026-09-30 — porting the module at launch prep.
+
 ## Secrets
 
 ### Shared API secrets live in `~/.env`, OUTSIDE every web root
@@ -466,7 +560,7 @@ add_filter( 'perfmatters_defer_js', $off );
 - Load with `set -a; . ~/.env; set +a`
 - Add new shared creds **there**, rather than scattering them per-project.
 - **Inject values without echoing them to the transcript** — `read -rs` into a `sed` replace.
-- Token scopes are deliberately narrow, so a call can fail on permissions while the token still verifies as active. Check the scope before concluding the API is broken.
+- Token scopes are deliberately narrow, so a call can fail on permissions while the token still verifies as active. Check the scope before concluding the API is broken. A second cause of the same symptom on Cloudflare: a token whose start date is in the future — see "A Cloudflare API token with a future start date…" under Cloudflare.
 **First seen:** 2026-06-07.
 
 ---

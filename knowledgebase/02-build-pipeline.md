@@ -102,6 +102,8 @@ Discovery workflow:
 
 When a schema is not in the library below, this is how you get it. An incomplete schema library is expected — the golden rule is the method for filling it.
 
+**A sibling install is a legitimate golden-rule source.** When this install has no builder-saved example of a shape, read one from another project's builder-saved output — `bricks_global_classes` (an option, so no builder session needed) or a template's `_bricks_page_content_2`. It is builder-saved output either way, and cheaper than a discovery session. It is weaker only when the Bricks versions diverge, so compare versions first. Several WCDP schemas below were lifted this way from MMHN and then proven rendering on WCDP.
+
 ### Discovery cost — the golden rule can evict itself
 
 A readback on a content-bearing page is not free: one `_bricks_page_content_2` blob on staging can run tens of thousands of tokens. Enough of them and the session compacts, evicting the knowledgebase — including this rule. The discovery method must not destroy the context that enforces it. Two disciplines:
@@ -168,7 +170,7 @@ wp eval "echo wp_json_encode(\Bricks\Breakpoints::\$breakpoints);"
 
 For each approved section:
 
-1. **Construct the element tree.** Build the section's Bricks element array — SECTION > CONTAINER > BEM elements per the structure in `01`. Each element is `{ id, name, parent, settings, ... }`. Element IDs must be 6-character alphanumeric, never all-numeric (see `03`).
+1. **Construct the element tree.** Build the section's Bricks element array — SECTION > CONTAINER > BEM elements per the structure in `01`. Each element is `{ id, name, parent, settings, ... }`. Element IDs must be alphanumeric and never all-numeric (see `03`); 6 characters is the house convention for new IDs, not a Bricks requirement — 5-character IDs pass the validator and survive a builder save (WCDP, 2026-08-18), though they have not been tested against `{query_results_count_filter:<id>}`. A script's ID guard validates only the IDs that script adds, never an inherited tree: an inherited page built on 5-character IDs is not corrupt, and a whole-tree guard aborts on it as if it were.
 
 2. **Create global classes.** Project BEM classes get registered in `bricks_global_classes`. Use the verified global class shape below. `settings` must be `array()`, never `new stdClass()` — a stdClass there crashes Bricks site-wide.
 
@@ -236,6 +238,34 @@ Lookup tier. Each schema below was discovered via the golden rule and is verifie
 - Exclude current post: `exclude_current_post: true`. Never `post__not_in: ["{post_id}"]` — the dynamic tag does not parse there and the invalid shape may get the whole query rejected on builder load.
 - Bricks fills `posts_per_page`, `orderby`, `order` from main-query defaults if omitted.
 
+**Loop riding an archive's main query** (verified — WCDP, 2026-08-20, builder-saved readback from a sibling install, proven rendering):
+
+```php
+'hasLoop' => true,
+'query'   => [ 'objectType' => 'post', 'post_type' => [ 'my_cpt' ],
+               'is_archive_main_query' => true, 'posts_per_page' => 12 ],
+```
+
+`posts_per_page` merges into the main query, and so do `orderby` / `order` (Bricks' defaults when omitted), which clobbers a plugin's `pre_get_posts` ordering at the same priority — keep ordering in PHP at priority 20. See `03`.
+
+**Scoping a native posts loop from PHP** (source-verified — WCDP, 2026-08-20, Bricks 2.3.10, `includes/query.php`):
+
+```php
+// apply_filters( 'bricks/posts/query_vars', $query_vars, $settings, $element_id, $element_name )
+add_filter( 'bricks/posts/query_vars', function ( $vars, $settings, $element_id ) {
+    if ( false === strpos( $settings['_cssClasses'] ?? '', 'prefix-upcoming-loop' ) ) return $vars;
+    // merge meta_query / orderby here; posts_per_page flows through from the element
+    return $vars;
+}, 10, 3 );
+
+// the loop element:
+'query'       => [ 'objectType' => 'post', 'post_type' => [ 'my_cpt' ], 'posts_per_page' => 3 ],
+'_cssClasses' => 'prefix-upcoming-loop',   // marker class = the hook key
+```
+
+- Key the hook on a **marker class in `_cssClasses`** — not the element id (changes on duplicate) and not `_cssId` (duplicated per loop iteration).
+- Prefer this native-loop-plus-filter shape over a custom query type for post-card loops: native loops resolve per-item LINK-context tags correctly, custom types do not reliably `setup_postdata()` (`03`). Verified with distinct per-item hrefs; the shape survived a builder save unstripped.
+
 ## Query Loop — Custom (registered via filter)
 
 ```json
@@ -275,6 +305,16 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 - `useDynamicData` is inside `image`; `altText` is at the top level of settings.
 - Confirmed path for ACF URL fields.
 
+**Static image** (verified — WCDP, 2026-08-20, builder-saved readback):
+
+```php
+'image'   => [ 'id' => 123, 'filename' => 'x.webp', 'full' => '<full-url>', 'size' => 'full', 'url' => '<sized-url>' ],
+'altText' => '…',          // top level, as above
+'loading' => 'eager',      // top-level scalar (elements/image.php controls['loading'])
+```
+
+Static images default to lazy **even as the LCP hero** — set `loading: 'eager'` on the above-the-fold image.
+
 ## Link (on container with tag=a, or on a button)
 
 ```json
@@ -294,6 +334,29 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 `div`, `section`, `a`, `article`, `nav`, `ol`, `ul`, `li`, `aside`, `address`, `figure`, `custom`.
 
 For anything else (`dl`, `dt`, `dd`): `"tag": "custom"` plus `"customTag": "dl"`.
+
+**Not Block-only.** `text-basic` registers the same `tag` + `customTag` pair (`includes/elements/text-basic.php`), so `'tag' => 'custom', 'customTag' => 'cite'` renders `<cite class="brxe-text-basic …">`, and `dt` / `dd` work the same way. With a block at `customTag: 'dl'` / `'blockquote'`, a full `<dl><div><dt>/<dd></div></dl>` or `<blockquote><p><cite>` builds with no custom PHP (verified — WCDP, 2026-08-18). Confirm the control exists on any other element before relying on it: `grep -n "customTag" wp-content/themes/bricks/includes/elements/<element>.php`.
+
+**`<time>` with a machine-readable date** (builder-verified — WCDP, 2026-09-11):
+
+```php
+'tag' => 'custom', 'customTag' => 'time',
+'_attributes' => [ [ 'id' => 'a1', 'name' => 'datetime', 'value' => '{acf_my_date:Y-m-d}' ] ],
+```
+
+The dynamic tag resolves inside the attribute; the bare ACF date modifiers (`:Y-m-d`, `:j`, `:M Y`) all render.
+
+**A real `<button>`** (verified — WCDP, 2026-09-14) for a dismiss/toggle control that does not navigate:
+
+```php
+'tag' => 'custom', 'customTag' => 'button',
+'_attributes' => [
+    [ 'id' => 'a1', 'name' => 'type',       'value' => 'button' ],
+    [ 'id' => 'a2', 'name' => 'aria-label', 'value' => 'Close announcements' ],
+],
+```
+
+Renders `<button class="…" type="button" aria-label="…">`. `customTag` is sanitised against `Helpers::get_allowed_html_tags()`, which on Bricks 2.4.2 starts from `wp_kses_allowed_html('post')` — `button` is in that list natively, so no `bricks/allowed_html_tags` filter is needed for it. Confirm on the install: `wp eval 'echo implode(" ", \Bricks\Helpers::get_allowed_html_tags());'`. Do not use the Bricks Button element for a non-navigating control: it sets its tag to `a` as soon as `settings['link']` is non-empty.
 
 ## Bricks Conditions (hide-when-empty etc.)
 
@@ -338,7 +401,7 @@ Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()`
 
 ```json
 {
-  "id": "6-char-alphanumeric",
+  "id": "abc123",
   "name": "class-name",
   "settings": {
     "_cssCustom": "/* CSS goes here */"
@@ -348,6 +411,7 @@ Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()`
 }
 ```
 
+- `id`: alphanumeric, never all-numeric; 6 characters is the house convention.
 - `settings` must be `array()` — never `new stdClass()`. A stdClass crashes Bricks' interactions loader site-wide; recovery requires direct MySQL.
 - Custom CSS in `_cssCustom` uses literal class selectors (`.my-class { ... }`), not `%root%`. Bricks substitutes `%root%` to literal at UI save time; the stored value is always literal.
 
@@ -423,8 +487,17 @@ Read back from builder-saved pages via the golden rule. These four were the libr
 - `_display`: `"grid"` | `"flex"` · `_direction`: `"row"` | `"column"` (**layout elements only** — `_flexDirection` elsewhere) · `_alignItems`: `"center"` | `"start"` | `"stretch"` · `_justifyContent` · `_flexWrap`: `"wrap"`
 - Bricks `block` / `container` **default to flex column**, so `_direction:"column"` + `_rowGap` works *without* setting `_display`. (A class that only does this is redundant with ACSS `.gap--N` — see `03`.)
 - `_columnGap` / `_rowGap`: token or value — `"var(--space-m)"`, `"0.6rem"`. **Layout elements only** (`section`/`container`/`block`/`div`) — on any other element the gap key is `_gap`, and `_direction` is `_flexDirection`. Wrong key for the element type = silent no-emit; see `03`.
-- `_gridTemplateColumns`: a **string** — `"90px 1fr auto"` or `"var(--grid-3)"`. Responsive via breakpoint suffix on the **outer** key: `"_gridTemplateColumns:tablet_portrait": "var(--grid-1)"`
-- `_width` / `_height`: `"100%"`, `"90px"`, `"var(--width-xl)"` · `_widthMax`: `"560px"` (note the `'100%'` special case in `03`)
+- **Grid alignment uses separate keys.** On a `_display: "grid"` class, `_alignItems` / `_justifyContent` are the *flex* keys and emit `align-items: initial` — the value you wrote is replaced, not dropped. Use `_alignItemsGrid` / `_justifyItemsGrid` / `_justifyContentGrid` / `_alignContentGrid` (`includes/elements/container.php`, gated on `_display`). Verified — WCDP, 2026-09-13. Mechanism in `03`.
+- `_gridTemplateColumns`: a **string** — `"90px 1fr auto"` or `"var(--grid-3)"`. Responsive via breakpoint suffix on the **outer** key: `"_gridTemplateColumns:tablet_portrait": "var(--grid-1)"`. **Layout elements only**, like the gap keys (`03`).
+- `_gridAutoRows` / `_gridAutoColumns`: plain text, raw CSS (`"1fr"`) · `_gridAutoFlow`: select (`"row"` …). On the grid element/class; the UI gate on `_display = grid` is panel-only, the emitter just needs the class to set `_display: "grid"`. `_gridAutoRows: "1fr"` gives equal-height card rows with no measured min-height — **cancel it where the grid drops to one column** (`"_gridAutoRows:mobile_landscape": "auto"`) or every stacked card stretches to the tallest. Verified — WCDP, 2026-08-19.
+- **Grid-item controls**, on the child (verified — WCDP, 2026-08-18; control definitions re-read on Bricks 2.4.2):
+  - `_gridItemColumnSpan` → `grid-column`, `_gridItemRowSpan` → `grid-row`: plain **text** controls, so the value is raw CSS — `"span 2"`, `"1 / 3"`, `"auto"`, never `2`. Registered in `container.php`, so **layout elements only**.
+  - `_gridItemJustifySelf` → `justify-self`: an `align-items`-type control (`"center"`, `"start"`, …), registered on layout elements and on every other element via `base.php`.
+  - There is **no** `_gridItemAlignSelf` on Bricks 2.4.2 — don't write it.
+  - All take a breakpoint suffix on the outer key. A column span **must** be reset where the grid drops to one column (`"_gridItemColumnSpan:mobile_landscape": "auto"`): `span 2` in a one-column grid creates an implicit second column and overflows. Verify the reset landed inside the `@media` block (`03`).
+- `_display` takes a breakpoint suffix too: `"_display:tablet_portrait": "none"` emits `@media (max-width: 991px) { .class { display: none } }` — the typed desktop-only hide, no `_cssCustom` media query (verified — WCDP, 2026-08-18).
+- `_flexGrow`: `"1"` (emits `flex-grow: 1`; defined in `base.php` and `container.php`) — survived a builder save (WCDP, 2026-09-11).
+- `_width` / `_height`: `"100%"`, `"90px"`, `"var(--width-xl)"` · `_widthMax`: `"560px"` (note the `'100%'` special case in `03`). `_widthMax: "none"` emits `max-width: none` — needed for full-bleed negative-margin work, since Bricks caps every element at `max-width: 100%` (`03`; builder-verified — WCDP, 2026-09-11)
 - `_overflow`: `"hidden"` · `_aspectRatio`: a **scalar string** — `"4/3"`, `"1"` (not an object)
 - Absolute positioning: `_position: "relative"|"absolute"`, `_top`/`_right`/`_bottom`/`_left`: `".8rem"`, `_zIndex: "2"`
 
@@ -432,7 +505,10 @@ Read back from builder-saved pages via the golden rule. These four were the libr
 ```php
 '_padding' => [ 'top' => 'var(--space-m)', 'bottom' => 'var(--space-m)' ],  // partial keys allowed
 '_margin'  => [ 'left' => 'auto', 'right' => 'auto' ],                      // 'auto' for centering
+'_padding:mobile_landscape' => [ 'top' => '4px', 'bottom' => '4px' ],    // partial keys hold at breakpoints too
 ```
+
+Partial keys work at breakpoints because typed spacing emits **longhands** (`padding-top`, …), never the shorthand, so the base sides a breakpoint object omits are untouched. Restating unchanged sides is noise — prune to the deliberate deviation. Verified — WCDP, 2026-09-14 (base `padding-left` held across the boundary).
 
 **Typography**
 ```php
@@ -454,6 +530,14 @@ Read back from builder-saved pages via the golden rule. These four were the libr
 '_background' => [ 'color' => [ 'raw' => 'var(--token)' ] ],   // {raw}-only works even for non-ACSS child-theme tokens
 ```
 
+**Pseudo-state suffix and transition** (verified — WCDP, 2026-08-19, read back from builder-saved global classes on a sibling install):
+```php
+'_border:hover'     => [ 'color' => [ 'raw' => 'var(--primary)' ] ],  // partial: only the changed props
+'_typography:hover' => [ 'color' => [ 'raw' => 'var(--token)' ] ],    // text-decoration etc. too
+'_cssTransition'    => 'border-color .2s ease, transform .2s ease',   // plain string, raw CSS value
+```
+The `:hover` suffix rides the **outer** key exactly like a breakpoint suffix, and the value is a *partial* of the base control's shape. Emits `.class:hover { … }` at `(0,2,0)`. Element-level control keys take it too (`subMenuBackground:hover`, `buttonBorder:hover` on nav/pagination elements).
+
 **Two-colour border.** Typed `_border` is single-colour. For e.g. a gold top plus a light all-round: set 1px all sides via typed `_border`, then add `_cssCustom: ".class{ border-top:3px solid var(--secondary); }"` (literal selector).
 
 ## Element envelope (verified — VMG, 2026-06-06)
@@ -462,7 +546,7 @@ The wrapper every element is written in. The traps in each field have their own 
 
 ```php
 [
-  'id'       => 'abc123',   // 6-char alphanumeric, never all-numeric — see 03
+  'id'       => 'abc123',   // alphanumeric, never all-numeric; 6 chars = house convention — see 03
   'name'     => 'block',
   'parent'   => 'xyz789',
   'children' => [ 'def456' ],   // MUST be populated — parent alone renders empty shells (03)
@@ -507,7 +591,14 @@ Any ACF **Relationship** or **Post Object** field on the current post is auto-ex
 
 - Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{post_url}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item — **including LINK-type settings** (a `link: {type:'meta', useDynamicData:'{post_url}'}` control resolves correctly per item), provided the loop is anchored correctly (see the `hasLoop` placement note below). An earlier version of this entry said LINK tags do not resolve per-item; that was a misdiagnosis of the placement bug, not a real limitation — corrected th-members, 2026-08-30, see `03`.
 - **`hasLoop` only works on `block` / `div` / `section`** (anything extending `Element_Container` — that's the only code path that actually dispatches a `\Bricks\Query` and repeats the element). Setting `hasLoop` on a leaf element (`text-link`, `heading`, `text-basic`, etc.) is silently accepted and persists in the DB, but does nothing — the element renders once, in the *parent* loop's context. Nest the tag-bearing leaf element one level inside a looped container instead; it inherits the correct context automatically. Full incident: `03`.
-- **Repeater** loops work too (`objectType: acf_<repeater>`), but subfield tags are namespaced: `{acf_<repeater>_<subfield>}`. The bare subfield tag prints literally.
+- **Repeater** loops work too (`objectType: acf_<repeater>`), including **options-page** repeaters (WCDP: five of them, builder-save verified, 2026-08-22), but subfield tags are namespaced: `{acf_<repeater>_<subfield>}`. The bare subfield tag prints literally.
+- **On a repeater loop the loop object is a row array, not a `WP_Post`.** `\Bricks\Query::get_loop_object()` returns whatever the loop iterates; for `acf_<repeater>` that is the row's associative array keyed by sub-field name. A custom tag that assumes `instanceof \WP_Post` silently renders empty text there. Branch on the type (verified — WCDP, 2026-08-22):
+  ```php
+  $row = \Bricks\Query::get_loop_object();
+  if ( is_array( $row ) && ! empty( $row['my_subfield'] ) ) { /* repeater row: read sub-fields by name */ }
+  elseif ( $row instanceof \WP_Post )                     { /* post loop: use $row->ID */ }
+  ```
+  This is what makes computed-from-the-row tags possible (e.g. initials derived from a `name` sub-field, so the client never maintains a second field in step with the first).
 - **`gallery` and `image` fields are NOT loopable** — they aren't `CONTEXT_LOOP`. Use a custom query type. See `03`.
 
 ## Hide-when-empty (two verified mechanisms)
@@ -525,7 +616,25 @@ Any ACF **Relationship** or **Post Object** field on the current post is auto-ex
 // Specific page (scores 8 — beats a `main:any` default)
 [ 'id'=>'cnd001', 'main'=>'ids', 'ids'=>[ $page_id ] ]
 ```
-The keys are `archivePostTypes` / `archiveTerms` — **not** `postType` / `taxonomy`, which are silently ignored and match every archive (`03`). One template can hold both conditions. The built-in `post` type needs the `page_for_posts` workaround instead (`03`).
+The keys are `archivePostTypes` / `archiveTerms` — **not** `postType` / `taxonomy`, which are silently ignored and match every archive (`03`). One template can hold both conditions. The built-in `post` type needs the `page_for_posts` workaround instead (`03`). The archive template's `_bricks_template_type` is `'archive'`.
+
+**CPT single template** (verified — WCDP, 2026-08-20, builder-saved readback from a sibling install): the type is **`'content'`, not `'single'`**:
+```php
+update_post_meta( $id, '_bricks_template_type', 'content' );
+// _bricks_template_settings:
+'templateConditions' => [ [ 'main' => 'postType', 'postType' => [ 'my_cpt' ] ] ]
+```
+
+**Error (404) template** (verified — WCDP, 2026-08-18, Bricks 2.3.10; from `includes/database.php` — `is_404()` → content type `error`, condition `main === 'error'` scores 8 — and proven by a live 404 render with full header/footer):
+```php
+update_post_meta( $id, '_bricks_template_type', 'error' );
+update_post_meta( $id, '_bricks_editor_mode', 'bricks' );
+update_post_meta( $id, '_bricks_template_settings', [
+    'templateConditions' => [ [ 'id' => 'cnderr', 'main' => 'error' ] ],
+] );
+// tree goes in _bricks_page_content_2 — error renders as a content-type template
+```
+Same map: `is_search()` → type `'search'` with condition `main: 'search'`; archives → `'archive'`.
 
 ## post-content element
 
@@ -539,6 +648,39 @@ Renders `the_content()` with **no element settings** — just a Global Class. St
 ```
 `type` MUST be `"meta"` for dynamic hrefs — `"external"` is literal-`url`-only and emits **no href at all** (`03`).
 
+- A button with **no `link` setting** renders as `<span class="bricks-button …">` — fully styled, no anchor, inert (verified — WCDP, 2026-08-20). Useful deliberately; also the tell when a button unexpectedly won't click — check for a missing or invalid `link` key.
+- The reverse: once `link` is non-empty the element renders `<a>`, so it is the wrong element for a control that does not navigate — use a layout element with `customTag: 'button'` (Block HTML tag options above).
+- Icon on a button: see Icon settings below.
+
+## Icon settings — custom icon sets (verified — WCDP, 2026-08-18)
+
+Custom icon sets are **`wp_options` state, not code**: Bricks has no filter to register one, and each icon row binds to an attachment ID on that install. Rebuild the set per install from the SVG files — `bin/bricks-icon-import.php` in this repo does it idempotently (`ICON_SET=<name> ICON_SRC=<dir|files> wp eval 'include ".../bin/bricks-icon-import.php";'`, `ICON_DRY=1` to preview). The silent-nothing failure when an attachment doesn't resolve is in `03`.
+
+Option shapes (read from a working install):
+```json
+// bricks_icon_sets
+[ { "id": "set_abc123xyz", "name": "MySet" } ]
+
+// bricks_custom_icons — one entry per icon
+[ { "id": "icon_def456uvw", "name": "arrow-right-line",
+    "url": "https://<site>/wp-content/uploads/<yyyy>/<mm>/arrow-right-line.svg",
+    "setId": "set_abc123xyz", "attachment_id": 53 } ]
+```
+
+Element setting — **identical on `button`, `icon` and `text-link`** (8 usages read back from a builder-saved page):
+```php
+'icon' => [
+    'library' => 'custom_set_abc123xyz',       // "custom_" . <setId>
+    'svg'     => [ 'id' => 59, 'icon_id' => 'icon_def456uvw', 'url' => '<url>' ],   // id = attachment, icon_id = the icon row
+],
+'iconPosition' => 'right',                     // button + text-link; absent on the icon element
+```
+
+- ⚠️ **The `svg` element's icon variant is NOT verified.** It is asserted elsewhere to use `iconSet` with `source: "iconSet"`, but no builder-saved example has been read back. Discover it before using it.
+- Bake `fill="currentColor"` and `aria-hidden="true"` into the files at import: Bricks inlines the SVG verbatim, and a button's icon renders with no attributes at all, so there is no per-element place to set either. `render_svg()` replaces an existing `aria-hidden` rather than duplicating it.
+- Bricks inlines the file contents, so the filename never appears in rendered HTML — don't count icons by grepping for it. Icons inside a query loop render once per iteration.
+- The same `icon` shape feeds BricksExtras icon controls (`prevIcon` / `nextIcon` on the Pro Slider Control below).
+
 ## BricksExtras ProSlider
 
 Element type is `xproslider`. Each slide block (typically `block` with `tag: "li"`) MUST carry the identity classes, or the SSR markup lacks them until Splide's JS initialises — slides flash unstyled, and screen readers that don't wait for JS miss the carousel semantics:
@@ -547,16 +689,49 @@ Element type is `xproslider`. Each slide block (typically `block` with `tag: "li
 '_hidden' => [ '_cssClasses' => 'x-slider_slide splide__slide' ]
 ```
 
-**Control value types are inconsistent — read an existing slider before writing one:**
+**Control values are typed by control, and the wrong type fails OPEN — read the control definition before writing one** (`grep -n -A10 "controls\['<key>'\]" wp-content/plugins/bricksextras/components/classes/x-pro-slider.php`). The builder never produces an invalid value, so a builder-saved readback does not protect a CLI write here:
 
-| Setting | Type |
-|---|---|
-| `pagination` | **boolean** (`true`/`false`) |
-| `arrows` | **string** (`"true"`/`"false"`) — NOT boolean |
-| `autoplay`, `pauseOnHover` | boolean |
-| `interval`, `speed` | numeric strings |
+| Control type | Examples | How BE reads it | Write |
+|---|---|---|---|
+| checkbox | `pagination`, `pauseOnHover`, `pauseOnFocus` | `isset( $settings['x'] )` | **`true`, or omit the key.** `false` is *set*, so **`false` = ON** — `pagination => false` renders dots. |
+| checkbox, value passed through | `rewind` | `isset()` then the value | `true`; `false` happens to work here, but omit it anyway — the checkbox rule is the safe default |
+| select of strings | `arrows` (`'true'`/`'false'`), `keyboard` (`'false'`/`'focused'`/`'global'`), `autoplayscroll` (`'autoplay'`/`'autoscroll'`/`'none'`) | value passed through | **One of the literal option strings.** A boolean is not an option: `keyboard => true` was coerced to `'global'` and hijacked the arrow keys document-wide. |
+| numeric strings | `interval`, `speed` | value | `'4000'` |
 
-`arrows: true` (boolean) is silently dropped. `listTag: 'ul'` + a slide with `tag:'li'` gives proper list semantics.
+`arrows => true` (boolean) is silently dropped. There is no `autoplay` key on BE 1.7.4 (this table once listed one as a boolean) — autoplay is `autoplayscroll => 'autoplay'`. A builder save did not reintroduce omitted checkbox keys (BE 1.7.1), but re-read after one anyway. Same `isset()` mechanism as the Bricks Form `redirectAdminUrl` below; full entry in `03`. **Correction, WCDP 2026-09-14:** this table previously listed `pagination` and `pauseOnHover` as booleans; that shape rendered dots with `pagination => false`.
+
+`arrows => 'false'` is correct but BE copies the raw string into its per-breakpoint config, where `"false"` is truthy, so Splide builds a `.splide__arrows` wrapper anyway. **Harmless** — BE's own CSS hides any `.splide__arrows:not(.x-splide__arrows)`, expecting arrows to come from `xproslidercontrol` (below). Don't write a rule to hide them.
+
+`listTag: 'ul'` + a slide with `tag:'li'` gives proper list semantics.
+
+**Slide padding — two traps, both on the slide:**
+- BE's `proslider.css` ships `.x-slider_slide { padding: 4rem 1rem }` — right for card carousels, wrong for a ticker, logo strip or quote rotator (a single text line became a 173px band). Zero it with a typed `_padding` on your own slide class; typed won against BE's `(0,1,0)` with no escalation (WCDP, 2026-09-14).
+- `slidePadding` is **not** Splide's `padding` option — it emits `#brxe-<id> .x-slider_slide { padding }` at ID specificity, crushing the card's own padding. Leave it unset when the slide *is* the card (WCDP, 2026-09-11; `03`).
+
+**Query-loop slide** (builder-verified — WCDP, 2026-09-11, zero strips):
+```php
+[ 'name' => 'xproslider', 'settings' => [
+    'perPage' => 3, 'perPage:tablet_portrait' => 2, 'perPage:mobile_landscape' => 1,   // breakpoint suffix on the outer key
+    'perMove' => 1, 'gap' => '32px', 'arrows' => 'false', 'rewind' => true, 'listTag' => 'ul' ] ],   // arrows STRING; pagination omitted = none
+[ 'name' => 'block', 'parent' => '<slider-id>', 'settings' => [
+    'tag' => 'li', '_hidden' => [ '_cssClasses' => 'x-slider_slide splide__slide' ],
+    'hasLoop' => true, 'query' => [ 'objectType' => 'post', 'post_type' => [ 'my_cpt' ], 'posts_per_page' => 6 ],
+    '_cssClasses' => 'prefix-marker' ] ],
+```
+`_hidden._cssClasses` and the user `_cssClasses` both render (verified in the DOM).
+
+## BricksExtras Pro Slider Control — nav arrow (verified — WCDP, 2026-09-11, BE source `x-pro-slider-control.php` + builder save)
+
+```php
+[ 'name' => 'xproslidercontrol', 'settings' => [
+    'controlType' => 'navArrow', 'navType' => 'prev',   // 'next' + nextIcon / nextAriaLabel for the other
+    'slider'      => 'section',                         // finds the slider in the same <section>
+    'buttonType'  => 'icon',
+    'prevIcon'    => [ 'library' => 'custom_set_abc123xyz', 'svg' => [ 'id' => 115, 'icon_id' => 'icon_def456uvw', 'url' => '<url>' ] ],
+    'prevAriaLabel' => 'Previous items' ] ],
+```
+
+Renders `<div class="x-slider-control" data-x-slider-control='{…"type":"navArrow"}'><button class="x-slider-control_nav x-slider-control_nav--prev" type="button" disabled aria-label="…">`. The button ships `disabled` and BE's JS enables it — curl shows it disabled. Style through a global class on the root: the `navbutton*` controls are element-level BE CSS and hit the CLI-regen gap (`03`).
 
 ## Bricks native Form element — auth action settings (verified — Highland, 2026-08-04, Bricks 2.3.10)
 
@@ -583,6 +758,33 @@ Read back from working login / lost-password / reset-password forms. The action 
 - `redirect` + `redirectAdminUrl` are **not** mutually exclusive — the admin branch overwrites the rendered redirect and re-wraps the *raw* string. To use a dynamic redirect, `redirectAdminUrl` must be **unset**, not `false` (the code tests `isset()`). Full mechanism in `03`.
 - The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions`.
 - `?redirect_to=` is honoured **only** when no redirect action is configured.
+
+**Form styling keys and the password toggle** (verified — WCDP, 2026-09-13, Bricks 2.3.13; read back from builder-saved auth pages on a sibling install, rendered and function-tested on WCDP):
+
+Class-level styling keys on the `form` element that emit — typed shapes, so they go on a global class like any other typed setting:
+```php
+'labelTypography'             => [ … ],   // typography shape, incl. text-transform
+'fieldTypography'             => [ … ],
+'placeholderTypography'       => [ … ],
+'fieldBackgroundColor'        => [ 'raw' => 'var(--white)' ],
+'fieldBorder'                 => [ … ],   // flat _border shape
+'fieldPadding'                => [ 'top' => '…', 'right' => '…', 'bottom' => '…', 'left' => '…' ],
+'fieldMargin'                 => [ … ],   // side object
+'submitButtonWidth'           => '100',
+'submitButtonBackgroundColor' => [ 'raw' => 'var(--primary)' ],
+'submitButtonTypography'      => [ … ],
+'submitButtonBorder'          => [ … ],
+'submitButtonMargin'          => [ … ],
+```
+There is **no submit hover control** — the hover state is the one legitimate `_cssCustom` on a form class.
+
+Password field with the eye toggle (an entry in `settings.fields[]`):
+```php
+[ 'type' => 'password', 'passwordToggle' => true,
+  'passwordShowIcon' => [ 'library' => 'svg', 'svg' => [ 'id' => <att>, 'url' => '<url>', 'filename' => 'eye.svg' ] ],
+  'passwordHideIcon' => [ 'library' => 'svg', 'svg' => [ … ] ] ]
+```
+Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `html` field types take `'width' => '50'` for a half-width pair. Importing the SVG attachments from WP-CLI needs `wp --user=1 media import` (`03`).
 
 ## BricksExtras Pro OffCanvas + Burger Trigger (verified — Highland, 2026-07-02, BE 1.6.9)
 
@@ -638,7 +840,38 @@ Child of a `galleryMode` Pro Slider; renders the `ul.splide__list` itself (BE's 
 ],
 ```
 
-⚠️ **Above the fold, `lazyLoadSupport` must be `'none'`** — the `splide` default ships a placeholder data-URI `src` and makes the LCP element a 0×0 SVG. And `maybeSRCSET` defaults to *disabled*, so without it you ship the full-size original. On the parent `xproslider`: `rewind => true` is REQUIRED for fade+autoplay to cycle back, and `arrows` is a **string** `'true'`/`'false'` while `pagination` is a real boolean.
+⚠️ **Above the fold, `lazyLoadSupport` must be `'none'`** — the `splide` default ships a placeholder data-URI `src` and makes the LCP element a 0×0 SVG. And `maybeSRCSET` defaults to *disabled*, so without it you ship the full-size original. On the parent `xproslider`: `rewind => true` is REQUIRED for fade+autoplay to cycle back, and `arrows` is a **string** `'true'`/`'false'` while `pagination` is an `isset()` checkbox — `true` or omit, never `false` (see the ProSlider table above).
+
+## BricksExtras Breadcrumbs (verified — WCDP, 2026-09-12, BE 1.7.1 source `x-breadcrumbs.php` + builder save)
+
+⚠️ BE elements render nothing until switched on in BricksExtras → Elements (`03`). Confirm `isset( \Bricks\Elements::$elements['xbreadcrumbs'] )` before writing the tree.
+
+```php
+[ 'name' => 'xbreadcrumbs', 'settings' => [
+    'ariaLabel'       => 'Breadcrumb',
+    'maybeSchema'     => 'disable',   // DEFAULTS ON — emits BreadcrumbList microdata
+    'maybeCPTarchive' => 'enable',    // DEFAULTS OFF — adds the CPT archive crumb
+    'separator'       => '›',
+] ]
+```
+
+- Every `maybe*` control is a select with **`'enable'` / `'disable'` strings**, not booleans.
+- `maybeSchema` defaults ON and duplicates a plugin- or PHP-owned BreadcrumbList JSON-LD — disable it wherever schema lives in code. The current crumb keeps a stray `itemprop="name"` span even with schema off (no `itemscope`, so inert).
+- `separator` emits `#brxe-<id> ol { --x-breadcrumb-separator: "›" }` — element-level CSS, so it needs the CSS regen.
+- Renders `nav.brxe-xbreadcrumbs[aria-label] > ol.x-breadcrumbs_list > li.x-breadcrumbs_list-item`, `aria-current="page"` on the last `li`. Style through a global class on the root: `.my-crumbs a`, `.my-crumbs [aria-current="page"]`, `li:not(:first-child)::before` for the separator, `--x-breadcrumbs-gap` for spacing.
+
+## Theme Style keys — root font-size and default heading tag (verified — WCDP, 2026-08-11)
+
+`01`'s Theme Style requirements live in `bricks_theme_styles`, not `bricks_global_settings`, under keys that don't match the UI labels. There is no `defaultHeadingTag` setting under any name (`03`).
+
+```php
+$ts = get_option( 'bricks_theme_styles', [] );
+$ts[ $k ]['settings']['typography']['typographyHtml'] = 'var(--root-font-size)';   // "HTML: font-size"
+$ts[ $k ]['settings']['heading']['tag']               = 'h2';                      // unset = h3
+update_option( 'bricks_theme_styles', $ts );
+```
+
+The control definitions are authoritative for both the group key and the control key: `includes/theme-styles/controls/typography.php` and `includes/theme-styles/controls/element-heading.php` each `return [ 'name' => …, 'controls' => … ]`. The heading element reads `$this->theme_styles['tag'] ?? 'h3'`, so an unset tag is h3, not h2. `htmlFontSize` in `includes/i18n.php` belongs to the Style Manager and is a red herring.
 
 ## Bricks custom fonts — `bricks_font_faces` meta shape (verified — Highland, 2026-06-13)
 
@@ -656,6 +889,8 @@ A single **variable** woff2 can back multiple discrete weight faces, but any wei
 ## Schemas not yet captured
 
 - `_border` image/gradient backgrounds (`_background` beyond a flat color).
+- `_transform` / `_transform:hover` and `_boxShadow` / `_boxShadow:hover` — not found in any builder-saved class or tree on the fleet as of 2026-09. A hover lift + shadow currently lives in `_cssCustom`. (Nearby shape, proves nothing about the generic keys: `subMenuBoxShadow = { values: { offsetX, offsetY, blur }, color: { raw } }`.)
+- The `svg` element's icon-set variant (see Icon settings).
 
 An incomplete library is expected. When you need one, discover it via the golden rule and append it here for the harvest.
 

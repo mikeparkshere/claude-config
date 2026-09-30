@@ -34,7 +34,7 @@ These six govern almost everything. Full versions are in the files below.
 
 **Consult by symptom, never cover to cover:**
 
-- `~/claude-config/knowledgebase/03-stack-gotchas.md` — build-stack gotchas. **Start at its Index**, then grep for the exact entry title. ~193KB; reading it whole triggers the compaction that evicts this skill.
+- `~/claude-config/knowledgebase/03-stack-gotchas.md` — build-stack gotchas. **Start at its Index**, then grep for the exact entry title. ~455KB; reading it whole triggers the compaction that evicts this skill.
 - `~/claude-config/knowledgebase/04-hosting-cutover.md` — hosting, cutover, cache and performance. Same contract.
 
 **Scaffolding a new project:** `~/claude-config/knowledgebase/99-project-context.template.md`.
