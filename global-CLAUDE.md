@@ -34,6 +34,11 @@ eight of nine servers. **Convergence is deferred, not decided** — pick a direc
 dedicated to it, not mid-rollout. Per-box table + full rationale: `server-provisioning.md` step 8
 (**private repo** `mikeparkshere/server-provisioning` — it is a fleet map, so it is not in this public repo),
 which is authoritative for the layout; keep this section in step with it.
+**The token lives only in its token file — never in `~/.env`** or any other multi-secret env file (Michael,
+2026-10-01). One copy per box means one place to rotate and one place to check; a second copy in `.env`
+is how a box ends up with a live token in one file and a dead one in another. Rotations go straight to
+the token file (scp from the Mac), not through `.env`. Removed from `~/.env` on jbm003 and mmhn26 the same day, after confirming nothing
+read it from there.
 
 Read it, don't source it — and never echo the value:
 ```bash
@@ -42,14 +47,12 @@ set -a; . ~/.runcloud-token; set +a; T="$RUNCLOUD_API_TOKEN"   # mpd2026 (export
 ```
 Reading into `$T` fails loudly on a missing file; `source` fails **silently** and leaves whatever was
 already in the environment.
-⚠️ **Never trust a pre-exported `$RUNCLOUD_API_TOKEN`.** jbm003 sources `~/.runcloud-api.env` from
-`~/.bashrc` line 122 — *below* the interactive bail on line 6 — so it populates the variable with a
-**stale** value in **interactive shells only**. A non-interactive probe returns unset, so the poisoning
-is invisible to `ssh jbm003 'echo $RUNCLOUD_API_TOKEN'` and live in every CC session. That is a
-jbm003-local `.bashrc` line, not a fleet convention. Always resolve from the file on disk.
-`~/.runcloud-api.env` is a **dead credential** — re-verified 2026-08-04 on jbm003: a valid `export`
-file, mode 600, but its token returns **401**. It is not the live credential anywhere; the only reason
-it still matters is the `.bashrc` poisoning above. Leaving it in place is the open item.
+⚠️ **Never trust a pre-exported `$RUNCLOUD_API_TOKEN`.** Until 2026-10-01 jbm003 sourced `~/.runcloud-api.env`
+from `~/.bashrc` *below* the interactive bail, so every interactive shell — and every CC session —
+carried a **stale** token, invisible to a non-interactive `ssh jbm003 'echo $RUNCLOUD_API_TOKEN'`.
+✅ **Resolved 2026-10-01:** the `.bashrc` line and `~/.runcloud-api.env` (a dead credential, 401) are both
+deleted; fresh shells now get no variable at all. A session started *before* the removal still inherits
+the old value until it exits — another reason to always resolve from the file on disk.
 **A single 401 is not proof of expiry.** A valid and a stale token are both ~235-char JWTs, so length
 distinguishes nothing. Before asking Michael to rotate: `sha256sum` each copy present on the box and
 `curl` each against the API. A 401 from a stale environment copy while the file on disk is valid is the
