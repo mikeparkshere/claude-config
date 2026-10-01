@@ -27,7 +27,7 @@ boxes happen, and the Ops layer above does not follow onto them. Dev via VSCode 
 
 ## RunCloud API
 **There is no single fleet convention. Resolve the path per box; do not assume.** As surveyed
-2026-07-30: `~/.runcloud/token` (bare JWT, mode 600) on 8 of 9 servers — the fleet reality — and
+2026-07-30: `~/.runcloud/token` (bare JWT, mode 600) on 8 of 9 servers — the fleet reality (9 of 10 since mmhn26, 2026-10-01) — and
 `~/.runcloud-token` (the `export RUNCLOUD_API_TOKEN=` form) on mpd2026 only, provisioned 2026-07-28.
 A survey of that one box was mistaken for doctrine and written here in `fd68161`; it was wrong for
 eight of nine servers. **Convergence is deferred, not decided** — pick a direction in a session
@@ -42,7 +42,7 @@ read it from there.
 
 Read it, don't source it — and never echo the value:
 ```bash
-T=$(tr -d '\n' < ~/.runcloud/token)                            # 8 boxes
+T=$(tr -d '\n' < ~/.runcloud/token)                            # 9 boxes
 set -a; . ~/.runcloud-token; set +a; T="$RUNCLOUD_API_TOKEN"   # mpd2026 (export form)
 ```
 Reading into `$T` fails loudly on a missing file; `source` fails **silently** and leaves whatever was
@@ -96,6 +96,9 @@ values *afterwards* is panel-only — webapp → Settings; the form mirrors thes
 ✅ **But set them at creation through the API** (verified 2026-10-01, MMHN): `POST /servers/{id}/webapps/custom`
 accepts the same `processManager*` / `memoryLimit` / `maxExecutionTime` / `timezone` fields and applies them, so
 a new webapp never has to ship on the 5-worker default. Read back `/settings` to confirm.
+⚠️ **New server: set the CLI PHP too** — RunCloud starts `php` (what WP-CLI runs) on the *lowest* installed
+version regardless of the webapp's FPM version. `PATCH /servers/{id}/php/cli` `{"phpVersion":"php84rc"}`, then
+verify `wp eval 'echo PHP_VERSION;'` (mmhn26 ran WP-CLI on 8.1 until caught, 2026-10-01).
 ⚠️ **Before booking panel time for a server-level directive, check the webapp's `stack`.** A `hybrid`
 webapp is nginx → Apache → FPM and **honours `.htaccess`**, so Apache directives work with no root, no
 sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
