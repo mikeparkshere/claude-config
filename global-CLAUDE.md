@@ -96,6 +96,13 @@ values *afterwards* is panel-only — webapp → Settings; the form mirrors thes
 ✅ **But set them at creation through the API** (verified 2026-10-01, MMHN): `POST /servers/{id}/webapps/custom`
 accepts the same `processManager*` / `memoryLimit` / `maxExecutionTime` / `timezone` fields and applies them, so
 a new webapp never has to ship on the 5-worker default. Read back `/settings` to confirm.
+⛔ **But never use `/webapps/custom` for a WordPress site** (found 2026-10-02, MMHN). It creates a webapp of
+type `custom`, and RunCloud's WordPress toolkit is keyed on type: `GET …/webapps/{w}/runcache` → 403 *"Web
+Application need to be set to WordPress to use this function"*, so **no RunCache, no page cache**. The webapp
+resource is `GET,HEAD,DELETE` only, so the type can't be changed by API afterwards; the only fixes are a RunCloud
+support ticket or recreating the webapp. Create WordPress sites with `/webapps/wordpress`. Whether that endpoint
+also accepts the `processManager*` fields is **unverified**: try them, read back `/settings`, and if they didn't
+apply, set FPM in the panel before the site takes traffic. Check `"type"` with a GET the day a webapp is created.
 ⚠️ **New server: set the CLI PHP too** — RunCloud starts `php` (what WP-CLI runs) on the *lowest* installed
 version regardless of the webapp's FPM version. `PATCH /servers/{id}/php/cli` `{"phpVersion":"php84rc"}`, then
 verify `wp eval 'echo PHP_VERSION;'` (mmhn26 ran WP-CLI on 8.1 until caught, 2026-10-01).
