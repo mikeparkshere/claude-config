@@ -523,6 +523,23 @@ add_filter( 'perfmatters_defer_js', $off );
 **Related:** the entry above covers Delay JS and Defer JS killing the WP media modal. Same plugin, same class of failure, different victim and a different exclusion set. **Whenever delay-JS is on, enumerate the dependency chain of anything interactive and exclude it whole.**
 **First seen:** JBM, 2026-06-24 — a contact form silently dropping submissions, found while wiring conversion tracking. Root cause was jQuery still delayed while the form's own scripts had been excluded.
 
+### A hidden image early in the header (mega-menu panel, off-canvas) takes the hero's `fetchpriority="high"` and a Perfmatters leading-eager slot, on every page
+**Symptom / When:** Mobile PSI drops sharply site-wide on the day a mega menu, off-canvas or any header panel with an image ships. In the PSI network list a menu image is fetched at **High** priority right after the CSS, and the real hero is fetched later or lazy-loaded. Nothing looks wrong on screen. If only one page type is being measured, it reads as a regression on that page and gets blamed on whatever else changed there.
+**Why:** A Bricks mega-menu template (or BricksExtras off-canvas/slide-menu content) renders **inside `#brx-header`, hidden**, so its image is the **first `<img>` in the DOM** on every page. Two things key on DOM order. (1) WordPress core's loading optimisation gives the first sizeable image `fetchpriority="high"` and marks that flag as spent, so the real hero gets nothing. (2) Perfmatters' **Exclude Leading Images** counts by DOM order, so the panel image (twice, if a mobile slide menu renders the same template) takes eager slots and strips its own lazy attribute. Image-format plugins that rewrite to `<picture>` may also skip it, so it ships as the original PNG/JPG.
+**Fix:**
+1. On the panel's image element set Bricks' own `loading: 'lazy'` (builder control, or the `bricks/element/settings` filter if the element is fed from code). An explicit `lazy` tells core the image is off-screen, so it gets no fetchpriority and the flag passes to the next image, the real hero.
+2. Keep it out of Perfmatters' eager count:
+```php
+add_filter( 'perfmatters_leading_image_exclusions', function ( $exclusions ) {
+	$exclusions[] = 'shop-menu__feature-image'; // any string in the <img> tag
+	return $exclusions;
+} );
+```
+Matching images skip the count and are lazy-loaded normally.
+**Verify:** for each page type, list the first six `<img>` tags: the hero must carry `fetchpriority="high"` and both panel copies must be lazy (`perfmatters-lazy` / `data-src`). Then, headlessly, open the menu and confirm the panel image loads (`complete` + `naturalWidth > 0`). Perfmatters' observer catches the reveal. Score the change with a stable meter, not single PSI runs (see the PSI entries above).
+**Related:** calling `wp_get_attachment_image()` in `wp_head` (e.g. for a preload) spends the same core flag by a different route.
+**First seen:** MMHN, 2026-10-03 — Shop mega menu shipped 10-02. Product-page mobile PSI fell 91 → ~69 and was first blamed entirely on Stripe's `js.stripe.com`, which landed the same day. Removing Stripe recovered a few points; the header image was the site-wide cause.
+
 ## Backups (Duplicator Pro)
 
 ### Retention is per *storage*, not per schedule — one shared storage lets the daily backup delete your fulls
