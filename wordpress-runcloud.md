@@ -376,6 +376,33 @@ add_action( 'acf/include_fields', function() {
 
 ---
 
+## Search Console + GA4 data (per-client service accounts)
+
+Scripts: `~/claude-config/bin/gsc.py` and `ga4.py`: self-contained (system `cryptography` + `requests`), read-only scopes.
+**One service account per client, granted on that client's properties only, key only on the box that hosts the client.**
+One shared key that reads every client means one leak exposes all of them, and offboarding a client means rotating everyone.
+
+Per-client files live in `~/.gsc/` (dir 700, files 600, outside every webroot), named after the webapp:
+```
+~/.gsc/<app>-sa.json   # the key: downloaded from GCP, scp'd from the Mac, never pasted into chat
+~/.gsc/<app>.json      # {"key": "~/.gsc/<app>-sa.json", "ga4_property": "123456789", "gsc_site": "sc-domain:example.com"}
+```
+The scripts pick the profile from the webapp you are in, so inside `/home/runcloud/webapps/<app>/` no flags are needed.
+Elsewhere: `--client <app>`. If the box has exactly one profile, it's used automatically. `--key/--property/--site` override.
+
+New client:
+1. GCP (the agency's project) → IAM → Service accounts → create `<client>-reporting`, **no project roles** → Keys → JSON.
+2. Search Console → property → Users and permissions → add the SA email as **Restricted**.
+3. GA4 → Admin → Property access management → add the SA email as **Viewer**. Note the property ID.
+4. From the Mac: `scp <key>.json <box>:~/.gsc/<app>-sa.json`; write the profile; `chmod 700 ~/.gsc; chmod 600 ~/.gsc/*.json`.
+5. Verify: `gsc.py sites` must list **only** this client's property (anything more = over-granted SA); `ga4.py metadata` → `Access OK`.
+6. Record the SA email + property IDs in the webapp's CLAUDE.md. Then remove any older shared SA from the client's properties.
+
+Gotchas: GSC lags ~2–3 days (set `--end` accordingly); GA4 "Conversions" is now `keyEvents`; `ga4.py --limit` defaults
+to 50 and sorts by the first metric, so rare events get truncated (use `--limit 500` when hunting one).
+
+---
+
 ## Audit Mode
 
 Auditing an existing site is its own command: **`/wordpress-audit`**. It layers on top of this session — webapp root, WP-CLI access and CLAUDE.md context carry over, so do not re-run the webapp selection step. Run it rather than improvising an inventory here.
