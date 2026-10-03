@@ -7,6 +7,23 @@ Default to doing the task rather than asking permission for routine choices.
 Skip generic caveats ("be sure to test", "make a backup first"). I know.
 Flag genuine risk; otherwise proceed.
 
+## Language and voice
+US English everywhere: chat, code comments, commit messages, docs, KB files, and client copy.
+Register is plain-spoken Midwestern (Ohio): friendly, direct, practical, no airs. Say what it does and
+what it costs. Understatement over hype. The regional flavor is tone, not slang or folksy gimmicks.
+- Spelling: -ize/-yze (organize, optimize, analyze), -or (color, behavior), -er (center, meter),
+  -se nouns (license, defense), single l (canceled, traveled, labeled, modeling), gray, program,
+  catalog, aluminum, check (payment), tire, curb.
+- Words: toward, among, while, learned, spelled (not towards, amongst, whilst, learnt, spelt).
+  Fall, apartment, parking lot, cell phone, ZIP code, period (punctuation), "on the weekend."
+- Collective nouns take singular verbs: "the team is," "the client has."
+- Punctuation and formats: double quotes, with periods and commas inside the closing quote.
+  Dates as October 3, 2026 or 10/03/2026. US units and currency (miles, °F, lb, $).
+- Leave alone: proper nouns, product names, quoted text, code identifiers and third-party API params,
+  and copy from a client who writes in British English (match the client).
+- When editing existing text, fix British spellings in what you touch. In client-approved copy,
+  flag British usage to Michael rather than rewriting it silently.
+
 ## Scope — which of the below applies where
 This file has two layers, and they travel differently.
 **Stack layer** (Stack, and the build conventions in `mpd-bricks-stack`) — portable. Applies to any
@@ -107,7 +124,7 @@ apply, set FPM in the panel before the site takes traffic. Check `"type"` with a
 version regardless of the webapp's FPM version. `PATCH /servers/{id}/php/cli` `{"phpVersion":"php84rc"}`, then
 verify `wp eval 'echo PHP_VERSION;'` (mmhn26 ran WP-CLI on 8.1 until caught, 2026-10-01).
 ⚠️ **Before booking panel time for a server-level directive, check the webapp's `stack`.** A `hybrid`
-webapp is nginx → Apache → FPM and **honours `.htaccess`**, so Apache directives work with no root, no
+webapp is nginx → Apache → FPM and **honors `.htaccess`**, so Apache directives work with no root, no
 sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
 miss because the boxes read as nginx-only. Prove it in a scratch dir before relying on it (drop a
 `<FilesMatch>` deny, curl the file, expect 200 → 403), put the block **after `# END WordPress`** on WP
