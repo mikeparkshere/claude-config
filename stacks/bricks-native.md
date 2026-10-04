@@ -31,5 +31,5 @@ Summary of the replacements, so a session can orient without opening the project
 
 ## Known open questions (alpha)
 
-- **`style-manager.min.css` is probably the token output here.** Two `03` entries tell you to delete that file. On this stack it is expected to carry the tokens, and only a builder session writes it. Both entries carry an unverified warning; settle it at spec Stage 4.
+- ~~**`style-manager.min.css` is probably the token output here.**~~ Settled 2026-10-04 (pkjsupport, Bricks 2.4.2): it's a later-loading **duplicate** of `color-palettes.min.css` / `global-variables.min.css`. Deleting it drops no tokens; a stale copy is the hazard. Both `03` entries are corrected.
 - **Utilities that ACSS shipped and mpd-core may not:** `.hidden-accessible`, `-trans-N` color tokens, `--grid-N` templates, the `-rgb` partials. Each ships only if the Stage 2 usage audit shows real use, so check `TOKENS.md` before you assume one resolves. If it isn't there, Bricks' `.screen-reader-text` is the visually-hidden fallback.
