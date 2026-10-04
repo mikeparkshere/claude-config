@@ -11,7 +11,10 @@
  * Usage (eval-file can no-op silently on RunCloud — use the include form):
  *
  *   ICON_SET=MPD ICON_SRC=/path/to/icons \
- *     wp eval 'include getenv("HOME") . "/claude-config/bin/bricks-icon-import.php";'
+ *     wp --user=1 eval 'include getenv("HOME") . "/claude-config/bin/bricks-icon-import.php";'
+ *
+ *   --user=1 is required: WP-CLI runs as user 0, and SVG uploads are allowed per role, so without it
+ *   every icon aborts with "not allowed to upload this file type" (the set row is still created).
  *
  *   ICON_SRC accepts directories and individual .svg files, colon-separated.
  *   ICON_DRY=1 reports what it would do and writes nothing.

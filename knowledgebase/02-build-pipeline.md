@@ -656,7 +656,7 @@ Renders `the_content()` with **no element settings** — just a Global Class. St
 
 ## Icon settings — custom icon sets (verified — WCDP, 2026-08-18)
 
-Custom icon sets are **`wp_options` state, not code**: Bricks has no filter to register one, and each icon row binds to an attachment ID on that install. Rebuild the set per install from the SVG files — `bin/bricks-icon-import.php` in this repo does it idempotently (`ICON_SET=<name> ICON_SRC=<dir|files> wp eval 'include ".../bin/bricks-icon-import.php";'`, `ICON_DRY=1` to preview). The silent-nothing failure when an attachment doesn't resolve is in `03`.
+Custom icon sets are **`wp_options` state, not code**: Bricks has no filter to register one, and each icon row binds to an attachment ID on that install. Rebuild the set per install from the SVG files — `bin/bricks-icon-import.php` in this repo does it idempotently (`ICON_SET=<name> ICON_SRC=<dir|files> wp --user=1 eval 'include ".../bin/bricks-icon-import.php";'`, `ICON_DRY=1` to preview). The silent-nothing failure when an attachment doesn't resolve is in `03`.
 
 Option shapes (read from a working install):
 ```json
