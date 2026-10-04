@@ -103,7 +103,13 @@ WORKING WITH WP-CLI FROM PROJECT ROOT:
 Since we're at project root, use subshell for WP-CLI:
 - (cd app/public && wp plugin list)
 - (cd app/public && wp cache flush)
-- (cd app/public && wp db query "SELECT * FROM wp_options LIMIT 5")
+- (cd app/public && wp eval 'global $wpdb; print_r( $wpdb->get_results( "SELECT option_name FROM {$wpdb->options} LIMIT 5" ) );')
+
+⚠️ **Never `wp db query` or `wp db cli` on Local.** They shell out to the `mysql` client, which dials
+`/tmp/mysql.sock` and fails (`ERROR 2002`). (`wp db export` does work: tested 2026-10-04, pkjsupport.) `--socket=` does not rescue it: WP-CLI's SQL-modes preflight
+ignores the flag. PHP-path commands (`wp eval`, `wp eval-file`, `wp option`, `wp post`) connect through PHP's
+`mysqli.default_socket`, which Local's `php.ini` points at the live socket. Use `$wpdb` for SQL (`03`: "Local:
+`wp db query` fails on the mysql socket"). Mirror image of the sibling-site trap in step 1: that socket is THIS site's.
 
 READING THE LOGS:
 `logs/php/error.log` is created on the first PHP error, so on a clean or freshly-blueprinted site it
