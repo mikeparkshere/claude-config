@@ -54,6 +54,8 @@ Read every numbered file it contains, 00 through 04, in order, honoring whatever
 
 Then read the project CLAUDE.md if one exists, at the project root or at app/public/wp-content/.
 
+**Dispatch on its `stack:` line** (`00`, read protocol step 4). No line, or `stack: acss`, means every `[stack:acss]` rule applies — the fleet default. `stack: bricks-native` means load the stack file the CLAUDE.md names and apply its replacements instead; the ACSS-specific CSS locations further down this file do not exist on that stack.
+
 The knowledgebase is the operating authority for this session. Where anything below in this file disagrees with it, the knowledgebase wins.
 
 If context is compacted, or if /clear is used at any point, re-read all of these files before continuing. A session that has lost the knowledgebase will keep working and will sound confident while doing it.
@@ -156,7 +158,7 @@ DEVELOPMENT PREFERENCES:
 
 For custom fields, ALWAYS use ACF Pro unless I specifically request custom meta boxes or WordPress native functions.
 
-CSS/STYLE LOCATIONS (Bricks + ACSS + WPCodeBox):
+CSS/STYLE LOCATIONS (Bricks + ACSS + WPCodeBox) — items 3–4 are [stack:acss]:
 When looking for CSS styles, check these locations in order:
 
 1. Bricks Global Classes (most common for component styles):

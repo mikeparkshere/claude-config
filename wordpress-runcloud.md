@@ -41,7 +41,7 @@ Do not continue under the unloaded gate. If Michael explicitly chooses to stay i
 cat CLAUDE.md
 ```
 
-If `CLAUDE.md` exists, read it and acknowledge the project context before proceeding. If it does not exist, flag this to the user:
+If `CLAUDE.md` exists, read it and acknowledge the project context before proceeding. Read its `stack:` line and dispatch on it (`knowledgebase/00`, read protocol step 4): absent or `acss` = the `[stack:acss]` rules apply; `bricks-native` = load the stack file it names, and ignore the ACSS-only paths and rules in this file. If it does not exist, flag this to the user:
 
 > "No CLAUDE.md found for this webapp. I have environment context but no project context. You may want to create one before we proceed — or tell me about the project now."
 
@@ -156,7 +156,7 @@ grep -a '^\[Wed Aug 05 1[0-9]' [APP_NAME]_error.log | grep -ac "pattern"
 - **ACF Pro** for all custom fields — ALWAYS use `acf_add_local_field_group()` for field registration, never UI-only
 - **Bricks Builder** for page building with dynamic data from helper functions
 - **ACF Local JSON** enabled for field sync and version control
-- **ACSS v3** is the CSS framework — never work around it or replace it
+- **ACSS v3** is the CSS framework — never work around it or replace it `[stack:acss]`
 - All custom post types, taxonomies, ACF fields, and options pages go in the **project core plugin**
 - WPCodeBox snippets approved on staging must be migrated to the core plugin before go-live
 
@@ -193,7 +193,7 @@ defined('ABSPATH') || exit;
 
 ---
 
-## CSS / Style Locations (Bricks + ACSS + WPCodeBox)
+## CSS / Style Locations (Bricks + ACSS + WPCodeBox) — items 3–4 are `[stack:acss]`
 
 When looking for CSS styles, check these locations in order:
 

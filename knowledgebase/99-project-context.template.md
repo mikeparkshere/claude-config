@@ -34,10 +34,18 @@ Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to us
    write (`00`).
 5. **Session degrading:** `/clear` and re-prime. Do not push through.
 6. **Doc/build mismatch = flag, don't fix.** Audits never migrate built state.
-   Pinned tokens have one home: ACSS Global CSS (`01`). Any authorized move:
-   verify the new home on the rendered front end BEFORE deleting the old copy
-   (`00`).
+   Pinned tokens have one home: ACSS Global CSS (`01`) [stack:acss]. Any
+   authorized move: verify the new home on the rendered front end BEFORE
+   deleting the old copy (`00`).
 ```
+
+**Also declare the stack in `CLAUDE.md`**, in its Project Overview, as a bare line the read protocol can grep (`00`, step 4):
+
+```markdown
+stack: acss            # or: bricks-native
+```
+
+Omitting it means `acss` — the fleet default. On a non-ACSS stack, rewrite rule 6's token home to that stack's (e.g. the Bricks Style Manager on `bricks-native`) and drop the tag; the rule is otherwise unchanged.
 
 ---
 
@@ -49,7 +57,7 @@ Per the read protocol in `00`, the phase is a **contract, not a note**, and the 
 
 DEV ends at whichever comes first: real data loading in, or the first client review. Both are the same event — something arrives that the build pipeline cannot regenerate. STAGING runs from there to cutover, which is most of the project's life. `+TXN` marks a site taking payments; it is a permanent property, not a phase, and it composes with all three.
 
-**Stack versions:** WordPress {x}, Bricks {x}, ACSS {x}, {core plugin} v{x}, {child theme} v{x}.
+**Stack versions:** WordPress {x}, Bricks {x}, {ACSS {x} | framework {x}}, {core plugin} v{x}, {child theme} v{x}. Stack: {acss | bricks-native}.
 
 **Environments:**
 - Local: {URL} — {install root}
@@ -137,7 +145,7 @@ DEV ends at whichever comes first: real data loading in, or the first client rev
 - **Wireframes:** {location}
 - **Logs:** {RunCloud paths — PHP/Apache and Nginx}
 - **DB backups:** {location / naming convention}
-- **ACSS token map:** {location of the per-project extracted token map}
+- **Token map:** {location of the per-project token map — the extracted ACSS map on `acss`, the stack's token spec on others}
 - **Notion CLAUDE.md:** {Notion URL — a **published view, not canonical**. This project's `CLAUDE.md` is the source of truth; CC pushes it to Notion on request, one-way. Never edit the Notion copy — an edit there is silently lost at the next sync.}
 - **Brand assets:** {location}
 - **Social:** {handles}

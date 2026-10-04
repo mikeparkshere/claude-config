@@ -20,7 +20,7 @@ These six govern almost everything. Full versions are in the files below.
 3. **Readbacks are narrow.** `jq`-extract the shape you need. Whole blobs go through a subagent. A full `_bricks_page_content_2` read on staging can run tens of thousands of tokens and evict this skill.
 4. **`wp_set_current_user(1)` first.** Any WP-CLI script writing `_bricks_page_*_2` meta. Without it the write silently no-ops and reports success.
 5. **After any compaction: stop.** Re-run the read protocol before the next write. A compacted session is a new session wearing the old one's scrollback.
-6. **Doc/build mismatches get flagged, not fixed.** Audits and alignment passes never migrate built state between homes. Pinned custom tokens have exactly one home — ACSS Global CSS (`01`) — and a doc naming another home is a doc bug. Any authorized move of load-bearing state verifies the new home on the rendered front end before the old copy is deleted (`00`).
+6. **Doc/build mismatches get flagged, not fixed.** Audits and alignment passes never migrate built state between homes. Pinned custom tokens have exactly one home — on `[stack:acss]` that is ACSS Global CSS (`01`); on another stack, the home its stack file names — and a doc naming another home is a doc bug. Any authorized move of load-bearing state verifies the new home on the rendered front end before the old copy is deleted (`00`).
 
 ---
 
@@ -36,6 +36,8 @@ These six govern almost everything. Full versions are in the files below.
 
 - `~/claude-config/knowledgebase/03-stack-gotchas.md` — build-stack gotchas. **Start at its Index**, then grep for the exact entry title. ~455KB; reading it whole triggers the compaction that evicts this skill.
 - `~/claude-config/knowledgebase/04-hosting-cutover.md` — hosting, cutover, cache and performance. Same contract.
+
+**Stack dispatch:** read the project CLAUDE.md `stack:` line before applying any rule (`00`, read protocol step 4). Rules tagged `[stack:acss]` apply when it says `acss` or is absent; `bricks-native` loads `~/claude-config/stacks/bricks-native.md` instead.
 
 **Scaffolding a new project:** `~/claude-config/knowledgebase/99-project-context.template.md`.
 

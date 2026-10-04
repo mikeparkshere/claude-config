@@ -10,6 +10,8 @@ Verified against Bricks 2.3.4 / ACSS 3.3.6. V1 baseline: 2026-05-24.
 
 WordPress + Bricks Builder 2.3.4+ + Automatic.css (ACSS) 3.3+ + ACF Pro + WS Forms Pro + RankMath Pro + Perfmatters, hosted on RunCloud / DigitalOcean. Claude Code via VSCode Remote-SSH is the build tool.
 
+`[stack:acss]` ACSS in that list is the fleet default, not a universal. A project declaring `stack: bricks-native` runs with no ACSS and takes its replacements from its stack file (`00`, read protocol step 4).
+
 Code ownership is strict and non-negotiable:
 
 - **All custom functionality** lives in the project's core functionality plugin — never in the theme or `functions.php`. ACF field groups are registered programmatically via `acf_add_local_field_group()` in the plugin, never UI-only. Custom post types, taxonomies, hooks, helper functions, Bricks dynamic tags — all plugin.
@@ -29,7 +31,7 @@ This is the most-violated rule in the build, named as a core principle in `00` a
 
 1. **Typed Bricks setting, via the UI control.** Padding, margin, gap, border, background, typography, grid, alignment — if the value can be typed into a Bricks panel, it goes there. This is the first choice every time, not a fallback.
 2. **`_cssCustom` on the specific element or class.** Only when no typed control can express the value — `justify-items: center`, a `max-height` on a figure+img, a narrow per-breakpoint override the typed schema cannot reach. Scoped to where it is used, for that use case.
-3. **Child theme `style.css`.** When the need is genuinely global and site-wide — brand context systems, site-wide utilities, link policy. Not element-specific. Pinned custom brand tokens are the one exception at this layer: they live in ACSS Global CSS, not the child theme — see "Pinned custom tokens" below.
+3. **Child theme `style.css`.** When the need is genuinely global and site-wide — brand context systems, site-wide utilities, link policy. Not element-specific. `[stack:acss]` Pinned custom brand tokens are the one exception at this layer: they live in ACSS Global CSS, not the child theme — see "Pinned custom tokens" below.
 
 **Why the order matters.** `_cssCustom` is the fast instinct and it gives more control. It is also less maintainable the moment anyone else touches the site. Inline custom CSS is invisible in the Bricks UI — a junior dev or a client working through the panels cannot see it, cannot edit it, and will not know it exists. It accumulates as cruft that has to be swept later. A typed setting is visible, editable in the panel, and survives a handoff intact. The rule is about what is maintainable to inherit, not what is fastest to write.
 
@@ -51,7 +53,7 @@ Templates in particular: give every styled element a template-specific class eve
 
 Two steps, in this order. Getting them the wrong way round means rebuilding a system the framework already ships.
 
-**1. Ask whether ACSS already owns this surface.** ACSS covers more third-party UI than its name suggests — most importantly it ships a **first-class WS Form layer**, gated by the `option-forms` setting: roughly 240 rules driven by a dedicated `--f-*` token namespace, made context-aware by the `.form--light` / `.form--dark` utility classes, covering inputs, labels, legends, help, placeholders, focus, the required marker, every button role, checkboxes, radios, selects, ranges, progress bars and tabs. Both context classes are registered as Bricks global classes by the ACSS import, so they are already in the picker.
+**1. Ask whether ACSS already owns this surface.** `[stack:acss]` — this whole step, through the two context-class warnings that close it. ACSS covers more third-party UI than its name suggests — most importantly it ships a **first-class WS Form layer**, gated by the `option-forms` setting: roughly 240 rules driven by a dedicated `--f-*` token namespace, made context-aware by the `.form--light` / `.form--dark` utility classes, covering inputs, labels, legends, help, placeholders, focus, the required marker, every button role, checkboxes, radios, selects, ranges, progress bars and tabs. Both context classes are registered as Bricks global classes by the ACSS import, so they are already in the picker.
 
 Where ACSS covers it, **ACSS is the form layer's one owner, configured at framework level:**
 
@@ -84,7 +86,7 @@ Remap the roots in one block and let the plugin's own derivation repaint everyth
 
 **Do not assume a framework default is accessible.** ACSS's own form defaults include an input border that fails 3:1 on white, and a focus colour and required marker that are light-surface brand colours reused unchanged on dark. The artifact carries the checklist; run it every time, because the ratios are per-brand and only the list travels.
 
-**Guard the semantic tier.** A governance-minimal palette (above) enables only the colour slots the brand uses, so `--danger` / `--success` / `--warning` / `--info` may not exist on a given project — and ACSS's own form defaults reference some of them. Confirm the slots a default depends on are enabled, or pin the value explicitly.
+**Guard the semantic tier.** `[stack:acss]` A governance-minimal palette (above) enables only the color slots the brand uses, so `--danger` / `--success` / `--warning` / `--info` may not exist on a given project — and ACSS's own form defaults reference some of them. Confirm the slots a default depends on are enabled, or pin the value explicitly.
 
 Mechanism, incident and the real class names: `03` → *"WS Form — skin it by overriding root `--wsf-form-*` vars"*, which remains correct for the no-ACSS-coverage case.
 
@@ -118,8 +120,8 @@ SECTION (Bricks Section element, BEM block class)
         └── BEM elements (.block__header, .block__grid, .block__item)
 ```
 
-- The `__inner` wrapper is dead. The ACSS Container class replaces it entirely — it handles max-width and centering.
-- Padding is stripped from BEM container elements. Section-level spacing is handled by ACSS section spacing — set it on the Section, do not write it into the BEM CSS.
+- The `__inner` wrapper is dead. `[stack:acss]` The ACSS Container class replaces it entirely — it handles max-width and centering.
+- Padding is stripped from BEM container elements. `[stack:acss]` Section-level spacing is handled by ACSS section spacing — set it on the Section, do not write it into the BEM CSS.
 
 **Bricks Theme Style requirements** — set per project (where each lives, and the unset-tag default of h3: `02` → Theme Style keys):
 
@@ -127,6 +129,8 @@ SECTION (Bricks Section element, BEM block class)
 - Container width = `var(--content-width)`
 - Default heading tag = H2
 - Disable class chaining = ON (Bricks performance setting; required)
+
+`[stack:acss]` `--root-font-size` and `--content-width` are supplied by ACSS. The four requirements themselves hold on every stack; only where the two variables resolve from changes.
 
 ---
 
@@ -136,11 +140,11 @@ SECTION (Bricks Section element, BEM block class)
 - **Element** — double underscore. `.service-hero__col`, `.capabilities__item`, `.featured-projects__card`.
 - **Modifier** — double dash. `.service-hero__col--content`, `.capabilities__item--featured`.
 
-ACSS global classes (`.container`, `.eyebrow`, button classes) are used as-is. Do not wrap them in BEM, do not create custom versions of them. Buttons use ACSS button classes — do not write custom button CSS.
+`[stack:acss]` ACSS global classes (`.container`, `.eyebrow`, button classes) are used as-is. Do not wrap them in BEM, do not create custom versions of them. Buttons use ACSS button classes — do not write custom button CSS.
 
 Specificity stays flat. BEM means each element has its own class; do not nest selectors like `.block .element .sub`. No `!important` as a default tool — where a layered-cascade fight has to be won, the doubled-class trick (`.foo.foo`) is the first move (see `03`).
 
-String expansion in Bricks: write `--variable` in a Bricks field and ACSS expands it to `var(--variable)`.
+`[stack:acss]` String expansion in Bricks: write `--variable` in a Bricks field and ACSS expands it to `var(--variable)`.
 
 ### Specificity cheat sheet
 
@@ -163,21 +167,23 @@ Before fighting any rule with a selector, check whether it consumes a token you 
 
 ## ACSS variable reference
 
-The authoritative values live in the project's ACSS token map, extracted per project. This is the structural reference — the variable names and what they are for.
+`[stack:acss]` The authoritative values live in the project's ACSS token map, extracted per project. This is the structural reference — the variable names and what they are for.
 
 **Spacing.** Six-step scale: `--space-xs`, `--space-s`, `--space-m`, `--space-l`, `--space-xl`, `--space-xxl`. The scale stops at `xs` — there is no `2xs` or `3xs`; using one silently falls back to an invalid var (see `03`). Section spacing: `--section-space-xs` through `--section-space-xxl`. Utility classes `.padding--{size}`, `.margin--{size}`, `.gap--{size}`. Directional spacing = a custom class plus `var(--space-{size})`. Fine-tune with `calc(var(--space-l) / 1.1)`. Never use magic numbers. Inside custom BEM classes, prefer the variables over the utility classes.
 
 **Typography.** Font sizes: `--h1` through `--h6`, and `--text-xxl` / `--text-xl` / `--text-l` / `--text-m` / `--text-s` / `--text-xs` (same `xs` floor — no `2xs`). Global heading variables: `--heading-font-family`, `--heading-color`, `--heading-line-height`, `--heading-font-weight`, `--heading-letter-spacing`, `--heading-text-transform`. Per-level overrides: `--h1-color`, `--h1-font-weight`, etc. Global text: `--text-font-family`, `--text-color`, `--text-line-height`, `--text-font-weight`. To resize a heading visually without changing its tag, set `font-size: var(--h4)` on an `h2`. No hardcoded `font-family` or `font-size`.
 
-ACSS heading and text sizes — and the `--space-*` scale — are fluid by default: the rendered values come from `clamp()` declarations in an `@supports` block in `automatic.css`, not from the rem fallbacks in `automatic-variables.css`, which read up to ~2× too large at the small end of the space scale. When auditing or overriding sizes, or judging whether a token step is right for a component, read the right file and preserve fluid scaling (see `03`).
+`[stack:acss]` ACSS heading and text sizes — and the `--space-*` scale — are fluid by default: the rendered values come from `clamp()` declarations in an `@supports` block in `automatic.css`, not from the rem fallbacks in `automatic-variables.css`, which read up to ~2× too large at the small end of the space scale. When auditing or overriding sizes, or judging whether a token step is right for a component, read the right file and preserve fluid scaling (see `03`).
 
 **Colors.** Utility classes `.text--{color}`, `.bg--{color}`, `.link--{color}`. Shades: `-ultra-light`, `-light`, `-mid`, `-dark`, `-ultra-dark`. Variables: `var(--{color})`, `var(--{color}-{shade})`. Semantic colors: `--warning`, `--info`, `--success`, `--danger`. Color partials for computed work: `--{color}-hex`, `-hsl`, `-h`, `-s`, `-l`, `-rgb`, `-r`, `-g`, `-b`. The `-rgb` partial is space-separated, so compose it with slash syntax — `rgb(var(--x-rgb) / a)`, never legacy `rgba(var(--x-rgb), a)`, which invalidates the whole declaration (`03`); prefer a ready-made `-trans-N` token where one exists. Local override pattern: `.my-card--alt { --base-dark: var(--secondary); }`. Every color value in output is an ACSS variable — no hex, no rgb(), no named colors.
 
-ACSS ships `.bg--ultra-light` / `.bg--light` / `.bg--dark` / `.bg--ultra-dark` but no `.bg--primary` — a brand-color section system is project-defined. ACSS auto-derives intermediate color shades at full saturation, which can be off-brand; treat auto-derived intermediates as needing design review before use.
+`[stack:acss]` ACSS ships `.bg--ultra-light` / `.bg--light` / `.bg--dark` / `.bg--ultra-dark` but no `.bg--primary` — a brand-color section system is project-defined. ACSS auto-derives intermediate color shades at full saturation, which can be off-brand; treat auto-derived intermediates as needing design review before use.
 
 ---
 
-## ACSS configuration
+## ACSS configuration `[stack:acss]`
+
+The tag on this heading covers the whole section, including the pinned-token subsection below.
 
 Configure ACSS the way we build Bricks: **programmatically, verified against output** — not by hand in the dashboard. The mechanism is `Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $values, $trigger_css_generation = true )`:
 
@@ -190,7 +196,7 @@ Direct-value settings — type sizes and **per-level Font Size Overrides**, scal
 
 **Governance-minimal palette.** Enable only the ACSS colour slots the brand uses. Every enabled slot emits ~15 auto-derived, full-saturation intermediates into the Bricks/AT colour picker — off-brand, and an invitation to pick off-script. Represent one-off brand colours (a flat surface, an accessible-text variant) as **pinned custom tokens in ACSS Global CSS** (next section), not slots; keep sub-14px sizes (eyebrows) out of the general text scale for the same reason.
 
-### Pinned custom tokens — one home, by law
+### Pinned custom tokens — one home, by law `[stack:acss]`
 
 **Pinned custom brand tokens live in a `:root {}` block in ACSS Global CSS (Settings → Global CSS in the dashboard; earlier versions labeled the same field "Global SCSS"). That is the only home. No alternatives.** Not child-theme `:root`. Not Bricks Global Variables. Not a per-project choice. A brand guide, project doc, or template that names any other home is a doc bug — fix the document, never the build (`00` → doc/reality mismatches).
 
@@ -232,7 +238,7 @@ This avoids `::after` pseudo-elements (which drop on Bricks import), avoids nest
 **Alternative — ACSS `.clickable-parent` utility** — available only when the card has no inner links (purely primary content). Apply `.clickable-parent` to the list item. It requires:
 
 - A direct-child `<a>` inside the card (a direct descendant, not wrapped in a heading).
-- A positioning context: `.card.clickable-parent { position: relative; }` — the compound selector is needed to beat ACSS's `.clickable-parent:not(a) { position: static }` at equal specificity.
+- A positioning context: `.card.clickable-parent { position: relative; }` — `[stack:acss]` the compound selector is needed to beat ACSS's `.clickable-parent:not(a) { position: static }` at equal specificity.
 - The direct-child anchor must not use `position: absolute` for its visual-hiding technique and must not apply `clip-path` — both break the stretched pseudo.
 
 Given those constraints, prefer the visible-anchor pattern for most cases.

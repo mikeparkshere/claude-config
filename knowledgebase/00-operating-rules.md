@@ -19,6 +19,8 @@ The knowledgebase is six files:
 - **04-hosting-cutover.md** — non-obvious **hosting layer** behaviors: the box, the CDN, the caches, and the cutover itself (RunCloud, RunCache, Cloudflare, ShortPixel, Perfmatters). Same catalog contract as `03`.
 - **99-project-context.template.md** — the template for the per-project working log.
 
+**Stack files.** The knowledgebase serves more than one stack. Rules that hold only when Automatic.css is installed carry a `[stack:acss]` tag; a project on another stack declares `stack:` in its `CLAUDE.md` and loads the matching file from `stacks/` (read protocol, step 4). Untagged rules are universal.
+
 Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulators** are `03` and `04` — provisional knowledge, each entry a real incident with a fix, grows every project.
 
 **Why `03` and `04` are separate:** `03` is how the build stack behaves while you build; `04` is the layer underneath and after. Different domains, consulted at different moments. Keeping ops out of `03` keeps `03` fast to scan by symptom, which is its whole job.
@@ -86,6 +88,7 @@ At the start of any build session:
 
    ```
    Phase: STAGING · CLAUDE.md rule 0, confirmed by .claude/settings.json
+   Stack: acss · no stack: line, fleet default
    Mode:  auto, with ask rules on destructive WP-CLI
    Contract: I build and edit without asking. I stop before anything that
              touches the database, deletes plugins or themes, or changes
@@ -111,7 +114,15 @@ At the start of any build session:
 
    **Phase lives in project files, never in auto-memory.** Auto-memory is per-machine and per-path (see the memory model), and the same project is worked from the Mac and from the box. A phase that lives only in one machine's memory is not a contract.
 
-4. **Re-entry.** This protocol is not start-of-session only. It re-runs after any compaction event and after any mid-session `/clear` — a compacted or cleared session is a new session wearing the old one's scrollback. Steps 1–3 in full, no abbreviating on the grounds that "we read it earlier." Earlier is gone; that is what compaction means. **Step 3 re-runs with the rest, and the readback is restated aloud.** This is what makes the phase gate survive compaction — and it is also why a phase promoted only in conversation is worthless: the classifier re-reads a spoken boundary from the transcript on every check, so compaction eats it, re-entry reads the unchanged file, and the session quietly resumes at the old phase with nobody notified. Promote on disk, in the same turn you say it out loud.
+4. **Dispatch on the project's stack.** Read the `stack:` value from the project `CLAUDE.md` (`grep -m1 '^stack:' CLAUDE.md`) and state it in the readback alongside the phase.
+
+   - Rules tagged **`[stack:acss]`** apply only when `stack: acss`, **or when no stack is declared** — the grandfathered fleet default. Every pre-carve-out project is an ACSS site, so an unmarked project falls back to the rules it was built under, the same way an unmarked phase falls back to LIVE.
+   - When `stack: bricks-native`, load the stack file named in the project `CLAUDE.md` (master: `stacks/bricks-native.md`) and apply its replacements in place of every `[stack:acss]` rule. A project `CLAUDE.md` suspended-rules table is the per-project override and wins over the stack file where they differ — flag the difference, don't pick one silently.
+   - **Untagged rules apply to every stack:** BEM, no `__inner`, the clickable-parent and focus-parent *patterns*, phase gates, the authorization gradient, the golden rule, typed-settings-first, compaction safeguards.
+
+   **How the tag reads.** On a heading, it scopes the whole section, or the whole `03`/`04` entry. Inline, at the start of a sentence, bullet or table row, it scopes only that unit. An entry whose *mechanism* is stack-neutral but whose *fix* names ACSS carries the inline tag on the ACSS part only; the rest still applies everywhere.
+
+5. **Re-entry.** This protocol is not start-of-session only. It re-runs after any compaction event and after any mid-session `/clear` — a compacted or cleared session is a new session wearing the old one's scrollback. Steps 1–4 in full, no abbreviating on the grounds that "we read it earlier." Earlier is gone; that is what compaction means. **Steps 3 and 4 re-run with the rest, and the readback is restated aloud.** This is what makes the phase gate survive compaction — and it is also why a phase promoted only in conversation is worthless: the classifier re-reads a spoken boundary from the transcript on every check, so compaction eats it, re-entry reads the unchanged file, and the session quietly resumes at the old phase with nobody notified. Promote on disk, in the same turn you say it out loud.
 
 The point of reading `00`/`01`/`02` fully is that there is no separate training step. The canon is the training.
 
@@ -287,7 +298,7 @@ There are three surfaces for build work. They are complementary, not interchange
 | Turning a token-aware wireframe into a built Bricks page | **WP-CLI build** — the pipeline in `02`. This is the primary path. |
 | Discovering an unknown Bricks schema; building or extending a template with Bricks UI controls available | **Bricks builder** — visual, authoritative. Build one example, save, read it back. |
 | Bulk operations: batch class creation, global class CSS population, custom query types, dynamic tags, CPT scaffolding, ACF fields | **WP-CLI direct DB edit** — the back half of `02`. |
-| Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::get_instance()->save_settings($merged, true)` (instance method, not static) after `wp_set_current_user(1)`; convention in `01`, procedure in `02`. The **colour palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
+| `[stack:acss]` Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::get_instance()->save_settings($merged, true)` (instance method, not static) after `wp_set_current_user(1)`; convention in `01`, procedure in `02`. The **color palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
 
 When a WP-CLI edit stalls — Bricks stripping writes, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
 

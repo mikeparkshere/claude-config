@@ -22,15 +22,17 @@ Claude Code does not produce a finished design. It produces a correctly-structur
 
 ## Required project context
 
+Where this half says "ACSS token" or "ACSS token map," a non-ACSS stack reads its own token map under the same names (`00`, read protocol step 4; `stacks/`). Only the `[stack:acss]`-tagged items below are ACSS mechanics.
+
 Before any build, these must be in hand. If any is missing, ask for it — do not assume defaults.
 
-1. **ACSS token map** — the full ACSS custom property set for this project's install. The wireframe should already be built against these. Extract it once per project from the live ACSS stylesheet (`wp-content/uploads/automatic-css/automatic-variables.css` and the `@supports` clamp block in `automatic.css` — see the gotcha in `03` about which file holds the rendered values).
+1. **ACSS token map** — `[stack:acss]` the full ACSS custom property set for this project's install. The wireframe should already be built against these. Extract it once per project from the live ACSS stylesheet (`wp-content/uploads/automatic-css/automatic-variables.css` and the `@supports` clamp block in `automatic.css` — see the gotcha in `03` about which file holds the rendered values).
 2. **Sections to skip** — which sections are pre-built: site header, site footer, reusable components that already exist on other pages.
 3. **Bricks version** — confirm 2.3.4 or later.
 4. **Plugin path and name** — the core functionality plugin, for CSS handoff reference.
 5. **Semantic vocabulary overrides** — any project-specific deviations from the semantic defaults in `01`.
 
-## ACSS brand-configuration (before token extraction)
+## ACSS brand-configuration (before token extraction) `[stack:acss]`
 
 Required-context item 1 (the ACSS token map) assumes ACSS is **already** configured to the brand. That configuration is its own procedure — WP-CLI-first, per the convention in `01`:
 
