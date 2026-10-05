@@ -199,6 +199,8 @@ if ( empty( $files ) ) exit( 1 ); // fail loudly if regen produced nothing
 
 Run with `wp eval-file`. The correct method is `Assets_Files::regenerate_css_files()` — not the `Assets::generate_*` methods, which are for inline-render mode and do not write files. Full incident: `03`.
 
+⚠️ **Only where the CLI user is the PHP-FPM user.** On a box where they differ (shared/reseller hosting, FPM as `apache`), a WP-CLI regen creates CSS files FPM can't overwrite, and every later builder save on those pages returns 500. Regenerate from wp-admin there (**Bricks → Settings → Performance → Regenerate CSS files**). Safe on RunCloud, where both run as `runcloud`. See `04` → "SSH/CLI user ≠ PHP-FPM user — whoever creates a file locks the other out…".
+
 **Verification.** Curl the page and grep the inline CSS for the class to confirm a typed setting actually emitted:
 
 ```bash
@@ -591,7 +593,7 @@ Any ACF **Relationship** or **Post Object** field on the current post is auto-ex
 
 **`objectType` is exactly `acf_<field_name>` — no fixed infix.** Bricks registers the loop tag as literally `'acf_' . $field['name']` (`provider-acf.php`). A field named `performers` is `acf_performers`, full stop — do not pattern-match a longer field name (e.g. a project's own `post_related_service` field, which is `acf_post_related_service` only because that's its literal name) into a perceived `acf_post_related_<x>` convention. When in doubt, grep `provider-acf.php`'s tag-registration line rather than inferring from an example.
 
-- Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{post_url}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item — **including LINK-type settings** (a `link: {type:'meta', useDynamicData:'{post_url}'}` control resolves correctly per item), provided the loop is anchored correctly (see the `hasLoop` placement note below). An earlier version of this entry said LINK tags do not resolve per-item; that was a misdiagnosis of the placement bug, not a real limitation — corrected th-members, 2026-08-30, see `03`.
+- Post Object → 1 iteration; Relationship → N. The loop item is the **related post**, so post-context tags (`{post_title}`, `{post_url}`, `{acf_<field>}`, `{post_terms_*}`) resolve per-item — **including LINK-type settings** (a `link: {type:'meta', useDynamicData:'{post_url}'}` control resolves correctly per item), provided the loop is anchored correctly (see the `hasLoop` placement note below). An earlier version of this entry said LINK tags do not resolve per-item; that was a misdiagnosis of the placement bug, not a real limitation — corrected THM, 2026-08-30, see `03`.
 - **`hasLoop` only works on `block` / `div` / `section`** (anything extending `Element_Container` — that's the only code path that actually dispatches a `\Bricks\Query` and repeats the element). Setting `hasLoop` on a leaf element (`text-link`, `heading`, `text-basic`, etc.) is silently accepted and persists in the DB, but does nothing — the element renders once, in the *parent* loop's context. Nest the tag-bearing leaf element one level inside a looped container instead; it inherits the correct context automatically. Full incident: `03`.
 - **Repeater** loops work too (`objectType: acf_<repeater>`), including **options-page** repeaters (WCDP: five of them, builder-save verified, 2026-08-22), but subfield tags are namespaced: `{acf_<repeater>_<subfield>}`. The bare subfield tag prints literally.
 - **On a repeater loop the loop object is a row array, not a `WP_Post`.** `\Bricks\Query::get_loop_object()` returns whatever the loop iterates; for `acf_<repeater>` that is the row's associative array keyed by sub-field name. A custom tag that assumes `instanceof \WP_Post` silently renders empty text there. Branch on the type (verified — WCDP, 2026-08-22):
@@ -638,6 +640,33 @@ update_post_meta( $id, '_bricks_template_settings', [
 ```
 Same map: `is_search()` → type `'search'` with condition `main: 'search'`; archives → `'archive'`.
 
+## Bricks Query Filters — taxonomy order and button-mode pills (verified — THM, 2026-08-11 / THT, 2026-09-16; re-read THT, 2026-10-05, Bricks 2.3.12 `includes/elements/filter-base.php`)
+
+Applies to `filter-select` / `filter-checkbox` / `filter-radio` bound to a taxonomy.
+
+**Explicit term order from term meta:**
+```php
+'filterTaxonomyOrderBy'      => 'meta_value_num',
+'filterTaxonomyOrderMetaKey' => 'my_term_order',
+```
+⚠️ The key is passed to `get_terms()` as `meta_key`, which is a **join**: a term with no row for that key is dropped from the filter entirely, not sorted last. Seed the meta on `created_term` so a term the client adds later still appears (`03`).
+
+**Pill styling, typed.** These controls register only when `displayMode` is `'button'` (`required => [ 'displayMode', '=', 'button' ]`), which is why the builder hides them until Mode is switched:
+```php
+'displayMode'                 => 'button',
+'buttonBackgroundColor'       => [ 'raw' => 'var(--primary-light)' ],
+'buttonBorder'                => [ … ],   // emits ONLY border-color
+'buttonTypography'            => [ … ],
+'buttonActiveBackgroundColor' => [ 'raw' => 'var(--primary)' ],
+'buttonActiveBorder'          => [ … ],
+'buttonActiveTypography'      => [ … ],   // targets the right node for active text color
+'buttonOptionsGap'            => '…',
+```
+They emit against `&[data-mode="button"] .bricks-button` and `… .bricks-button.brx-option-active`. `buttonBorder`'s `css[]` maps a single property, `border-color`, so width, style and radius in it persist and emit nothing. Radius is the one legitimate `_cssCustom`:
+```php
+'_cssCustom' => '.my-filter[data-mode="button"] .bricks-button { border-radius: var(--radius-xl); }',
+```
+
 ## post-content element
 
 Renders `the_content()` with **no element settings** — just a Global Class. Style rendered descendants via that class's `_cssCustom` (`.class h2`, `.class blockquote`, …) since they have no typed control; add `scroll-margin-top` for in-content anchor jumps.
@@ -653,6 +682,7 @@ Renders `the_content()` with **no element settings** — just a Global Class. St
 - A button with **no `link` setting** renders as `<span class="bricks-button …">` — fully styled, no anchor, inert (verified — WCDP, 2026-08-20). Useful deliberately; also the tell when a button unexpectedly won't click — check for a missing or invalid `link` key.
 - The reverse: once `link` is non-empty the element renders `<a>`, so it is the wrong element for a control that does not navigate — use a layout element with `customTag: 'button'` (Block HTML tag options above).
 - Icon on a button: see Icon settings below.
+- **`tag` is free text on the Button, not a select** (verified — THT, 2026-10-05, Bricks 2.3.12 `includes/elements/button.php` ~L24: `'type' => 'text'`, placeholder `span`, shown only when `link` is empty). Write the real tag name, `'tag' => 'button'`, and **no `customTag`**. The `tag: 'custom'` + `customTag` pair from Block HTML tag options does not apply here: `'custom'` fails the allowed-tags validation with a builder error telling you to extend `bricks/allowed_html_tags`, which can never fix it (`03`).
 
 ## Icon settings — custom icon sets (verified — WCDP, 2026-08-18)
 
@@ -682,6 +712,7 @@ Element setting — **identical on `button`, `icon` and `text-link`** (8 usages 
 - Bake `fill="currentColor"` and `aria-hidden="true"` into the files at import: Bricks inlines the SVG verbatim, and a button's icon renders with no attributes at all, so there is no per-element place to set either. `render_svg()` replaces an existing `aria-hidden` rather than duplicating it.
 - Bricks inlines the file contents, so the filename never appears in rendered HTML — don't count icons by grepping for it. Icons inside a query loop render once per iteration.
 - The same `icon` shape feeds BricksExtras icon controls (`prevIcon` / `nextIcon` on the Pro Slider Control below).
+- **On the standalone `icon` element, `iconSize` and `iconColor` misbehave with a custom-set SVG** (THT, 2026-09-06): `iconSize` emits only `font-size`, which an inlined SVG with no `width` ignores (it grows to fill its flex row), and `iconColor` emits `fill` as well as `color`, painting a stroke-only icon solid. Size it with typed `_width` / `_height` and add `fill: none` in `_cssCustom`. Prefer the `svg` element for a stroke icon where the `icon` element's own behavior (e.g. `isAccordionIcon`) isn't needed; its typed `height`/`width` don't emit `fill`. (Its icon-set variant is still unverified, per the bullet above.) Full entry in `03`.
 
 ## BricksExtras ProSlider
 
@@ -761,6 +792,14 @@ Read back from working login / lost-password / reset-password forms. The action 
 - The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions`.
 - `?redirect_to=` is honoured **only** when no redirect action is configured.
 
+**Email action recipient** (verified — THM, 2026-08-29; re-read THT, 2026-10-05, Bricks 2.3.12 `includes/integrations/form/actions/email.php` L17):
+```php
+'actions'       => [ 'email' ],                 // plus any others
+'emailTo'       => 'custom',                    // the literal sentinel, never an address
+'emailToCustom' => '{acf_support_email}',       // address or dynamic tag; render_data() parses it
+```
+Put an address straight on `emailTo` and the `=== 'custom'` test fails, so the email silently goes to `admin_email` (`03`).
+
 **Form styling keys and the password toggle** (verified — WCDP, 2026-09-13, Bricks 2.3.13; read back from builder-saved auth pages on a sibling install, rendered and function-tested on WCDP):
 
 Class-level styling keys on the `form` element that emit — typed shapes, so they go on a global class like any other typed setting:
@@ -803,13 +842,13 @@ Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `ht
   'backdrop_to_close'    => true,
   'esc_to_close'         => 'true',   // DEFAULTS OFF — set explicitly
   'trapFocus'            => 'true',   // exists (undocumented in BE docs); DEFAULTS OFF
-  'preventScroll'        => 'true',   // DEFAULTS OFF; returnFocus defaults ON
+  'preventScroll'        => 'true',   // DEFAULTS OFF; returnFocus defaults ON — leave it UNSET
   'reduce_motion'        => 'notransition', // fade | slide | notransition
 ],
 // Burger: 'name' => 'xburgertrigger', 'settings' => [ 'aria_label' => 'Open main menu' ]
 ```
 
-⚠️ **The three a11y flags default OFF.** Set `esc_to_close` / `trapFocus` / `preventScroll` explicitly on every build. Renders `.x-offcanvas_backdrop` + `.x-offcanvas_inner` (role=dialog, `inert` when closed); config lands in `data-x-offcanvas` JSON — verify via curl. BE base CSS gives the inner 300px width + 30px padding; zero it on your own class. Burger renders a real `<button>` with aria wired at runtime by JS (curl won't show it).
+⚠️ **The three a11y flags default OFF.** Set `esc_to_close` / `trapFocus` / `preventScroll` explicitly on every build. ⚠️ **But never write `returnFocus`** (THM, 2026-08-11, BE 1.7.1): the render tests `'enable' === $settings['returnFocus']` while the control's options are `'true'`/`'false'`, so *any* stored value, "Enable" included, renders `"returnFocus": false`. Unset is the only ON (`03`). Renders `.x-offcanvas_backdrop` + `.x-offcanvas_inner` (role=dialog, `inert` when closed); config lands in `data-x-offcanvas` JSON — verify via curl. BE base CSS gives the inner 300px width + 30px padding; zero it on your own class. Burger renders a real `<button>` with aria wired at runtime by JS (curl won't show it).
 
 ## BricksExtras Before/After Image (verified — Highland, 2026-07-11, BE 1.6.9)
 
@@ -861,6 +900,13 @@ Child of a `galleryMode` Pro Slider; renders the `ul.splide__list` itself (BE's 
 - `maybeSchema` defaults ON and duplicates a plugin- or PHP-owned BreadcrumbList JSON-LD — disable it wherever schema lives in code. The current crumb keeps a stray `itemprop="name"` span even with schema off (no `itemscope`, so inert).
 - `separator` emits `#brxe-<id> ol { --x-breadcrumb-separator: "›" }` — element-level CSS, so it needs the CSS regen.
 - Renders `nav.brxe-xbreadcrumbs[aria-label] > ol.x-breadcrumbs_list > li.x-breadcrumbs_list-item`, `aria-current="page"` on the last `li`. Style through a global class on the root: `.my-crumbs a`, `.my-crumbs [aria-current="page"]`, `li:not(:first-child)::before` for the separator, `--x-breadcrumbs-gap` for spacing.
+
+## BricksExtras Media Player — `crossorigin` (verified — THT, 2026-08-31; re-read THT, 2026-10-05, BE 1.7.1 `components/traits/media-player-trait.php` ~L1845)
+
+```php
+$el['settings']['crossorigin'] = 'null';   // the STRING 'null', not a real null: suppresses the attribute
+```
+Unset defaults to `'anonymous'` (`isset( $settings['crossorigin'] ) ? … : 'anonymous'`), which makes the media request CORS-controlled. A source on another origin that sends no `Access-Control-Allow-Origin` then never plays: endless spinner, no console error, no failed request. Set `'null'`, or add CORS headers on the media host (required anyway if WebVTT tracks are ever added). Safe for same-origin playback too (`03`).
 
 ## Theme Style keys — root font-size and default heading tag (verified — WCDP, 2026-08-11)
 

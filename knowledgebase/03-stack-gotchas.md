@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-250 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+267 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~31,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -56,20 +56,26 @@ Group labels below are bold rather than headings on purpose — `###` here would
 
 - Doubled-class selectors beat Bricks inline CSS cascade
 - Bricks element IDs must be alphanumeric, never all-numeric — 6 chars is the house convention; validate only the IDs a script adds
+- `{query_results_count_filter}` with NO element id renders 0 when it sits outside the loop
 - `_cssId` is the stable hook for PHP filters, not Bricks' internal element id
 - Re-sign Bricks code elements after any DB-side edit
 - Bricks code elements store CSS in `settings.cssCode`, not `settings.code`
 - `update_post_meta` silently fails on `_bricks_page_*_2` keys from WP-CLI
 - Bricks Element Manager — a disabled element renders as NOTHING, even when it's in the template data
 - Bricks Query Filter elements need a manual reindex AND a cron tick after programmatic creation
+- Sibling `:has()` drives an empty state across Bricks AJAX filter re-renders — no JS listener
 - Bricks term dynamic data tag is `{term_url}`, not `{term_link}`
 - Bricks filter-radio / filter-checkbox default to vertical column — set `displayMode: 'button'` for horizontal pills
 - Bricks archive template `archiveType: postType / post` never matches for built-in `post`
 - Bricks filter active state — color must be set on `.brx-option-text`, not the `<label>`
+- Bricks taxonomy filter ordered by a meta key silently DROPS every term lacking that meta
 - Bricks per-post CSS cache hides DB-side global-class edits until regen
 - `rm -f post-*.min.css` does NOT auto-regenerate — frontend silently degrades
 - Bricks button utility classes (`btn--outline`, `btn--primary`) are Bricks-injected, not user-defined
 - Bricks `bricks/allowed_html_tags` filter for custom elements
+- Bricks Button element's `tag` is free text — `custom` + `customTag` is invalid there, and the error message misleads
+- Bricks `accordion-nested` emits `aria-controls=""` / `aria-labelledby=""` unless the content wrapper and heading carry `_cssId`
+- Bricks `icon` element with a custom-set SVG — `iconSize` doesn't size it and `iconColor` fills it
 - Bricks emits skip-links automatically via the `bricks_body` action
 - Bricks — typed `_border` setting uses a flat width/style/color shape, not per-side nested objects
 - Bricks — typed-setting breakpoint suffixes go on the OUTER key, not as a sibling inside a nested dict
@@ -152,6 +158,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 - `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
 - A Bricks CPT template that renders `post_content` = per-page content with zero template risk
+- Bricks dynamic tags do NOT parse inside raw `post_content` — use shortcodes, including `[bricks_template id="X"]` for real Bricks elements
+- Bricks re-grants revision support to every Bricks-enabled post type at `init` 999 — a default-priority `remove_post_type_support()` silently loses
 - Bricks `altText` — an empty string is indistinguishable from unset, so you cannot force `alt=""`
 - Bricks image-as-figure puts `brxe-<id>` on the `<figure>`, not the `<img>` — naive verification greps find nothing
 
@@ -167,6 +175,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Sticky header + offcanvas inside the header template — the panel "drops"/slides with the header
 - BE Pro Slider Gallery default lazy-load ships placeholder `src` — kills hero/LCP images
 - BricksExtras control values are typed, and the wrong type fails OPEN — `false` can mean ON
+- BricksExtras Media Player defaults `crossorigin="anonymous"` — a cross-origin source with no CORS headers never plays, silently
+- A typed BricksExtras setting can land on a DESCENDANT — overriding the custom property on the element itself silently loses
+- Bricks builder save 500s on ONE template — a stray BricksExtras `extrasCustomQueryCode` placeholder
 - BricksExtras Pro Slider — `slidePadding` is CSS padding on every slide, NOT Splide's `padding` option
 - BricksExtras Pro Slider — a hover-lift shadow is clipped by the track, and the clip window can't live on the track
 - BricksExtras before/after renders nothing server-side — verify headless with Playwright, and beware the screenshot-timing false alarm
@@ -190,9 +201,11 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS — `automatic-bricks.css` enqueues AFTER the child theme; override ACSS tokens via `:root`, not selectors `[stack:acss]`
 - ACSS — button bg-context wrappers override variant classes via specificity `[stack:acss]`
 - ACSS button variants: the Bricks picker, the Button Style dropdown and the compiled CSS are three independent lists — `btn--action` is never in the dropdown, and a picker class can emit zero CSS `[stack:acss]`
+- ACSS `[class*="btn--"]` matches ANY class containing the substring — a BEM modifier like `header__btn--panel` picks up button skin `[stack:acss]`
 - ACSS — "light"/"dark" variants of a NEAR-BLACK base resolve to LIGHT colors `[stack:acss]`
 - ACSS — changing a base color hex in the Dashboard can wipe variation overrides on that family `[stack:acss]`
 - ACSS — `:where(section…)` makes any hand-rendered `<section>` flex-column-centered; `section > div` forces its children to column `[stack:acss]`
+- A fixed ACSS width token in a Container's `_widthMax` replaces its viewport-safe max-width — horizontal overflow on mobile `[stack:acss]`
 - ACSS palette shades are dashboard-derived — a WP-CLI base-color write leaves the ramp stale `[stack:acss]`
 - ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file `[stack:acss]`
 - ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it `[stack:acss]`
@@ -208,6 +221,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACF Pro — `default_value` seeds the form only, not `get_field()` reads
 - ACF — `true_false` opt-out fields: legacy posts have NO meta row, so `value='1'` excludes them
 - ACF — `acf/prepare_field`: `$field['name']` is the PREFIXED input name; match on `_name`
+- ACF hook-variation order: `acf/render_field/key=…` fires AFTER the field has rendered — arm string swaps on `prepare_field`
+- ACF relationship field's `taxonomy` setting silently zeroes every search result
 - An ACF field property computed at registration time silently breaks the options group it reads — compute it in `acf/prepare_field`
 - ACF — `acf_form()` front-end survival kit
 - ACF field removal — `get_field()` stops working but the raw post meta survives
@@ -229,6 +244,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
 - `redirect_canonical` 301s requests you meant to serve — a term archive to a same-slug CPT single, and a custom rewrite endpoint to a trailing slash
 - Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
+- `remove_action()` on `admin_head` needs core's REAL priority AND must run after the admin bootstrap
 - A `wp_mail_from` filter beats an explicit `From:` header — a form plugin's per-message From field is cosmetic
 - `default_category` still references a term with 0 posts — repoint before deleting Uncategorized
 - Updating a PARENT THEME on a live box throws a hard fatal at any request that lands inside the unpack window
@@ -315,6 +331,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Stretched-link cards break three silent ways — specificity, `clip-path`, absolute positioning
 - `<details>` content can't be force-shown on desktop (Chrome `::details-content` content-visibility)
 - A `*/` inside a CSS comment silently eats the NEXT rule
+- CSS custom properties do not substitute inside `url("data:image/svg+xml,…")`
 
 **Fonts**
 
@@ -372,6 +389,12 @@ foreach ( array_column( $new_elements, 'id' ) as $id ) {           // NOT array_
 ```
 ⚠️ **Untested:** 5-char IDs have not been checked against `{query_results_count_filter:<id>}` (a two-minute local test). Until someone runs it, keep IDs you point a tag at at 6 characters.
 **First seen:** V1 baseline, 2026-05-24 (all-numeric IDs blanking dynamic tags). · WCDP, 2026-08-18 — a page built with 5-character IDs throughout was opened and saved in the builder. Element count didn't change, and every at-risk key (`customTag`, breakpoint-suffixed grid keys, `:has()` `_cssCustom`, `style: btn--*`, icon settings) was intact. A later script's whole-tree 6-char guard then aborted on that page before writing anything. The abort was correct behaviour from an over-broad rule.
+
+### `{query_results_count_filter}` with NO element id renders 0 when it sits outside the loop
+**Symptom / When:** An archive header reads "0 Items" while the grid below renders a full page. The same tag works on a sibling template, and nothing errors.
+**Why:** With an id (`{query_results_count_filter:abc123}`), Bricks resolves the count from that element's query history. With **no** id, it falls back to `Query::get_query_object( Query::is_any_looping() )`, the *current* query. A count in a page header sits outside every loop, so there is no current query and the count resolves to 0.
+**Fix:** Always scope the tag to the loop element's id: `{query_results_count_filter:<loopElementId>}`. The bare form works only inside the loop it counts. **Verify it right:** the markup is `<span data-brx-qr-count="<id>">20</span> Items`, so grepping the page for the literal `20 Items` finds nothing whether the tag works or not. Grep the span.
+**First seen:** THM, 2026-08-09 — the archive template used the bare tag while a taxonomy template built later from the same base used the scoped form. Both had valid 6-char ids, so the all-numeric entry above did not apply.
 
 ### `_cssId` is the stable hook for PHP filters, not Bricks' internal element id
 **Why:** Bricks' internal element id changes on duplicate. The HTML `id` attribute (`_cssId` in builder data) is user-controlled and survives duplication.
@@ -436,11 +459,13 @@ wp_cache_flush(); // drop the stale meta cache for the row
 
 **⚠️ `--skip-themes` and CSS regen are mutually exclusive in one `wp` invocation.** `\Bricks\Assets_Files::regenerate_css_files()` is defined in the same theme `--skip-themes` unloads — skip it and regen fatals (`Class "Bricks\Assets_Files" not found`); keep the theme and the meta write no-ops. **Split them:** write meta under `--skip-themes`, then regen in a *separate* `wp eval` with themes loaded + `wp_set_current_user(1)`. (Or use route (c) and regen normally.)
 
+**⚠️ Revisions are the exception that route (a) does not cover.** WordPress denies `edit_post` on the `revision` post type for every user, so `current_user_can( 'edit_post', <revision_id> )` and `\Bricks\Capabilities::current_user_can_use_builder( <revision_id> )` are both `false` even as user 1. A sweep across templates "succeeds" on live posts and silently leaves the old value in their revisions, and the script's own log may still report a clean pass. Write revisions with route (c), using `wp_cache_delete( $rev_id, 'post_meta' )`, and confirm with a `LIKE` scan afterward rather than trusting the sweep. A stale reference in a revision is inert until someone restores it, so this matters when you're deleting the thing referenced.
+
 **Symptom triage — this entry covers a write that FAILS or no-ops. A write that lands and then reverts *minutes later* is a different bug** — see "Editing `bricks_global_classes` while a Bricks builder tab is open gets silently reverted."
 
 The `bricks_global_classes` option is not gated this way (but see the builder-clobber entry — it has its own hazard).
 
-**First seen:** AHML, 2026-04-27 — appending the article section to the Blog Single template. The script printed success and exited cleanly; the element count in the DB stayed unchanged. (This is the full incident record for the auth requirement named in `00` and `02`.)
+**First seen:** AHML, 2026-04-27 — appending the article section to the Blog Single template. The script printed success and exited cleanly; the element count in the DB stayed unchanged. (This is the full incident record for the auth requirement named in `00` and `02`.) · **Extended:** THM, 2026-08-09 — removing a custom font: 4 global classes repointed cleanly, while 8 template revisions reported success and kept the old font id. Caught by a post-change reference count.
 **Mechanism deepened:** AHML, 2026-07-01 — traced to the `sanitize_post_meta__bricks_page_content_2` → `security_check_elements_before_save()` path (the sanitize callback hands back the *existing* array, so `update_post_meta` sees no diff — which is why it returns `false` rather than erroring).
 **Extended:** TAB, 2026-04-25 / 2026-06-09 / 2026-06-24 — the `--skip-themes` and `$wpdb` routes, and the regen mutual-exclusion, each found independently before the shared mechanism was understood. TAB also logged a "write returns true, then silently reverts" signature (2026-04-25) that **neither guard explains** — it is almost certainly the builder-clobber bug, which wasn't characterised until 2026-06-22.
 
@@ -468,7 +493,21 @@ wp_set_current_user( 1 );
 //   wp cron event run bricks_indexer
 ```
 Or `wp cron event run --all`. Confirm with `SELECT COUNT(*) FROM wp_bricks_filters_index` (> 0).
-**First seen:** AHML, 2026-04-27 — Blog Archive filter facet. Element registered, `reindex()` returned true, index table stayed at 0 rows.
+**It bites again on every RE-run, and worse.** `reindex()` empties `wp_bricks_filters_index` immediately and only queues the rebuild. Until cron ticks, the filter resolves zero options, and Bricks renders a zero-option filter as **nothing at all**, absent from the DOM rather than an empty `<ul>`. An idempotent re-run of a script that changed only CSS then makes a working filter vanish, and it reads as though the element was deleted. Don't call `reindex()` on a re-run that touches only global-class styling, since that lives in an option and needs no reindex. When you do call it, make the script fail loudly:
+```php
+if ( 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}bricks_filters_index" ) ) echo "*** index EMPTY: run wp cron event run bricks_indexer\n";
+```
+**First seen:** AHML, 2026-04-27 — Blog Archive filter facet. Element registered, `reindex()` returned true, index table stayed at 0 rows. · **Extended:** THT, 2026-09-16 — a gender filter disappeared after a re-run that added one CSS property.
+
+### Sibling `:has()` drives an empty state across Bricks AJAX filter re-renders — no JS listener
+**Symptom / When:** A "no results" block must show when a filtered loop returns nothing, and track every AJAX re-render of the grid, without wiring a listener to filter events.
+**Why:** The loop's trail element (`.brx-query-trail`, `includes/elements/base.php`) carries `data-max-pages` in the re-rendered markup, so a pure-CSS sibling selector reacts to the AJAX swap for free.
+**Fix:**
+```css
+.results-grid:has(.brx-query-trail[data-max-pages="0"]) ~ .results-empty { display: block; }
+```
+`:has()` falls to custom CSS on import (`02`, CSS authoring rules), so put it in the child theme or a class's `_cssCustom`, not a typed control.
+**First seen:** THM (inherited from its clone source), 2026-08-09 — a browse template's empty state. Trail class and attribute re-verified on current Bricks at harvest, 2026-10-05.
 
 ### Bricks term dynamic data tag is `{term_url}`, not `{term_link}`
 **Symptom:** A term-context dynamic tag renders as the literal string — `<a href="{term_link}">…</a>`. `{term_name}` resolves; the link href does not. No error.
@@ -503,12 +542,29 @@ Template type can stay `archive` — Bricks treats type as a UI hint; matching i
 ### Bricks filter active state — color must be set on `.brx-option-text`, not the `<label>`
 **Symptom:** A filter facet's active pill has low-contrast text. Setting `color` on the wrapper `<label>` does nothing.
 **Why:** Bricks renders each option as `<label> > <input> + <span.brx-input-indicator> + <span class="brx-option-text bricks-button">`. The visible text is the inner `<span>`, which carries `.bricks-button` — and `.bricks-button` has its own `color` rules that win because the span is a child of the label.
-**Fix:** Target the inner span. The active span gets `brx-option-active`:
+**Fix — preferred, in button mode: the typed pill controls.** With `displayMode: 'button'`, `filter-base.php` registers `buttonBackgroundColor`, `buttonBorder`, `buttonTypography`, `buttonActiveBackgroundColor`, `buttonActiveBorder`, `buttonActiveTypography` and `buttonOptionsGap`. They emit against `&[data-mode="button"] .bricks-button` and `.bricks-button.brx-option-active`, which is the inner span, so `buttonActiveTypography` sets the active color on the right node with no hand-written CSS (shapes in `02`). The controls are invisible in the builder until Mode is Button, which is why they look absent. **One gap:** `buttonBorder`'s CSS mapping is the single property `border-color`, so width, style and radius written into it persist and never emit. Add only the radius as custom CSS: `.my-filter[data-mode="button"] .bricks-button { border-radius: var(--radius-xl); }`.
+**Fix — hand-written, outside button mode or on older Bricks:** target the inner span. The active span gets `brx-option-active`:
 ```css
 .blog-filter__radio .brx-option-text.brx-option-active { color: var(--base); }
 ```
 Keep the label rule for background and border-color. Same pattern for `filter-checkbox`.
-**First seen:** AHML, 2026-04-30 — Blog Archive filter, active pill rendered cognac-on-cognac.
+**First seen:** AHML, 2026-04-30 — Blog Archive filter, active pill rendered cognac-on-cognac. · **Extended:** THT, 2026-09-16, Bricks 2.3.12 — the typed-control route, found by reading `filter-base.php` rather than the builder UI.
+
+### Bricks taxonomy filter ordered by a meta key silently DROPS every term lacking that meta
+**Symptom / When:** A taxonomy-bound filter is given a custom order with `filterTaxonomyOrderBy: meta_value_num` + `filterTaxonomyOrderMetaKey: <key>` (shape in `02`). The order works. Then a term added later, typically by the client in wp-admin, never appears in the filter. It exists, has posts, and shows on its own archive. Nothing errors.
+**Why:** Bricks passes the key straight to `get_terms()` (`Query_Filters::set_data_source_from_taxonomy()` → `$args['meta_key']`). `WP_Term_Query` implements `meta_key` as a **join** on term meta, so a term with no row for that key is excluded, not sorted last. Bricks already sets `hide_empty => false`, so an *empty* term still shows. It's specifically the *unmetaed* term that vanishes, and nothing about the symptom points at ordering.
+**Fix:** Guarantee every term carries the meta, including terms created after the build, by seeding it on `created_term` rather than a one-off backfill:
+```php
+add_action( 'created_term', function ( $term_id, $tt_id, $taxonomy ) {
+    if ( ! in_array( $taxonomy, [ 'my-tax-a', 'my-tax-b' ], true ) || '' !== get_term_meta( $term_id, 'term_order', true ) ) return;
+    $max = 0;
+    foreach ( (array) get_terms( [ 'taxonomy' => $taxonomy, 'hide_empty' => false, 'fields' => 'ids', 'exclude' => [ $term_id ] ] ) as $sid )
+        $max = max( $max, (int) get_term_meta( $sid, 'term_order', true ) );
+    update_term_meta( $term_id, 'term_order', $max + 10 );
+}, 10, 3 );
+```
+Prove it with a probe term whose meta you delete, then run the query Bricks runs (`get_terms([... 'orderby'=>'meta_value_num', 'meta_key'=>'term_order'])`). Custom ordering is only worth this when the terms form a scale (Small · Average · Large sorts alphabetically wrong). Otherwise keep Bricks' alphabetical default.
+**First seen:** THM, 2026-08-11 — size-scale terms. The drop was predicted while writing the ordering and verified with a probe term before the hook shipped.
 
 ### Bricks per-post CSS cache hides DB-side global-class edits until regen
 **Symptom:** You edit `bricks_global_classes` via the DB. `wp cache flush` runs fine, but rendered pages still reference the old classes.
@@ -540,7 +596,7 @@ The correct method is `Assets_Files::regenerate_css_files()` — not the `Assets
 **Fix:** During cleanup, treat `btn--*` as Bricks-managed. Safe to delete the Global Class entry; rendering is unaffected. Verify by inspecting rendered HTML.
 **Corollary — PHP-rendered surfaces get NO button CSS at all.** Because the CSS is generated per Bricks Button element at render, a plain `<a class="btn btn--primary">` in a PHP template (a dashboard, a Woo template override) renders unstyled — mono font only, no fill/padding/border — while the same classes look right on Bricks-built pages. It is in no globally-enqueued stylesheet (only `automatic-gutenberg.css`, block-editor-only, plus the child theme's mono-font `.btn` rule). No Bricks Button on the page = no button CSS.
 **Fix (non-Bricks surfaces):** define the button CSS yourself, scoped so it cannot collide with Bricks' per-element CSS on builder pages (e.g. `.woocommerce .btn--primary{background:var(--primary);color:var(--white);…}`). `[stack:acss]` Consume `--primary`/`--white`/`--primary-hover` to match the ACSS button.
-**Corollary — non-Button Bricks elements get no button CSS either.** A `text-link` (or any element other than a Bricks **Button**) carrying `btn--primary` via `_cssGlobalClasses` renders with the class in the DOM and no fill, padding or radius. `.btn--*` classes only **declare** custom properties (`--btn-background`, `--btn-text-color`, …); the consuming rule is emitted per Button element at render, and where ACSS compiled its button module into `automatic-gutenberg.css` there is no global consumer on the front end at all. Grepping the page finds `.btn--primary` defined, which makes it look like a cascade problem. Fix: use a real `button` element (`name: 'button'`) with the `style` setting, and brand it by overriding the **tokens** rather than writing button chrome — `.my-cta { --btn-background: var(--action); --btn-font-weight: 700; }`. `[stack:acss]` A token override also beats fighting ACSS's `[class*="btn--"]` rule at equal specificity, which is why a typed `_typography.font-weight` on the class silently loses. See also "ACSS button variants: the Bricks picker, the Button Style dropdown and the compiled CSS are three independent lists…".
+**Corollary — non-Button Bricks elements get no button CSS either.** A `text-link` (or any element other than a Bricks **Button**) carrying `btn--primary` via `_cssGlobalClasses` renders with the class in the DOM and no fill, padding or radius. `.btn--*` classes only **declare** custom properties (`--btn-background`, `--btn-text-color`, …); the consuming rule is emitted per Button element at render, and where ACSS compiled its button module into `automatic-gutenberg.css` there is no global consumer on the front end at all. Grepping the page finds `.btn--primary` defined, which makes it look like a cascade problem. Fix: use a real `button` element (`name: 'button'`) with the `style` setting, and brand it by overriding the **tokens** rather than writing button chrome — `.my-cta { --btn-background: var(--action); --btn-font-weight: 700; }`. `[stack:acss]` A token override also beats fighting ACSS's `[class*="btn--"]` rule at equal specificity, which is why a typed `_typography.font-weight` on the class silently loses. See also "ACSS button variants: the Bricks picker, the Button Style dropdown and the compiled CSS are three independent lists…". The inverse trap, where a non-button class *gains* button skin because its name contains `btn--`, is "ACSS `[class*="btn--"]` matches ANY class containing the substring…".
 **First seen:** AHML, 2026-04-29 — CSS sweep deleted `btn--outline` as orphan; it kept rendering. No actual breakage. · **Extended:** VMG, 2026-06-07 — portal dashboard CTAs rendered as bare links until `.btn` CSS was added under `.woocommerce`. · **Extended:** WCDP, 2026-08-10 — both inherited header CTAs were `text-link` + `btn--secondary`/`btn--primary` and had been rendering as bare text links.
 
 ### Bricks `bricks/allowed_html_tags` filter for custom elements
@@ -555,6 +611,32 @@ add_filter( 'bricks/allowed_html_tags', function( $tags ) {
 **Current Bricks: `button` needs no filter.** On Bricks 2.4.2 (WP 7.1.2), `Helpers::get_allowed_html_tags()` starts from `array_keys( wp_kses_allowed_html( 'post' ) )`, and `button` is already in that list, so the example above is redundant there. A layout element with `tag: 'custom'` + `customTag: 'button'` emits a real `<button>` with no filter (schema in `02`, "Block HTML tag options"). Keep the filter for tags that really are outside kses `post`. Check the live list rather than trusting a copy: `wp eval 'echo implode(" ", \Bricks\Helpers::get_allowed_html_tags());'`
 **First seen:** V1 baseline, 2026-05-24. · **Checked:** WCDP, 2026-09-30 — `button` present in core's list on Bricks 2.4.2 with no filter registered.
 
+### Bricks Button element's `tag` is free text — `custom` + `customTag` is invalid there, and the error message misleads
+**Symptom / When:** A Button element with `tag: 'custom'` shows the builder error *"HTML tag not allowed. Extend allowed tags through filter `bricks/allowed_html_tags`"*. Extending the filter does nothing.
+**Why:** Layout and text elements expose `tag` as a select whose `custom` option pairs with a sibling `customTag`. The Button is the exception: its `tag` control is `type: 'text'` (placeholder `span`, shown only when `link` is empty, `includes/elements/button.php`), validated against `Helpers::get_allowed_html_tags()`. `'custom'` is a Bricks sentinel, not an HTML tag, so no filter can ever permit it. (The shape is in `02`.)
+**Fix:** Set `tag` to the real tag name (`'button'`, `'a'`) and remove `customTag`. Sweep for offenders:
+```php
+foreach ( get_posts( [ 'post_type' => [ 'bricks_template', 'page' ], 'posts_per_page' => -1, 'post_status' => 'any', 'fields' => 'ids' ] ) as $id ) {
+    foreach ( (array) get_post_meta( $id, '_bricks_page_content_2', true ) as $el ) {
+        if ( ( $el['name'] ?? '' ) === 'button' && ( $el['settings']['tag'] ?? '' ) === 'custom' ) printf( "%d %s\n", $id, $el['id'] );
+    }
+}
+```
+This does not apply to `<button>` markup inside a **code** element, which is the entry above.
+**First seen:** THM (inherited from its clone source), 2026-08-09. Control type re-verified on current Bricks at harvest, 2026-10-05.
+
+### Bricks `accordion-nested` emits `aria-controls=""` / `aria-labelledby=""` unless the content wrapper and heading carry `_cssId`
+**Symptom / When:** A headless-built nestable accordion toggles fine, but every title wrapper has `aria-controls=""`, every content wrapper has `id="" role="region" aria-labelledby=""`, and the title heading gets `id=""`. Nothing is visibly wrong.
+**Why:** `Accordion_Nested::enhance_accessibility()` walks the rendered HTML with DOMDocument and does `$wrapper->getAttribute('id') ?? 'accordion-content-' . $index`. DOMDocument returns an empty **string** for a missing attribute, never `null`, so the `??` fallback never runs and `''` is written back. Elements with element-level styling get `id="brxe-…"` and happen to work. Class-only elements, the correct build per `01`, hit the bug.
+**Fix:** Give each content wrapper and each question heading an explicit, page-unique `_cssId` (`faq-a-00` / `faq-q-00`, never inside a query loop). The pass then wires real ids.
+**First seen:** THT, 2026-09-06 — an FAQ accordion, caught by reading the rendered title wrapper.
+
+### Bricks `icon` element with a custom-set SVG — `iconSize` doesn't size it and `iconColor` fills it
+**Symptom / When:** An `icon` pointed at a custom icon set renders huge, growing to fill its flex row (439px in a 700px accordion title), and a stroke-only chevron or check renders as a solid filled shape.
+**Why:** Bricks inlines the SVG as the element root (`<svg class="brxe-icon">`). `iconSize` emits only `font-size`, and an inlined SVG with no `width` attribute doesn't size from font-size. `iconColor` emits both `color` and `fill`, and a CSS `fill` beats the file's `fill="none"`, painting every path.
+**Fix:** On the icon's class, set typed `_width` / `_height` (e.g. `1.25em`), keep `iconColor` for the `currentColor` stroke, and add `_cssCustom: '.my-icon { fill: none; flex: 0 0 auto; }'`, which has no typed control. Prefer the `svg` element (`source: 'iconSet'`) wherever the accordion's `isAccordionIcon` behavior isn't needed. It has real typed `height`/`width` and doesn't emit `fill`. (Related: "`svg:not([width]){min-width:1em}` outranks a global class…".)
+**First seen:** THT, 2026-09-06 — FAQ accordion chevrons.
+
 ### Bricks emits skip-links automatically via the `bricks_body` action
 **What it does:** Bricks core emits two skip-links via `bricks_body` at frontend bootstrap, before the header template renders: `<a class="skip-link" href="#brx-content">` and a footer-skip variant. It also emits `<main id="brx-content">`.
 **Why it matters:** When building a header template, do not author your own skip-link — you will get two anchors with the same target, confusing assistive tech.
@@ -565,7 +647,15 @@ add_filter( 'bricks/allowed_html_tags', function( $tags ) {
 **Symptom:** A `_border` setting written with a per-side nested shape (`_border.bottom.{width,style,color}`) persists in `bricks_global_classes` without error, but the rendered page contains no border CSS at all.
 **Why:** Bricks' `_border` schema is flat — width is a per-side object, style is a scalar, color is a single object, radius is a per-side object. Bricks' emitter walks `_border.width` / `.style` / `.color` / `.radius` explicitly; anything else is ignored and not even stripped on next builder load, so a readback looks correct while the output is empty.
 **Fix:** Use the flat shape (it is in the `02` schema library). For "bottom border only," set `width.bottom = '1'`, other sides `'0'`. Confirm by curl + grep of the inline CSS. A correct declaration looks like `border-top: 1px solid var(--base-light); border-right: 0 solid var(--base-light); ...` — if there are no `border-*` declarations, the shape is wrong.
-**First seen:** KSCBS, 2026-05-17 — About page built programmatically; three classes had `_border` in nested shape, all rendered with no border.
+**The opposite signature — a shorthand parsed into the typed fields.** A paste through the HTML & CSS to Bricks converter, or an import, can decompose `border: 1px solid var(--neutral)` positionally and put the **color in `width`** (`"width":"var(--neutral)"`, `color` unset). Bricks then emits no `border-width` or `border-color`, CSS falls back to `medium` (~3px) and `currentColor`, and a heavier, text-colored border renders that looks deliberate. The same split breaks `var(--x, fallback)` on its internal comma, spreading one call across corners (`top: "var(--border-radius-m,"`, `right: "0.5rem)"`). Rewrite to the flat shape, and rebuild the radius from what the browser was actually rendering (the fallback), since the named token may never have existed. Audit an install:
+```bash
+wp eval '$g=get_option("bricks_global_classes",[]);
+foreach($g as $c){ $b=$c["settings"]["_border"]??null; if(!$b) continue;
+  $w=$b["width"]??null; $bad = (is_string($w) && strpos($w,"var(")!==false);
+  foreach((array)($b["radius"]??[]) as $v) if (is_string($v) && (substr_count($v,"(")!=substr_count($v,")"))) $bad=true;
+  if($bad) printf("%s (%s): %s\n",$c["name"],$c["id"],wp_json_encode($b)); }'
+```
+**First seen:** KSCBS, 2026-05-17 — About page built programmatically; three classes had `_border` in nested shape, all rendered with no border. · **Extended:** THM, 2026-08-09 — an inherited single-template aside class had rendered a 3px `currentColor` border on every page since the clone. Found while editing the box, not by looking for it.
 
 ### Bricks — typed-setting breakpoint suffixes go on the OUTER key, not as a sibling inside a nested dict
 **Symptom:** A responsive typed setting written as a sibling key inside a dict (`'font-size:tablet_portrait' => '3rem'` inside `_typography`) saves and persists, but the rendered CSS emits it as a literal malformed property — `font-size:tablet_portrait: 3rem;` — which the browser drops. The override never fires.
@@ -717,7 +807,8 @@ System stacks work as literals (`"sans-serif"` is a valid CSS keyword). Named fa
 **Why:** `frontend.min.css` ships `:where(.brxe-image).tag { display:inline-block; height:fit-content; position:relative; width:auto }`. The `:where()` zeros `.brxe-image`'s specificity but `.tag` carries (0,1,0). With `position:absolute; inset:0` AND `height:fit-content`, height comes from content, not the inset values — `bottom:0` is ignored for sizing. The inner img's `height:100%` then resolves circularly against the figure's intrinsic size, so `object-fit:cover` has no aspect mismatch to crop and `object-position` has nothing to position.
 **Fix:** Set `_width: "100%"` and `_height: "100%"` on the figure's Global Class. Same specificity (0,1,0), but the page-inline CSS comes after `frontend.min.css` in source order, so it wins.
 **Diagnostic recipe:** when an image hero "looks fine but `object-position` does nothing," inspect the rendered figure — computed height matching the img's intrinsic height (not the section's) is this bug.
-**First seen:** TAB, 2026-05-02 — Our Process hero; surfaced by noticing the object-position lever was inert.
+**The naming consequence — never call a design-system class `.tag`.** The `tag` class is not the user-facing HTML-tag setting. It is a structural marker that `includes/elements/image.php` stamps onto the outermost wrapper of any Image element that gets a wrapper (a link, a caption, an overlay or gradient, or an explicit `tag` setting) (`set_attribute( '_root', 'class', 'tag' )` and `set_attribute( 'link', 'class', 'tag' )`). Any bare `.tag` rule, a common name for badges, chips and status pills, leaks onto every linked image site-wide and shows up as unexplained inset on card images. Name those classes `.badge` / `.chip` / `.pill` rather than guarding `.tag` with `:not(.brxe-image)`. Audit: `curl -s <url> | grep -oE 'class="[^"]*\btag\b[^"]*"' | sort -u` should return only Bricks image wrappers.
+**First seen:** TAB, 2026-05-02 — Our Process hero; surfaced by noticing the object-position lever was inert. · **Extended:** THM (inherited from its clone source), 2026-08-09 — the naming collision, and the reason that project's badge utility is `.badge`. Re-verified on current Bricks at harvest, 2026-10-05.
 
 ### Bricks `_aspectRatio` dual-routes to the inner img — it can't drive the figure's box when the image element IS the figure
 **Symptom / When:** You consolidate a photo block to image-as-figure (image element, `tag: "figure"`, one class carrying wrapper+img settings) with `_aspectRatio: "3/4"`. The figure collapses to the image's intrinsic dimensions; aspect-ratio appears to do nothing.
@@ -870,8 +961,9 @@ $ppp = $s['query']['posts_per_page'] ?? ( $s['posts_per_page'] ?? null );
 add_action( 'pre_get_posts', 'prefix_event_archive_query', 20 ); // after Bricks' merge at 10
 ```
 Setting an explicit `orderby` on the loop element also works, but it splits query policy across two homes. Keep it in PHP. The same merge applies to `posts_per_page`, which is how the loop's own setting reaches the main query.
+**The flip side — a loop NOT merged paginates against the wrong page size.** Without `is_archive_main_query: true`, the loop is a secondary query, and its `/page/N/` links are resolved by the **main** query, sized from Settings → Reading. WordPress 404s any `paged` beyond the main query's `max_num_pages` before Bricks renders anything. The links work for every loop page only when **loop `posts_per_page` ≥ main `posts_per_page`**. Larger is always safe, and smaller breaks once there are enough posts. The fix is the merge flag (native), or a loop page size at or above Reading's, or a `pre_get_posts` that sizes the main query for that archive. ⚠️ A "test pagination on a small dataset" tweak (loop 3 against Reading 10) manufactures exactly this 404 in code that is fine, and a production config with loop 24 / Reading 10 hides it until someone lowers the loop. Mirror the production *relationship* between the two values when testing.
 **Verify:** dump the live request, not a simulation. A temporary mu-plugin printing `$wp_query->get('orderby')` and `$wp_query->request` on the real archive URL shows the clobber. The simulated-query check will pass and mislead.
-**First seen:** WCDP, 2026-08-20 — the Events archive (upcoming only, ordered ascending by a start-date meta clause) rendered in a per-request-varying order. Same-second seed `post_date`s made `ORDER BY post_date DESC` non-deterministic. Priority 10 → 20 fixed it; verified stable across three loads with `ORDER BY CAST(meta_value AS SIGNED) ASC` in the live SQL.
+**First seen:** WCDP, 2026-08-20 — the Events archive (upcoming only, ordered ascending by a start-date meta clause) rendered in a per-request-varying order. Same-second seed `post_date`s made `ORDER BY post_date DESC` non-deterministic. Priority 10 → 20 fixed it; verified stable across three loads with `ORDER BY CAST(meta_value AS SIGNED) ASC` in the live SQL. · **Extended:** THT, 2026-09-16 — every page-2 link on a CPT archive 404'd under a loop-3 / Reading-10 test config. Re-tested at Reading 2 / loop 3, where all pages resolved.
 
 ### Bricks scores competing header/footer/template conditions — a specific post-ID condition (8) beats `main: any`
 **Symptom / When:** A second header template conditioned to one page (`main: ids`) doesn't appear to take over from the site-wide default (`main: any`) — the page renders an empty `<header id="brx-header">` shell, or the wrong header.
@@ -915,7 +1007,13 @@ Then regen CSS. Confirm by render — the `<footer>` markup should be absent.
 **Symptom / When:** A programmatically-built `_bricks_page_content_2` renders all TOP-LEVEL sections but each is an empty shell — no headings, grids or cards. Element count is correct; nesting via `parent` is correct.
 **Why:** Bricks' frontend renderer walks the `children` array on each element, not `parent`. If every element ships `'children'=>[]`, only depth-0 elements render; their descendants are never emitted.
 **Fix:** After building the flat element list, derive `children` from `parent` before writing — group ids by parent in document order, then set each element's `children`. Builder-saved trees always have populated `children` (`children:a:3`), which is the golden-rule tell.
-**First seen:** TAB, 2026-05-31 — 42 elements wrote; 3 sections rendered as empty shells until children were rebuilt.
+**The same model, two more ways it bites:**
+- **A wrong `parent` renders fine, and breaks the next script that trusts it.** Because rendering never reads `parent`, a typo that points an element at its grandparent is invisible on the page. A later removal script that filters by `parent` then misses that subtree, and a rebuild reusing the same id scheme leaves **duplicate element ids** in the array. Walk `children` from known roots for any removal or audit, and after every direct tree edit check that the walked count equals the array count. Watch for a top-level `parent` stored as the **string** `"0"`: a strict `=== 0` root scan skips it, so use `== 0`.
+- **Top-level order is raw array order.** Nested order lives in the parent's `children`, but `parent: 0` elements have no parent, so they render in the flat array's sequence. `$content[] = $section` or `array_merge` puts a new section last on the page. Place it with `array_splice()` / `array_unshift()`, and read back before regenerating CSS:
+```bash
+wp post meta get <id> _bricks_page_content_2 --format=json | jq '[.[] | select(.parent==0)] | map({id, name, label})'
+```
+**First seen:** TAB, 2026-05-31 — 42 elements wrote; 3 sections rendered as empty shells until children were rebuilt. · **Extended:** THT, 2026-09-01 — a grid-builder helper's grandparent `parent` typo led a later cleanup to miss a card subtree, and the rebuild produced 13 duplicate ids. It was caught by a reachability walk before shipping. Same day, a promoted top-level hero element was sitting at the end of the array and would have rendered last.
 
 ### Bricks `_cssGlobalClasses` must reference class IDs, not names — name refs persist but emit no class attribute
 **Symptom / When:** A built tree renders every element with correct nesting and working loops, but **unstyled** — the global-class names never appear in `class="…"`, so no CSS hooks and no layout. Readback of the meta looks fine (the names are right there).
@@ -1015,7 +1113,8 @@ A single class (0,1,0) beats bare `blockquote` (0,0,1), and an unlayered inline 
 **Symptom / When:** A Bricks form (e.g. on a custom login / lost-password / reset-password page) carries leftover placeholder email settings — a bogus `fromName`, a stale subject. It looks like the user-facing auth emails will send with that bogus From name.
 **Why:** `fromName` and friends are read in exactly one place — `includes/integrations/form/actions/email.php`, the **Send Email** action. The `login` / `lost-password` / `reset-password` actions trigger **WordPress core mail** (`retrieve_password()` etc.), whose From name/address come from WP core / `wp_mail_from_name` / an SMTP plugin / Bricks' own `userActivationLinkEmailFromName` — never the form field. If the form's `actions` array has no `email`, those fields are inert dead config.
 **Fix:** Confirm the form's `actions` first; if there's no `email` action, the field changes nothing. To actually brand auth emails, set Bricks' `userActivationLinkEmailFromName`, filter `wp_mail_from_name`, or use an SMTP plugin. Scrub the leftover only for a clean audit — zero behavior change.
-**First seen:** TAB, 2026-06-11 — a blueprint's leftover `fromName` on three auth forms; confirmed inert in Bricks source rather than chased.
+**Inside the Email action, the recipient has its own trap.** `email.php` reads a configured recipient only when `$form_settings['emailTo'] === 'custom'` *and* `emailToCustom` is non-empty. Otherwise it falls back to `get_option( 'admin_email' )` with no indication. An address written straight into `emailTo` looks right in the data and mails the site admin. Always write the pair, `'emailTo' => 'custom'` plus `'emailToCustom' => '<address or tag>'` (shape in `02`). `emailToCustom` is dynamic-tag-parsed, so an options-field tag works there.
+**First seen:** TAB, 2026-06-11 — a blueprint's leftover `fromName` on three auth forms; confirmed inert in Bricks source rather than chased. · **Extended:** THM, 2026-08-29 — the `'custom'` sentinel, read from `email.php` while routing a report form to an options-page support address.
 
 ### Bricks — seed utility global-class "anchors" from a plugin so child-theme classes show in the picker
 **Symptom / When:** A child-theme utility class (`.display`, `.eyebrow`) works on the front end but doesn't appear in the Bricks class picker, so it can't be assigned to an element in the builder.
@@ -1078,6 +1177,8 @@ Each facet follows from one line:
 - **`align-items: flex-start`.** In a flex column, `align-items` controls the cross axis, which is width. `flex-start` makes every child shrink to its content instead of stretching. It is invisible on plain text (a paragraph clamps and wraps anyway) and visible the moment a child needs full width for its own reasons: a `space-between` row, a background, a `border-bottom` separator. A card *grid* never shows it, because `display: grid` stretches items by default.
 - **`display: flex`.** CSS multi-column layout does not apply to flex containers, so `column-count` is ignored with no warning.
 - **`width: 100%`.** A `block` used as a compact item in a row takes the full row width instead of hugging its content.
+- **`.brxe-section` centers, whatever its tag.** The same base layer ships `.brxe-section{align-items:center;display:flex;flex-direction:column;…}`, built to center a Container. Used as a card (`tag: aside`), its shrink-wrapped children (an eyebrow span, a heading) center while full-width children keep left-aligned text, so the stack looks mismatched with no `text-align` anywhere. This is distinct from ACSS's `:where(section)` rule, which needs a real `<section>` tag.
+- **The gap axis you didn't set.** `[stack:acss]` ACSS's auto-gap module (`_auto-gap.scss`, gated on its content-gap and Bricks options) emits `:where(.brxe-block)` and `:where(.brxe-div)` with `gap: var(--content-gap)`. At zero specificity it loses to any class rule, but only on the longhands that rule declares. A class setting only `_columnGap` leaves `row-gap` at the section-scale `--content-gap`, which surfaces only when the row wraps, often weeks after the class was built. The winning rule never names your class, so find it by iterating `document.styleSheets` with `el.matches(rule.selectorText)`, not by grepping the class name.
 **Fix:** Set the typed control explicitly. Never assume the element's CSS default.
 
 | Facet | Typed fix (on the class) |
@@ -1087,6 +1188,8 @@ Each facet follows from one line:
 | rows shrink to content | `'_alignItems' => 'stretch'` on the **list/parent** class, not the row |
 | `column-count` ignored | `'_display' => 'block'` alongside the `column-count` custom CSS. Don't switch the element to `div` instead: that kills every flex/grid setting on the class, the mirror-image trap |
 | compact item goes full width | `'_width' => 'auto'` (or a fixed width) |
+| `section` used as a card centers its children | `'_alignItems' => 'stretch'` (or `flex-start`), or build it as a `block` with `tag: custom` + `customTag: aside` |
+| wrapped lines get a big gap | set `'_rowGap'` explicitly whenever `_columnGap` is set on a row that can wrap |
 
 Switching an element from `div` to `block` also makes flex settings work without `_display`, but it brings `align-items: flex-start`, `flex-wrap: wrap` and `width: 100%` with it, so it is a bigger behavioural change than it looks.
 Audit a tree for inert flex settings on `div`-based classes:
@@ -1105,7 +1208,7 @@ foreach ( get_option( "bricks_global_classes", [] ) as $c ) {
 ```
 **Verify:** measure, don't look. For the row facets, compare `el.getBoundingClientRect().width` on a row against its parent (they must match), and take a narrow-viewport screenshot. The DB is right, the emitted CSS is right and the desktop render looks right in every one of these cases. A tall single column from the `column-count` facet can also push later sections past a scroll-reveal trigger, so "content below never fades in" can be a layout bug rather than an animation one.
 Related: `.brxe-block` / `.brxe-container` flex-column default (the `.gap--N` entry in ACSS), and ACSS's `section > div` column rule.
-**First seen:** WCDP, 2026-08-18 — a numbered steps card whose counter badge stacked above its text (`div`); the same dead settings sat in three other classes on the page, one shipped a fortnight earlier and reviewed twice. Same day, a 390px screenshot showed the external-link arrow wrapping below the title on tool cards and six directory cards, on every mobile visit since they were built (`flex-wrap`); and a key-dates `dl` whose rows ended at different x positions (`align-items`). · WCDP, 2026-08-20 — an event-card date badge and a share-link list both stretched to full width (`width: 100%`). · WCDP, 2026-08-22 — a history honor roll's `column-count: 2` rendered as one tall column (`display: flex`). Same day, new county-office rows exposed the `align-items` facet on **every** row device already shipped: 933, 837, 1200 and 1200px wide inside a 1320px container, all narrow since the day they were built, all fixed with one class edit each. Base rules re-verified against Bricks 2.4.2, 2026-09-30.
+**First seen:** WCDP, 2026-08-18 — a numbered steps card whose counter badge stacked above its text (`div`); the same dead settings sat in three other classes on the page, one shipped a fortnight earlier and reviewed twice. Same day, a 390px screenshot showed the external-link arrow wrapping below the title on tool cards and six directory cards, on every mobile visit since they were built (`flex-wrap`); and a key-dates `dl` whose rows ended at different x positions (`align-items`). · WCDP, 2026-08-20 — an event-card date badge and a share-link list both stretched to full width (`width: 100%`). · WCDP, 2026-08-22 — a history honor roll's `column-count: 2` rendered as one tall column (`display: flex`). Same day, new county-office rows exposed the `align-items` facet on **every** row device already shipped: 933, 837, 1200 and 1200px wide inside a 1320px container, all narrow since the day they were built, all fixed with one class edit each. Base rules re-verified against Bricks 2.4.2, 2026-09-30. · **Extended:** THM, 2026-08-30 — a wrapping credit line had a ~30px row gap against a 13.5px column gap (gap axis). THT, 2026-09-06 — an `aside` CTA card's eyebrow and heading centered over left-aligned text (`.brxe-section`).
 
 ### Bricks — an empty `text-basic` renders nothing; use `block`/`div` for decorative empties
 **Symptom / When:** A `text-basic` with `text:''` (a CSS-only dot, accent bar, counter holder) produces no DOM output at all.
@@ -1461,8 +1564,9 @@ Register on `render_tag` **and** `render_content` (conditions resolve via the la
 
 ### Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 **Symptom / When:** Bricks → Settings → Maintenance is switched on, anonymous visitors correctly get a 503, but the page they get is Bricks' unstyled default rather than anything of yours.
-**Why:** Two separate keys in the `bricks_global_settings` option, and only one of them is the toggle. `maintenanceMode` (`"maintenance"` = 503, `"coming_soon"` = 200, key **absent** = off) turns it on; `maintenanceTemplate` holds a `bricks_template` post ID whose `_bricks_template_type` is `content`. With no template ID set, `Maintenance::get_default_maintenance_page_html()` serves the plain fallback. The custom template renders standalone — header and footer are OFF by default (`maintenanceRenderHeader` / `maintenanceRenderFooter` opt back in), and search/archive/error templates are zeroed.
-**The second-order trap:** logged-in users bypass maintenance entirely, so during a maintenance window you only ever see the site *logged in*. Any logged-in-only rendering bug masquerades as a site-wide one for the whole window.
+**Why:** Two separate keys in the `bricks_global_settings` option, and only one of them is the toggle. `maintenanceMode` (`"maintenance"` = 503, `"comingSoon"` = 200, key **absent** = off) turns it on. The Coming Soon value is **camelCase `comingSoon`**: it is the `<option value="comingSoon">` in `includes/admin/admin-screen-settings.php`. The snake_case `coming_soon` appears only in a docblock in `includes/maintenance.php`, so copying it from there writes a value Bricks never matches. `maintenanceTemplate` holds a `bricks_template` post ID whose `_bricks_template_type` is `content`. With no template ID set, or an unpublished one, `Maintenance::get_default_maintenance_page_html()` serves the plain fallback. The custom template renders standalone. Header and footer are OFF by default (`maintenanceRenderHeader` / `maintenanceRenderFooter`, compared as the string `'1'`, opt back in), and search/archive/error templates are zeroed. The page set as Bricks' own `login_page` setting is exempt from the gate (`apply_maintenance_mode()` checks it first), so a custom login form stays reachable.
+**The second-order trap:** logged-in users bypass maintenance entirely, so during a maintenance window you only ever see the site *logged in*. Any logged-in-only rendering bug masquerades as a site-wide one for the whole window. Administrators always bypass. With `bypassMaintenanceUserRoles` **unset**, `Capabilities` grants the bypass to **any** logged-in user; setting it to specific roles narrows that.
+**The status-code trap:** the two modes are the same gate with different statuses. A `curl -w '%{http_code}'` deploy check that reads a `comingSoon` site's 200 as "the gate arrived off" is wrong. Verify the gate by the rendered `<title>` / template markup, or read `maintenanceMode` directly, never by status alone. Curl the homepage, one other arbitrary page (site-wide, not homepage-only) and the login page (still exempt).
 **Fix:** Build a `content`-type template, set both keys, and purge. Note `maintenanceMode` is switched off by **unsetting** the key, not by writing a falsy value.
 ```bash
 wp eval '$s=get_option("bricks_global_settings");$s["maintenanceMode"]="maintenance";update_option("bricks_global_settings",$s);' # on
@@ -1475,7 +1579,7 @@ Purge the page cache after either toggle. The template dropdown in the admin fil
 - **Pre-stage without going live:** build the template with **no** `templateConditions` (it renders nowhere until selected), set `maintenanceTemplate` ahead of time, and leave `maintenanceMode` unset until cutover. Verify by switching `maintenanceMode` on for a minute and curling logged-out.
 
 Robots.txt and `template_redirect` redirects still run in maintenance mode.
-**First seen:** MBC, 2026-08-07 — built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation. · **Extended:** WCDP, 2026-09-30 — go-live maintenance page pre-staged with the mode off.
+**First seen:** MBC, 2026-08-07 — built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation. · **Extended:** WCDP, 2026-09-30 — go-live maintenance page pre-staged with the mode off. · **Corrected:** THM, 2026-08-29 / THT, 2026-09-14, reconciled at their harvest 2026-10-05. THM read `comingSoon` from the admin `<select>` while gating a site before its paywall existed, and THT saw two sibling sites answer 503 (`maintenance`) and 200 (`comingSoon`) in one deploy check. This entry had said `coming_soon`.
 
 
 ### `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
@@ -1523,6 +1627,18 @@ from `post_content` to see exactly where it lands in the hierarchy, so your new 
 right level. ⚠️ **What this does not solve:** anything genuinely emitted by the template — a bare H1,
 shared H2s, furniture. Those remain template-level and stay a multi-page decision. Know which half
 of the duplication you are looking at before you pick a tool.
+
+### Bricks dynamic tags do NOT parse inside raw `post_content` — use shortcodes, including `[bricks_template id="X"]` for real Bricks elements
+**Symptom / When:** A post body rendered through Bricks' `post-content` element contains a Bricks tag like `{acf_support_email}`, and the literal string prints on the page. Or one page of that kind needs a genuine Bricks element, such as a Form, that raw editor HTML can't provide.
+**Why:** The `post-content` element's WordPress-source branch (`includes/elements/post-content.php`) is a bare `the_content()`, with no Bricks dynamic-data pass. Bricks' tag engine runs only on its own typed element settings, inside each element's `render()`. Core does hook `do_shortcode` onto `the_content`, so shortcodes resolve there with no Bricks involvement.
+**Fix:** Wrap each value in a small shortcode (`add_shortcode( 'support_email', fn() => esc_html( get_field( 'support_email', 'option' ) ) )`), and use `get_bloginfo( 'name' )` for the site name rather than inventing an `{acf_…}`-shaped tag. For a full Bricks element, build it as its own `content`-type `bricks_template` with no conditions, and embed `[bricks_template id="<id>"]` (registered unconditionally in `includes/templates.php`) in that page's content. This keeps page-specific pieces with the page, unlike a shared template section gated on `{post_id} == <id>`, which breaks silently when the post is recreated.
+**First seen:** THM, 2026-08-29 — legal-document bodies printed `{acf_…}` tags literally until shortcodes replaced them. The same build moved a report Form out of a post-ID-gated template section into a `[bricks_template]` embed.
+
+### Bricks re-grants revision support to every Bricks-enabled post type at `init` 999 — a default-priority `remove_post_type_support()` silently loses
+**Symptom / When:** `remove_post_type_support( 'page', 'revisions' )` on `init` reads correctly and throws no error, yet `post_type_supports( 'page', 'revisions' )` stays `true`. The same call for `post` works, which makes it look post-type-specific.
+**Why:** `Bricks\Revisions::add_revisions_to_all_bricks_enabled_post_types()` (`includes/revisions.php`) runs on `init` at priority **999** and calls `add_post_type_support( $type, 'revisions' )` for every post type Bricks manages (`page` by default, plus any CPT enabled in Bricks settings). A removal at 10 is overwritten later in the same pass. `post` isn't on Bricks' list, so nothing races it.
+**Fix:** Remove at a priority above 999, e.g. `add_action( 'init', $cb, 20000 )`, and confirm with `post_type_supports()`. This class reads correct and behaves wrong. If the goal is to stop revisions being written, removing support is enough: `wp_save_post_revision()` checks support first and bails, so a `wp_revisions_to_keep` cap on that type is unreachable.
+**First seen:** THM, 2026-08-29 — removing revisions from `post` and `page`. `post` worked and `page` didn't, traced by dumping `$wp_filter['init']`. THT, 2026-09-16 — the same removal extended to every content CPT.
 
 ### Bricks `altText` — an empty string is indistinguishable from unset, so you cannot force `alt=""`
 
@@ -1629,8 +1745,40 @@ Triage first: click an item and inspect. If `aria-expanded` updates, only SSR is
 grep -n -A10 "controls\['<key>'\]" wp-content/plugins/bricksextras/components/classes/x-<element>.php
 ```
 Then: **checkbox → set `true` or omit the key, never `false`.** **Select → use one of its literal option strings.** On BE 1.7.1 a builder save didn't reintroduce omitted checkbox keys, but re-read them after a save anyway. The `02` ProSlider table records these types.
+**A third shape: a select whose render compares against a string none of its options produce.** The OffCanvas `returnFocus` control offers `'true'` / `'false'`, but `x-offcanvas-nestable.php` renders `isset( $settings['returnFocus'] ) ? 'enable' === $settings['returnFocus'] : true`. `'enable' === 'true'` is false, so **any** explicit value, including choosing "Enable" in the builder, disables return-focus, and only the unset default works. Close drops keyboard focus to the top of the document. `unset()` the key headlessly, and verify from the rendered `data-x-offcanvas` JSON, which reads `"returnFocus": false` while the settings say `'true'`. The neighboring `esc_to_close`, `trapFocus` and `preventScroll` pass through correctly, which is what makes the odd one easy to miss.
 **Same mechanism as "Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path"** (must be unset, not `false`, because the code tests `isset()`). That entry was recorded as one element's quirk. It is a pattern across BricksExtras and Bricks alike.
-**First seen:** WCDP, 2026-09-14 — building a news ticker on a Pro Slider. One cause produced three bugs in a single element: `pagination => false` rendered dots, `keyboard => true` stole the arrow keys on a page with three sliders, and the `arrows` breakpoint string built DOM that only BE's own CSS was hiding.
+**First seen:** WCDP, 2026-09-14 — building a news ticker on a Pro Slider. One cause produced three bugs in a single element: `pagination => false` rendered dots, `keyboard => true` stole the arrow keys on a page with three sliders, and the `arrows` breakpoint string built DOM that only BE's own CSS was hiding. · **Extended:** THM, 2026-08-11, BE 1.7.1 — the `returnFocus` case on a mobile-header offcanvas, caught by reading back the rendered JSON.
+
+### BricksExtras Media Player defaults `crossorigin="anonymous"` — a cross-origin source with no CORS headers never plays, silently
+**Symptom / When:** The player loads its poster and controls, and pressing play gives an endless spinner. There's no console error and no failed request, and `curl -I` on the source returns `200` with `video/mp4`, so it looks like a dynamic-tag or PHP problem.
+**Why:** `xmediaplayer` sets `crossorigin="anonymous"` whenever the setting is unset (`media-player-trait.php`: `isset($settings['crossorigin']) ? $settings['crossorigin'] : 'anonymous'`). The browser then treats the media request as CORS-controlled, and if the host is another origin that sends no `Access-Control-Allow-Origin`, it refuses the response without surfacing an event. `canplay` simply never fires. A plain `curl -I` looks the same either way. Use `curl -I -H "Origin: <page origin>"` and look for `access-control-*`.
+**Fix:** Send `Access-Control-Allow-Origin` from the media host (required anyway if caption/WebVTT tracks are ever added), or suppress the attribute with BE's own escape hatch, the **string** `'null'`: `$el['settings']['crossorigin'] = 'null';` (shape in `02`). Same-origin playback never enforces CORS, so removing it is safe there too.
+**First seen:** THT, 2026-08-31 — a trailer file on the production domain, tested from a local dev origin. The resolved URL and the file both checked out, and the attribute was found only by reading the rendered player markup.
+
+### A typed BricksExtras setting can land on a DESCENDANT — overriding the custom property on the element itself silently loses
+**Symptom / When:** A BE element styled through a custom property (`--x-burger-line-color` on a Burger Trigger) ignores your child-theme override on its own class. Inspecting that element shows your value winning, and the component still renders in the old color.
+**Why:** Two traps. (1) Bricks emits the typed setting on a child, `#brxe-<id> .x-hamburger-box { --x-burger-line-color: … }`, so the bars below it inherit from that nearer ancestor and never see your declaration. (2) Matching that descendant can't win either, because the selector carries an ID (1,1,0), and hardcoding `#brxe-<id>` breaks the day the element is duplicated.
+**Fix:** Override what the property *feeds*. BE paints the bars with `background-color: var(--x-burger-line-color)` at (0,1,0)/(0,1,1), so a scoped rule on the consumer wins with no `!important` and no generated id:
+```css
+.my-context .my-burger .x-hamburger-inner,
+.my-context .my-burger .x-hamburger-inner::before,
+.my-context .my-burger .x-hamburger-inner::after { background-color: var(--base); }
+```
+This inverts the usual "override the token, not the rule" advice in "ACSS — `automatic-bricks.css` enqueues AFTER the child theme…". There the token is declared at `:root` and is reachable. Here its declaration belongs to an ID selector on a descendant. Before writing either kind of override, find the declaring selector by iterating `document.styleSheets` for the property name.
+**First seen:** THT, 2026-09-15 — a light burger treatment over a hero video.
+
+### Bricks builder save 500s on ONE template — a stray BricksExtras `extrasCustomQueryCode` placeholder
+**Symptom / When:** Builder save returns a 500 on one template while every other template saves. The site serves 200, the template renders, and its DB tree reads back fine. Any WAF audit lines against `admin-ajax.php` around the failure are the WAF *reacting* to a 5xx, not causing it.
+**What fixed it:** removing `extrasCustomQueryCode` from the `block` elements carrying it. The value was BE's own demo placeholder (`<style>h1.my-heading{color:crimson}</style><h1 class='my-heading'>Just some custom HTML</h1>`), left over from an old insertion. It never rendered, because the blocks were not in custom-query mode, so stripping it changed nothing on the page, and saving worked immediately.
+**Mechanism: open, deliberately not invented.** Two theories fail. Bricks' signature validation can't be it, because `Admin::process_elements_for_signature()` signs `code` only on elements named `code`/`svg` plus `queryEditor`, never a block's BE field. A WAF match on `<style>` in the POST can't be it either: a sibling template with `<style>`/`<script>` in a real `code` element saves fine, and the WAF log held no rule match. The open question is whether BE's own save-time handling of the field throws.
+**Fix:** strip it wherever it appears. It is inert.
+```php
+foreach ( $content as $i => $e ) foreach ( array_keys( (array) ( $e['settings'] ?? [] ) ) as $k )
+  if ( stripos( $k, 'extrasCustomQueryCode' ) !== false ) unset( $content[$i]['settings'][$k] );
+```
+Check every site in the same lineage. It rides along with any duplicated template and sits dormant until someone saves that template.
+**The lesson that cost more than the fix:** comparing the failing template against a working one on the same site, and against the same template on a sibling site, corrected two theories that a plain reading of the logs had supported. Where the PHP log is unreadable, a control case is the instrument, and it's a better one, since it isolates the variable.
+**First seen:** THM (LIVE), 2026-09-16 — a footer template 500ing on every save, present in every environment in the lineage.
 
 ### BricksExtras Pro Slider — `slidePadding` is CSS padding on every slide, NOT Splide's `padding` option
 **Symptom / When:** After setting `slidePadding` (expecting Splide's peek/padding option), the cards inside the slider lose their own padding. A card class carrying `--space-l` renders at exactly the `slidePadding` value, and the slides sit that same distance off the container edge.
@@ -1735,10 +1883,10 @@ Discover valid schema keys with `(new \Automatic_CSS\Model\Config\UI())->get_all
 
 ### ACSS per-level heading sizes (`h1-min` / `h1-max`) DO reach `--h1` — if they don't, the write path is wrong `[stack:acss]`
 **Symptom / When:** You set `h1-max`/`h2-max` and the actual `--h1` still compiles from the modular-scale default — the values sit in the option, may even appear as `--h1-max` in the CSS, but the size doesn't change.
-**Why:** The per-level Font Size Override is the real mechanism and it works: on ACSS 3.3.6 a `save_settings()` call carrying only `h1-min: 36` / `h1-max: 76` compiles `--h1: clamp(2.25rem, …, 4.75rem)` — exactly 36 → 76px — and delivers it on the live page (th-tour, 2026-09-14, single-variable test with everything else untouched; MMHN saw the same on a full brand ladder, 2026-07-16). When the size *doesn't* move, the overrides never reached the compiler: a direct `wp option update` / `option patch` write persists the keys but does not regenerate the stylesheets (see "ACSS settings — write via `Database_Settings::save_settings()`, never direct option writes"), a save under a non-admin context silently guts the output (see the headless-config entry), or the dashboard Save was never actually clicked after a DB-side edit. An earlier version of this entry attributed the symptom to a hidden `$heading-fallbacks` mode in the SCSS; that diagnosis was never reproduced and is withdrawn.
+**Why:** The per-level Font Size Override is the real mechanism and it works: on ACSS 3.3.6 a `save_settings()` call carrying only `h1-min: 36` / `h1-max: 76` compiles `--h1: clamp(2.25rem, …, 4.75rem)` — exactly 36 → 76px — and delivers it on the live page (THT, 2026-09-14, single-variable test with everything else untouched; MMHN saw the same on a full brand ladder, 2026-07-16). When the size *doesn't* move, the overrides never reached the compiler: a direct `wp option update` / `option patch` write persists the keys but does not regenerate the stylesheets (see "ACSS settings — write via `Database_Settings::save_settings()`, never direct option writes"), a save under a non-admin context silently guts the output (see the headless-config entry), or the dashboard Save was never actually clicked after a DB-side edit. An earlier version of this entry attributed the symptom to a hidden `$heading-fallbacks` mode in the SCSS; that diagnosis was never reproduced and is withdrawn.
 **Fix:** Write the ladder with `wp_set_current_user(1)` + `\Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $merged, true )` — the full option merged, mobile = min / desktop = max in px — then verify on the *rendered* page (`curl` the compiled `automatic.css?ver=…` for the `--h1: clamp(` line), not the DB. Do **not** re-declare `--h1`…`--h6` in the child theme or any other CSS home to express a ladder (`01` → Pinned custom tokens: irregular ladders are per-level overrides, never token re-declarations).
 **Still true from the original entry:** the ACSS 3.3.6 schema has no global `body-line-height` / `text-line-height`, and `h4-line-height` is absent even though h1/h2/h3/h5/h6 have it — those go in the child theme.
-**First seen:** TAB, 2026-04-25 — an irregular brand ladder (56→40→28→22→18→16) appeared not to compile from `h1-max`; the child-theme `:root` override that shipped instead is grandfathered as-built. **Corrected:** th-tour, 2026-09-14 — the H1-only test above proved the override compiles; entry rewritten under `00`'s correction exception (mechanism was wrong, not the incident). MMHN, 2026-07-16 — same result on a full ladder, recorded in the sibling entry "per-level Font Size Override hits a non-geometric brand scale exactly".
+**First seen:** TAB, 2026-04-25 — an irregular brand ladder (56→40→28→22→18→16) appeared not to compile from `h1-max`; the child-theme `:root` override that shipped instead is grandfathered as-built. **Corrected:** THT, 2026-09-14 — the H1-only test above proved the override compiles; entry rewritten under `00`'s correction exception (mechanism was wrong, not the incident). MMHN, 2026-07-16 — same result on a full ladder, recorded in the sibling entry "per-level Font Size Override hits a non-geometric brand scale exactly".
 ### ACSS `option-<slot>-clr` toggles gate whether a color slot compiles at all `[stack:acss]`
 **Symptom / When:** You set `color-secondary` (or tertiary/action/accent) via the dashboard or `save_settings()`, but `--secondary-*` and its whole shade ramp never appear in `automatic-variables.css`. The hex lands in the option; the slot emits nothing.
 **Why:** Each color slot has an on/off toggle — `option-primary-clr`, `option-secondary-clr`, etc. ACSS only compiles a slot's variables when the toggle is `'on'`. **Blueprints frequently ship with several slots OFF**, so this bites on any project started from one.
@@ -1823,6 +1971,7 @@ Spacing piggybacks the same mechanic: a brand `--space-*` defined in a token fil
 - **CSS** — the SCSS `load-buttons` mixin emits only the variants whose `option-<slot>-btn` toggle is on (and whose `option-<slot>-clr` is on).
 - **Dropdown** — `Buttons_Styles::get_styles_list()` iterates the hardcoded PHP map `Buttons_Styles::$acss_colors_list` (primary / secondary / tertiary / accent / base / neutral / warning / info / danger / success), filtered to the enabled toggles. There is **no `action` row**, so no toggle can ever make it appear. This bites precisely on brands whose button colour is `--action`, the slot ACSS itself recommends for that job.
 Separately, `btn--outline` is a **modifier, not a variant**: every emitted rule is compound (`.btn--primary.btn--outline`, `.btn--secondary-light.btn--outline`, …) and bare `.btn--outline` has no rule at all. And the Button `style` control is a single-value select — a value outside its options list renders (Bricks emits `bricks-background-{style}` blind and ACSS's `render_attributes` filter rewrites the prefix) but is exactly what the builder's JS tree validator **resets to the default on the next save**. So neither a missing variant nor a modifier can be smuggled through `style`.
+**The same split covers `size`.** ACSS replaces Bricks' own size enum (`sm`/`md`/`lg`/`xl`) through the same controls filter (`add_bricks_buttons_sizes()` → `get_sizes_list()`, default `btn--m`), and the Bricks Button emits the stored value as a class. Whether that class has front-end CSS is a separate question. A plausible `btn--l` / `btn--lg` stores fine and renders identically to no size class when no stylesheet the page actually loads carries its rule. `btn--lg` exists nowhere. The size rules (`btn--xs`…`btn--xl`) compile into `automatic-gutenberg.css`, which is front-end on some installs and editor-only on others. So check the page's `<link>` list as well as the grep.
 **Fix:** Before designing or building against a variant, ask the compiled CSS, not the picker:
 ```bash
 grep -ohE '\.btn--[a-z-]+' wp-content/uploads/automatic-css/*.css | sort -u   # what ACSS actually emits
@@ -1842,7 +1991,13 @@ add_filter( 'bricks/elements/button/controls', function ( $controls ) {
 ```
 Register it, don't smuggle it. For a filled + outline pair, use one base variant for both and add `acss_import_btn--outline` to `_cssGlobalClasses` on the second — the modifier goes in the class list, never in `style`.
 **Related:** "Bricks button utility classes (`btn--outline`, `btn--primary`) are Bricks-injected, not user-defined" — the consuming CSS exists only on a real Bricks Button element.
-**First seen:** WCDP, 2026-08-10 — the Donate CTA needed `--action` (the only red in the palette that clears AA under white text) and the dropdown had no way to offer it; fixed with the priority-20 filter. WCDP, 2026-08-18 — an approved wireframe specified a white hero button and a ghost secondary; `.btn--white` was in the picker but `option-white-btn` was off and it emitted nothing. Rebuilt as `btn--secondary-light` (12.39:1 on navy) and `btn--secondary-light` + `btn--outline` (9.34:1), with no new button CSS. ACSS 3.3.6.
+**First seen:** WCDP, 2026-08-10 — the Donate CTA needed `--action` (the only red in the palette that clears AA under white text) and the dropdown had no way to offer it; fixed with the priority-20 filter. WCDP, 2026-08-18 — an approved wireframe specified a white hero button and a ghost secondary; `.btn--white` was in the picker but `option-white-btn` was off and it emitted nothing. Rebuilt as `btn--secondary-light` (12.39:1 on navy) and `btn--secondary-light` + `btn--outline` (9.34:1), with no new button CSS. ACSS 3.3.6. · **Extended:** THT, 2026-09-01 — a "large" banner CTA built to a mockup's `.btn--lg` would have rendered at base size. The grep found no front-end rule, so the CTA was sized with typed padding/font-size instead.
+
+### ACSS `[class*="btn--"]` matches ANY class containing the substring — a BEM modifier like `header__btn--panel` picks up button skin `[stack:acss]`
+**Symptom / When:** An ordinary element styled by its own global class (here a `text-link`) loses its background and renders as a transparent box with a 2px `currentColor` border as soon as it also carries a class whose *name* contains `btn--`. Its global-class CSS is emitted and correct, but something later overrides it.
+**Why:** ACSS targets buttons with substring attribute selectors. The compiled `automatic.css` itself ships context rules like `.bg--light [class*="btn--"]` and `.bg--ultra-light [class*="btn--"].btn--outline`, and builds whose button module compiles globally add a bare `[class*="btn--"]:where(:not(.btn--none, …))` rule with background, color, padding and border. Each of these matches *any* class attribute containing `btn--`, so a BEM block named `*__btn` with any `--modifier` trips it. Outside a real button variant, the `--btn-*` variables resolve to nothing useful, and the element gets the skeleton skin.
+**Fix:** Never put `btn--` inside a non-button class name. Rename the block (`header__join` / `header__join--panel`). If a rename is impossible, add `.btn--none`, which the bare selector excludes. Audit with `grep -o '\[class\*="btn--"\][^{]*' wp-content/uploads/automatic-css/*.css` to see which contexts apply on the install.
+**First seen:** THT, 2026-09-06 — the offcanvas-panel copy of a header CTA pill, modifier `header__btn--panel`.
 
 ### ACSS — "light"/"dark" variants of a NEAR-BLACK base resolve to LIGHT colors `[stack:acss]`
 **Symptom / When:** You build a dark-theme surface on `var(--base-light)` expecting "slightly lighter than the near-black base" and get a light grey-lavender. White text on it is unreadable.
@@ -1865,7 +2020,14 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Symptom / When:** A plugin/PHP-rendered card built as `<section class="card">` (with `<div>` children) renders with content horizontally centred and spread vertically, and direct-child rows you set `display:flex` come out stacked as columns — though your CSS never says so. Shows only on real pages (ACSS loaded), not in a stripped mockup.
 **Why:** ACSS ships `section:where(:not(.bricks-shape-divider)){display:flex;flex-direction:column;align-items:center;gap:…}` and `section > div:where(…){display:flex;flex-direction:column;align-items:flex-start;gap:…}`. Intended for Bricks sections, they match ANY top-level `<section>` and its direct `<div>` children. They use `:where()` (specificity 0,0,1) so they're trivially overridden — but ONLY for properties you explicitly declare; relying on element defaults (no `display`/`flex-direction`) lets ACSS win.
 **Fix:** On hand-authored sections, declare the layout explicitly: `.card{display:block}` and `flex-direction:row` on every direct-child flex row. Don't rely on element defaults inside a `<section>` on an ACSS site.
-**First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centred and stacked; the login card too.
+**The reverse direction — the gutter.** The same family carries the section gutter, `:where(section:not(section section)) { padding-block: var(--section-padding-block); padding-inline: var(--gutter); }`. It matches the real `<section>` tag, so a Bricks Section element whose `tag` was switched to `div` loses the gutter and sits flush against the viewport on mobile while its siblings are padded. Leave Section elements on the `section` tag, or apply the gutter on the element's class where a `div` is genuinely required.
+**First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centered and stacked; the login card too. · **Extended:** THM (inherited from its clone source), 2026-08-09 — the gutter case. Selector re-verified against compiled ACSS 3.3.6 at harvest, 2026-10-05.
+
+### A fixed ACSS width token in a Container's `_widthMax` replaces its viewport-safe max-width — horizontal overflow on mobile `[stack:acss]`
+**Symptom / When:** A narrowed content column (`_widthMax: 'var(--width-l)'` on a Container) looks right on desktop, but at 390px the page scrolls sideways and the column is ~820px wide.
+**Why:** The container's own `max-width` is `var(--content-width-safe)` = `min(var(--content-width), calc(100% - var(--gutter) * 2))`. A typed `_widthMax` replaces that whole declaration, and `--width-l` is `calc(var(--content-width) * 0.6)`, a fixed value with no viewport term, so nothing clamps it below the screen width anymore.
+**Fix:** `_widthMax: 'min(var(--width-l), var(--content-width-safe))'`. That keeps the narrow column on desktop and the safe cap everywhere else. Or leave the Container alone and narrow an inner block.
+**First seen:** THT, 2026-09-06 — an FAQ container, found in a 390px iframe test.
 
 ### ACSS palette shades are dashboard-derived — a WP-CLI base-color write leaves the ramp stale `[stack:acss]`
 **Symptom / When:** Scripting the ACSS palette via `save_settings`: you write `color-primary` (or `color-accent`), regenerate, and `--primary` updates but `--primary-light/-dark/-hover/…` stay on the OLD colour.
@@ -1889,7 +2051,11 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Symptom / When:** A brand type scale isn't geometric (H1 46–56, H2 34–48, H3 22–26 — H2:H3 ≠ H1:H2), so ACSS's base-size + single ratio can't land every level.
 **Why:** ACSS Typography has a per-level tab (H1…H6, and XXL…XS for text) with a **Font Size Override (mobile / desktop px)** on top of the global base+scale. The mobile/desktop pair is the fluid-clamp min/max — i.e. the brand's range.
 **Fix:** Set the brand ranges as per-level overrides (mobile=min, desktop=max); leave base+scale for the unspecified levels. Scriptable via `save_settings`. Pin a floor with a per-level override where a scale step would dip below it (e.g. `text-s`=14/14 for a 14px floor).
-**First seen:** MMHN, 2026-07-16.
+**The downward trap — a base change can compile min > max.** ACSS derives the small steps *down* from the base by dividing by each end's scale (`mob-text-scale` 1.2, `text-scale` 1.333). Raise `base-text-mob` 16 → 17 with `base-text-desk` at 18, and two divisions by 1.333 from 18 land below two by 1.2 from 17, so `--text-xs` compiles as `clamp(0.75rem, …, 0.633rem)`. Browsers resolve that to the min, so it *looks* fine, but the token is nonsense and anything doing its own math on the max end gets 10px. After any base or scale change, read the compiled clamps and pin any level whose max is below its min (`text-xs` = 12/12):
+```bash
+grep -oE -- '--(h[1-6]|text-[a-z]+): *clamp[^;]+' wp-content/uploads/automatic-css/automatic.css
+```
+**First seen:** MMHN, 2026-07-16. · **Extended:** THT, 2026-09-14 — applying a brand type ladder. The inverted `--text-xs` was caught by reading the compiled clamps, not by eye.
 
 ### ACSS is fully configurable headless via `Database_Settings::save_settings()` — but only under an admin context, or it silently GUTS `automatic-bricks.css` `[stack:acss]`
 **Symptom / When:** Configuring ACSS (colors, fonts, scales) from WP-CLI. Two failure layers. (1) `\Automatic_CSS\API::update_settings( $vars )` — the documented entry point — fatals: `Call to undefined method Automatic_CSS\Model\Database_Settings::save_vars()` (API.php:86). (2) Worse and **silent**: a successful `save_settings()` from plain WP-CLI regenerates all files and reports success, but `automatic-bricks.css` collapses ~22 KB → **140 bytes** and the core bundles shed ~34 KB — the Bricks button/focus layer (`.btn--primary`, the `bricks-is-frontend` focus system) vanishes from the front end. Nothing errors; the site just quietly loses styling.
@@ -1988,6 +2154,18 @@ The sync is additive (never removes) and gated by `option-remove-deactivated-cla
 **Fix:** `$name = $field['_name'] ?? $field['name'];` before any name-keyed logic.
 **First seen:** NLTA, 2026-07-06 — a per-field placeholder swap on a front-end form matched nothing.
 
+### ACF hook-variation order: `acf/render_field/key=…` fires AFTER the field has rendered — arm string swaps on `prepare_field`
+**Symptom / When:** A `gettext` swap (or any pre-render tweak) armed on `acf/render_field/key=<field key>` provably runs, and the original string still shows.
+**Why:** `acf_render_field()` fires `acf/render_field` once, and ACF fans it out to variations in array order, `type` then `name` then `key` (`acf_add_action_variations( 'acf/render_field', ['type','name','key'], 0 )`). The field type's own renderer, which echoes strings like "Select taxonomy", is on the `type` variation, so a `key` hook arrives one render late. `acf_prepare_field()` runs before the render action at all.
+**Fix:** Arm anything that must precede ACF's renderer on `acf/prepare_field/key=<field key>` (and see the entry above for `_name`). Verify by rendering `acf_render_field_wrap()` under `wp eval` and grepping the output for both strings.
+**First seen:** THM, 2026-08-30 — relabeling a relationship field's taxonomy-filter placeholder.
+
+### ACF relationship field's `taxonomy` setting silently zeroes every search result
+**Symptom / When:** A Relationship field's search returns nothing for every query, including terms that match published posts, and its taxonomy-filter dropdown has no options.
+**Why:** Two settings look alike and aren't. `filters => ['search','taxonomy']` controls which UI controls appear, and the dropdown is populated from the taxonomies registered on the field's `post_type`. The field's own `taxonomy` setting is a **content restriction** taking `taxonomy:term` pairs. A bare taxonomy slug decodes (`acf_decode_taxonomy_term()`, `explode(':')`) to an empty term, which becomes a `tax_query` clause `'terms' => ['']` ANDed into every query. No post can satisfy that. The same value feeds the dropdown's term lookup, so one bad setting produces both symptoms.
+**Fix:** Leave `taxonomy` as `array()` unless you mean to hard-restrict to specific terms, and then use full `taxonomy:term` pairs. `filters` alone gives you the dropdown. Prove it by reproducing ACF's query (`acf_decode_taxonomy_terms()` → `tax_query`) in a real `WP_Query` with and without the restriction and comparing `found_posts`.
+**First seen:** THM, 2026-08-30 — a relationship field configured with a bare slug as "which taxonomy to offer". Newly created posts were invisible to search from the day it shipped (0 results with the restriction, 2 without).
+
 ### An ACF field property computed at registration time silently breaks the options group it reads — compute it in `acf/prepare_field`
 **Symptom / When:** You add a `message` field (or any field with computed `choices`, `default_value` or `instructions`) whose text comes from a helper that calls `get_field( …, 'option' )`. The helper reports the wrong state, and the **whole options group it queried stops resolving on the front end**. Values that read correctly from `wp eval` before the field was added now return `0`/`''`. There's no PHP error or warning, HTTP 200 throughout, and `php -l` passes. The damage shows on pages nowhere near the edit.
 **Why:** Computing the property inside the definition runs the helper during `acf/include_fields`, which re-enters ACF while it is still registering field groups. `get_field()` returns nothing at that point, and the options group answers empty.
@@ -2036,7 +2214,8 @@ for ( $i = 0; $i < $count; $i++ ) {
 // …migrate $rows to the new structure, then delete both the value and the `_`-prefixed key per row
 ```
 **Order matters:** read the raw data BEFORE removing the field from the PHP if you can — it's far easier. If the field is already gone, this is the recovery path.
-**First seen:** TAB, 2026-04-26 — refactoring a page-level FAQ repeater to a FAQ CPT + relationship; the repeater was removed from the field group first, so the 6 rows had to be read raw.
+**The Bricks side: a tag pointing at a removed field renders LITERALLY.** An existing-but-empty field resolves `{acf_<name>}` to `''`. A removed field has no field object, so Bricks' ACF provider never resolves the tag, and the raw string passes through, as `href="{acf_url_cancel}"` on a link, which is worse than no link. When retiring a field, grep `bricks_global_classes` and every `_bricks_page_*_2` for `{acf_<name>}` and remove those settings in the same pass.
+**First seen:** TAB, 2026-04-26 — refactoring a page-level FAQ repeater to a FAQ CPT + relationship; the repeater was removed from the field group first, so the 6 rows had to be read raw. · **Extended:** THM, 2026-08-29 — a footer link rendered a literal tag after its options field was retired, caught on the first post-removal render check.
 
 ### A field group rebuilt with the same names nested in `group` fields — `get_field()` returns the OLD top-level value
 **Symptom / When:** The inverse of the entry above, and worse: not `null`, but a **stale value returned confidently**. The admin shows the correct content, while `get_field('company_name','option')` and any `{acf_company_name}` dynamic tag return something that appears nowhere in the ACF UI — often a scaffold placeholder from the original build, months after it was replaced.
@@ -2111,10 +2290,10 @@ Keep `acf/settings/save_json` pointed at the (now empty) `acf-json/` afterwards:
 **First seen:** MBC, 2026-08-25 — two groups migrated and one deleted. One deletion left 34 orphaned `acf-field` rows, and the `local` inconsistency would have shipped the first group on a false positive had its DB post happened to win too.
 
 ### ACF `url` field type rejects relative paths and query strings
-**Symptom / When:** A field declared `'type' => 'url'` throws "Value must be a valid URL" and blocks save when you enter an internal link like `/request-a-quote/` or `/request-a-quote/?service=decks`.
-**Why:** ACF's `url` type validates against a full RFC URL (scheme + host). Relative paths, site-root paths and bare query strings all fail — the type is for absolute external URLs only.
-**Fix:** Use `'type' => 'text'` for internal links. The Bricks tag `{acf_<field>}` resolves a text field identically in a link `useDynamicData` binding, so no template change is needed. (Don't reach for the ACF `link` type as a workaround — it returns an **array**, which breaks a string `{acf_<field>}` tag.)
-**First seen:** TAB, 2026-05-30 — a CTA field holding `/request-a-quote/?service=slug` blocked save under `type: url`.
+**Symptom / When:** A field declared `'type' => 'url'` throws "Value must be a valid URL" and blocks save when you enter an internal link like `/request-a-quote/` or `/request-a-quote/?service=decks`. The same happens with `mailto:` / `tel:` links, and an editor may only notice that "my changes never saved".
+**Why:** ACF's `url` validator (`class-acf-field-url.php`, `validate_value()`) is not an RFC check. It's a substring test: valid if the value contains `://`, or starts with `//` (protocol-relative), and invalid otherwise. Relative paths, site-root paths, bare query strings, `mailto:` and `tel:` all lack both, so they always fail.
+**Fix:** Use `'type' => 'text'` for internal links and for `mailto:` / `tel:` values. The Bricks tag `{acf_<field>}` resolves a text field identically in a link `useDynamicData` binding, so no template change is needed. (Don't reach for the ACF `link` type as a workaround — it returns an **array**, which breaks a string `{acf_<field>}` tag.)
+**First seen:** TAB, 2026-05-30 — a CTA field holding `/request-a-quote/?service=slug` blocked save under `type: url`. · **Extended:** THM, 2026-08-29 — a support field holding a `mailto:` link refused to save. Diagnosed from ACF's validator source, which also corrected this entry's earlier "full RFC URL" explanation.
 
 ### An ACF repeater round-trip bakes `new_lines` formatting into storage — `get_field()` → `update_field()` is lossy
 **Symptom / When:** You append one row to a repeater the obvious way: `get_field()`, push a row, `update_field()`. The new row is correct and `update_field()` returns `true`, but every **existing** row with a newline in a `textarea` sub-field (`'new_lines' => 'br'`) now renders `<br /><br />`, and the admin textarea shows a literal `<br />`. Only rows that happened to contain a newline are damaged, so spot-checking the row you added proves nothing.
@@ -2152,7 +2331,8 @@ add_filter( 'bricks/query/run', function ( $results, $query ) {
 }, 20, 2 );
 ```
 `\Bricks\Query` exposes `element_id`, `object_type`, `settings` and `loop_index` as public properties. Delete the dead `posts_per_page` from the element tree afterwards — left in place it misleads the next reader.
-**First seen:** TAB, 2026-05-29 — repeater loops rendered correct row counts with literal subfield tags; grepping `provider-acf.php` gave the namespaced format. · **Extended:** WCDP, 2026-08-10 — capping a repeater list in the global footer while its own page shows the full set.
+**Relationship / post-object loops are the same, so they cannot paginate.** `set_loop_query()` returns `get_field()`'s whole array for those too, with no `paged` slicing, no `found_posts` and no `max_num_pages`, so a Pagination element shows nothing. For a paginated grid driven by a relationship field, resolve the IDs yourself and feed them to an `objectType: 'post'` loop as `post__in`, in a `bricks/posts/query_vars` filter scoped to that element (keep the element's own `posts_per_page`). That's a real `WP_Query`, and native pagination works. On a singular template, also see "`redirect_canonical` 301s requests you meant to serve…".
+**First seen:** TAB, 2026-05-29 — repeater loops rendered correct row counts with literal subfield tags; grepping `provider-acf.php` gave the namespaced format. · **Extended:** WCDP, 2026-08-10 — capping a repeater list in the global footer while its own page shows the full set. · **Extended:** THM, 2026-08-30 — a 9-per-page grid on a CPT single, rebuilt from an ACF relationship loop to a `post__in` query and confirmed across two pages.
 
 ### ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
 **Symptom / When:** Two faces of one bug. (1) A loop set to `objectType: acf_<gallery_field>` renders the loop shell (`data-start=0 data-end=0`) but **zero items**, though the field has images. (2) A repeater loop renders the right row count and text subfields resolve, but an **image** subfield bound to a Bricks image element renders an empty `<img>`.
@@ -2230,7 +2410,12 @@ add_filter( 'redirect_canonical', fn( $r, $req ) => is_tax( 'project_category' )
 add_filter( 'redirect_canonical', fn( $r ) => get_query_var( 'my_var' ) ? false : $r );
 ```
 **Verify:** `curl -sk -D - -o /dev/null <url>` and confirm the **first** response is `200`, not `301` — following redirects (`-L`, a browser) hides the bug.
-**First seen:** TAB, 2026-05-31 — category archives 301'd to service singles until the filter was added. · **Extended:** WCDP, 2026-08-08 — a PHP-rendered `/site.webmanifest` endpoint 301'd to a trailing slash. WP 7.0.3.
+**Third trigger — a secondary loop's `/page/N/` on a singular page.** `redirect_canonical()` accepts a page suffix on an `is_singular()` URL only as `<!--nextpage-->` content splitting, so a paginated grid on a CPT single 301s back to page 1 even though the loop renders page 2 correctly server-side. The query var isn't the one you'd guess. For a non-hierarchical CPT, `<cpt>/<slug>/page/N/` maps to the archive-style **`paged`**, while a bare `<cpt>/<slug>/N/` maps to `page`, so a bypass that checks `page` never fires. Dump `$GLOBALS['wp_rewrite']->wp_rewrite_rules()` for the CPT before writing it, then:
+```php
+add_filter( 'redirect_canonical', fn( $url ) => ( is_singular( '<cpt>' ) && get_query_var( 'paged' ) > 1 ) ? false : $url );
+```
+Bricks' loop reads `paged` as a fallback after `page` (`Query::get_paged_query_var()`), so nothing else changes.
+**First seen:** TAB, 2026-05-31 — category archives 301'd to service singles until the filter was added. · **Extended:** WCDP, 2026-08-08 — a PHP-rendered `/site.webmanifest` endpoint 301'd to a trailing slash. WP 7.0.3. · **Extended:** THM, 2026-08-30 — a CPT single's paginated grid. A first bypass on `page` never matched and looked exactly like an unregistered filter.
 
 ### Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
 **Symptom / When:** Wiring a favicon on a Bricks build. Two snags: (1) WP native Site Icon never emits an SVG favicon (raster only), so a crisp/scalable SVG needs separate output; (2) setting `site_icon` programmatically (import attachment + `update_option('site_icon', $id)`) does NOT generate the `site_icon-32/180/192/270` intermediate sizes — `wp_generate_attachment_metadata()` only makes the default sizes, so every favicon link falls back to the full image.
@@ -2246,6 +2431,16 @@ add_filter( 'redirect_canonical', fn( $r ) => get_query_var( 'my_var' ) ? false 
 - SVG favicon → emit it yourself in the core plugin (bundled asset, brand constant): `add_action('wp_head', fn() => printf('<link rel="icon" href="%s" type="image/svg+xml">', esc_url($url)), 2)`. Modern browsers prefer the SVG; Safari/iOS/Android use the native raster set. Add `<meta name="theme-color">` alongside. An SVG with `<style>@media (prefers-color-scheme: dark){...}</style>` gives a free dark-mode favicon.
 **Root-path icons need real files.** Browsers request `/favicon.ico`, and iOS requests `/apple-touch-icon.png` and `/apple-touch-icon-precomposed.png`, straight from the document root regardless of any `<link>` tag; no markup suppresses that. Put real files at the web root for those three: the web server answers them without booting PHP (they keep working if WordPress is down or a plugin is deactivated, and the 404s stay out of the log). Everything else (SVG icon, manifest, PNG icons) is discovered via `<link>` and can live with the plugin.
 **First seen:** Highland, 2026-06-14 — programmatic Site Icon generated only `thumbnail`; added the size filter + a plugin SVG-favicon module (`inc/favicon.php`). · **Extended:** WCDP, 2026-08-08 — `wp media import` + `wp option update site_icon` left `get_site_icon_url(32)` returning a 250×250 file (regenerated via `WP_Site_Icon::additional_sizes()`), and the access log filled with 404s for the three root icon paths. WP 7.0.3.
+
+### `remove_action()` on `admin_head` needs core's REAL priority AND must run after the admin bootstrap
+**Symptom / When:** A plugin removes a core callback (e.g. `wp_site_icon`) from `wp_head`, `login_head` and `admin_head` with the same priority. The first two work, and the `admin_head` removal silently returns `false`.
+**Why:** Two traps that must both be fixed. (1) **Priority:** `remove_action()` matches hook, callback *and* priority. `wp_site_icon` is on `wp_head` / `login_head` at 99 (`wp-includes/default-filters.php`) but on `admin_head` at the default 10 (`wp-admin/includes/admin-filters.php`). (2) **Timing:** `admin-filters.php` is required only once an admin request bootstraps, after plugins have run their top-level code, so a top-level removal finds nothing yet to remove. The front-end hooks are registered before plugins load, which is why the same pattern works there and masks the problem.
+**Fix:**
+```php
+add_action( 'admin_init', function () { remove_action( 'admin_head', 'wp_site_icon' ); } ); // real priority, after admin bootstrap
+```
+Verify with `has_action()` under a real admin load order (see "Firing admin hooks under `wp eval`…" for loading it under CLI).
+**First seen:** THM, 2026-08-29 — a favicon-unification module. The `admin_head` removal never fired, which stayed invisible only because no Site Icon was set. It would have emitted a competing wp-admin favicon the day someone set one.
 
 
 ### A `wp_mail_from` filter beats an explicit `From:` header — a form plugin's per-message From field is cosmetic
@@ -3148,7 +3343,8 @@ add_action( 'admin_init', function () {
 } );
 ```
 Verify as the role: `edit.php?post_type=bricks_template` should 302 to `/wp-admin/`.
-**First seen:** WCDP, 2026-09-30 — Site Manager role built from the Business Manager playbook.
+**`admin_init` is right only for a role that holds the screen's capability.** For a role that lacks it (a `read`-only reviewer kept out of wp-admin entirely), `wp-admin/menu.php`'s `user_can_access_admin_page()` check `wp_die()`s a 403 on screens like `edit.php` *before* `admin_init` fires, so the redirect never runs. Hook `init` (priority ≤ 10) with an `is_admin()` guard instead, exempting `wp_doing_ajax()`, REST, `admin-post.php` and any screen the role needs (`profile.php` for a password change).
+**First seen:** WCDP, 2026-09-30 — Site Manager role built from the Business Manager playbook. · **Extended:** THT, 2026-09-14 — a `read`-only reviewer role: `/wp-admin/` redirected, while `edit.php` showed core's 403.
 
 
 ## CSS general
@@ -3197,6 +3393,22 @@ a:any-link:hover { text-decoration: underline; }
 A delivered-but-unparsed rule means a parse error upstream, and the comment immediately before it is the first suspect.
 **First seen:** WCDP, 2026-08-22 — a sitewide list-marker rollout rendered custom markers alongside the browser discs they were meant to replace. The `list-style: none` rule was the one being swallowed.
 
+### CSS custom properties do not substitute inside `url("data:image/svg+xml,…")`
+**Symptom / When:** Tokenizing SVG icon colors fails. The data-URI icon renders an unparseable literal `var(...)`, or keeps its old hex after every other token in the rule has updated.
+**Why:** A URL value is opaque to CSS, and no variable substitution happens inside it. Hex baked into data-URI SVG markup is static.
+**Fix:** Three options, by trade-off.
+1. **Hardcode the hex** in the data URI. Fastest, but it has to be re-edited with every palette change.
+2. **`mask-image` + `background-color`.** The SVG becomes a stencil, and `background-color`, which does take `var()`, supplies the color:
+   ```css
+   .icon {
+       background-color: var(--accent);
+       -webkit-mask: url("data:image/svg+xml,…") center / 18px 18px no-repeat;
+               mask: url("data:image/svg+xml,…") center / 18px 18px no-repeat;
+   }
+   ```
+   If the element already uses `background-color` for a fill (a chevron on a colored `<select>`), move the icon to a `::after`.
+3. **Inline `<svg>` with `stroke="currentColor"`**, inheriting `color`. This is the cleanest token-driven route, but the icon must live in the markup, which usually means a template change.
+**First seen:** THM (inherited from its clone source), 2026-08-09.
 
 ## Fonts
 
@@ -3283,7 +3495,8 @@ Bricks' sanitizer still runs on the upload. To add the icon to a custom set, don
 **Why:** RunCloud's bundled wp-cli phar `EvalFile_Command` strips the opening tag and `eval()`s the source. Some file contents trip a silent bailout in that eval path (mechanism unconfirmed — the failing file had a large HTML nowdoc with UTF-8 en dashes and a ~300-line element-tree array; a sibling script of similar size/shape ran fine). Truncated versions of the same file DO report parse errors, so the eval path can error loudly — this failure mode is specifically silent.
 **Fix:** Run the identical file as `wp eval 'include "/path/to/build-x.php";'` — `include` compiles it as a normal PHP file and it executes correctly. Cheap habit: if an eval-file script produces no output where output is expected, don't debug the script first — rerun via include.
 **Watch for (inside the escape hatch):** `include` still runs the file inside a function, so its top-level variables are not globals. See the next entry.
-**First seen:** Highland, 2026-07-11 — the Request-an-Estimate page build script; identical file ran perfectly via include on the first try.
+**And an uncaught `throw` dies the same way.** Inside `wp eval` or `wp eval 'include …'`, an uncaught exception prints nothing, exits 0 and silently skips the rest of the script, while everything written before it has landed. Don't `throw` for guard failures in a build script. Use `echo "ABORT: …"; return;` (a `return` ends the include visibly), end every script with a sentinel echo whose absence counts as failure, and make writes skip-if-present so a re-run is safe.
+**First seen:** Highland, 2026-07-11 — the Request-an-Estimate page build script; identical file ran perfectly via include on the first try. · **Extended:** THT, 2026-09-06 — an id-length guard threw on a 5-char element id. Global classes written earlier in the script landed, the template write didn't, and only the missing progress line gave it away.
 
 ### `wp eval-file` and the `wp eval 'include …'` workaround do NOT run the file in global scope — `global $var` sees nothing
 **Symptom / When:** A script defines `$cls` at the top and a helper function does `global $cls;`. The function sees an empty variable and the script fails on the first lookup, even though the assignment is plainly at the top of the same file. The quieter face: helpers that fill a shared array through `global $E` write to the real global while the top-level code reads an empty local. Every check passes, `php -l` is clean, and the script "succeeds" with nothing written, or every element a helper builds lands with a setting `null`.
@@ -3300,7 +3513,7 @@ Or declare `global $X;` at the top of the file before assigning, so both sides b
 **Symptom / When:** A keyed edit to a Bricks global class ("find id X, set one key") reports success, but the change never appears on the target site, and a DIFFERENT site on the same box changes instead. The underlying cause: the shell's working directory persists across tool calls, so a `wp` command that follows a screenshot or utility command runs against whatever webapp was last `cd`-ed into.
 **Why:** Two Bricks installs on one box can genuinely share a 6-char class id. Both WCDP and MMHN abbreviated their About-hero lead class to `abhled` (`about-hero__lead` vs `about-hero__lede`). An id-keyed edit that lands on the wrong install therefore finds a real class and overwrites it. "The id can't exist elsewhere" feels safe; it isn't.
 **Fix:** Three rules for every WP-CLI write:
-1. `cd <webapp-root> &&` INSIDE the same command string as the `wp` call (or pass `--path=`). Never trust inherited cwd.
+1. `cd <webapp-root> &&` INSIDE the same command string as the `wp` call (or pass `--path=`). Never trust inherited cwd. **`--path=` is a server answer only.** On LocalWP every site shares identical `wp-config.php` credentials (`local` / `root` / `localhost`) and is told apart purely by a per-site MySQL socket, which PHP takes from the Site Shell's own `php.ini` (`mysqli.default_socket`). `--path=<other site>` therefore bootstraps the other site's code and then reads and writes the **shell's** database, with no error. On Local, use that site's own Site Shell, or invoke PHP with `-d mysqli.default_socket=<sibling socket>`. Either way, prove the target with `wp option get siteurl` first. (Distinct from "Local: `wp db query` fails on the mysql socket", which fails loudly. This one succeeds wrongly.)
 2. Key class edits on **id AND name**, so a collision fails closed:
    ```php
    if ( $c['id'] === 'abhled' && $c['name'] === 'about-hero__lead' ) { /* edit */ }
@@ -3310,7 +3523,7 @@ Or declare `global $X;` at the top of the file before assigning, so both sides b
    if ( 'https://expected.host' !== untrailingslashit( get_option( 'siteurl' ) ) ) { WP_CLI::error( 'wrong site' ); }
    ```
 An element-count or `is_array()` guard at the top of a write script also works and is not paperwork: it turns a wrong-site run into a harmless error. The siteurl assertion is the strongest form, because it fails on the first line regardless of what the tree contains. Keep build scripts: the recovery below came from one.
-**First seen:** WCDP/MMHN, 2026-08-22 — an /about hero-lead colour edit landed `color: white` on MMHN's lede, which sits on cream, making it near-invisible on a client-viewable staging site for ~15 minutes. Restored from MMHN's own class-creation script. An earlier wrong-site run the same day was stopped by an `is_array()` guard; a third, later that day, was aborted by the script's element-count assertion before any write.
+**First seen:** WCDP/MMHN, 2026-08-22 — an /about hero-lead color edit landed `color: white` on MMHN's lede, which sits on cream, making it near-invisible on a client-viewable staging site for ~15 minutes. Restored from MMHN's own class-creation script. An earlier wrong-site run the same day was stopped by an `is_array()` guard; a third, later that day, was aborted by the script's element-count assertion before any write. · **Extended:** THM, 2026-08-09 — on Local, `wp option get siteurl --path=<sibling>` answered with the shell's own site. It was caught on a read, before any write.
 
 ### WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
 **Symptom / When:** Feeding a password via `--prompt=admin_password < passfile` precisely to keep it off the command line — and wp-cli prints the fully resolved command (`--admin_password='…'` and all) to stdout, straight into logs and transcripts.
@@ -3466,6 +3679,8 @@ the finding.
 
 ## Diagnostic patterns
 
+**First move when a rendered page is wrong: `curl` it.** The raw server response has no JS, browser cache or CSS applied, so one request partitions the problem. Correct HTML means the fault is in JS, CSS or a cache layer, and PHP is exonerated. Wrong HTML means it's server-side, and the browser is irrelevant. Make the check print something either way (`00`, evidence discipline). (THM, inherited from its clone source, 2026-08-09.)
+
 ### Diagnostic JS via a Bricks code element
 **When to use:** A click intercepted by something invisible, an element misbehaving, a mystery state.
 **Pattern:** Add a temporary `<script>` in a Bricks code element; drop `console.log`s and a `MutationObserver` on the suspect node; reload, perform the action, read the output; iterate. Strip the script after diagnosis — do not leave console noise in production.
@@ -3497,7 +3712,7 @@ wp db query "SELECT post_id, meta_key FROM wp_postmeta
 
 ### Testing as a logged-in user from the CLI — mint auth cookies with `wp_generate_auth_cookie`
 **Symptom / When:** A bug only reproduces logged-in (admin bar, maintenance-mode bypass, an admin screen, user-specific rendering), but `curl` is anonymous and there is no browser on the box. **This catalog already tells you to "verify with an auth-cookie curl" in several places — this is the recipe those entries assume.**
-**Why:** WP auth is two cookies (`LOGGED_IN_COOKIE`, plus `SECURE_AUTH_COOKIE` over HTTPS) whose values `wp_generate_auth_cookie()` will mint for any user id and expiry. A session token from `WP_Session_Tokens` makes the cookie revocable the moment you are done.
+**Why:** WP auth is two cookies (`LOGGED_IN_COOKIE`, plus `SECURE_AUTH_COOKIE` over HTTPS) whose values `wp_generate_auth_cookie()` will mint for any user id and expiry. Send **both**. The front end accepts `logged_in` alone, but wp-admin bounces to the login screen without the auth cookie, and that bounce can be mistaken for your own role redirect firing. A session token from `WP_Session_Tokens` makes the cookie revocable the moment you are done.
 **Fix:** Short expiry, never echo the value, destroy the token and shred the file afterwards:
 ```bash
 umask 077
@@ -3523,7 +3738,16 @@ grep -c "My Tab Label" /tmp/.o           # 0 = genuinely absent
 grep -ciE "fatal error|critical error" /tmp/.o
 ```
 They answer different questions, and only the second is evidence the screen works.
-**First seen:** MBC, 2026-08-25 — after moving an options page to `acf_add_options_page()`, the CLI check reported zero menu entries; an authenticated request returned 200 with every tab rendering. Trusting the CLI would have meant rolling back a correct migration.
+**When you do need a CLI simulation, load what an admin request loads.** WP-CLI never requires `wp-admin/includes/*` or the admin-bar files, so `wp_add_dashboard_widget()` or `WP_Admin_Bar` is undefined (a fatal), or worse, a missing dependency makes something report "nothing registered". Require the files and set the preconditions first:
+```php
+require_once ABSPATH . 'wp-admin/includes/dashboard.php';    // wp_add_dashboard_widget(), wp_dashboard_setup()
+require_once ABSPATH . 'wp-admin/includes/template.php';
+require_once ABSPATH . 'wp-includes/class-wp-admin-bar.php';  // WP_Admin_Bar
+require_once ABSPATH . 'wp-includes/admin-bar.php';           // wp_admin_bar_* node callbacks
+wp_set_current_user( 1 ); set_current_screen( 'dashboard' );
+```
+`WP_Admin_Bar::add_menus()` only *registers* the `admin_bar_menu` callbacks. Nodes exist only after a separate `do_action( 'admin_bar_menu', $bar )`, so checking right after `add_menus()` reports real nodes as missing.
+**First seen:** MBC, 2026-08-25 — after moving an options page to `acf_add_options_page()`, the CLI check reported zero menu entries; an authenticated request returned 200 with every tab rendering. Trusting the CLI would have meant rolling back a correct migration. · **Extended:** THM, 2026-08-29 — verifying a role-scoped dashboard-widget wipe and an Admin Bar logo swap. Both fataled on the missing requires, and both reproduced the real request once the files were loaded.
 
 
 ---
