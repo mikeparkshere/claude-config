@@ -152,6 +152,11 @@ stale and missing app-highland entirely — restoring from it would have silentl
 production site (WP-Cron is disabled site-side, so nothing would have picked up the slack). Verify with
 `diff <(crontab -l) ~/cron-handrolled.bak`.
 New webapp → add `DISABLE_WP_CRON` + a crontab line in the matching tier.
+**parkshere2022 / 238586 uses a different mechanism, deliberately (decided 2026-09-10):** RunCloud-managed cron
+jobs by API (`/etc/cron.d/runcloud-<user>`, `php<ver>rc … wp-cron.php`, `*/10` staggered by minute digit, Woo sites
+`*/5`), not a hand-rolled crontab — two system users, panel visibility and RAM headroom all favor it. Adopt the
+jbm001 *ideas* there, not the file: stderr → `~/cron-logs/<app>.log` (Clemente jobs 200747/200748 set the pattern;
+the other 14 still discard stderr — retrofit is an open item) and tier only where a queue actually lags.
 
 ## Project conventions
 Three-tier classification: Tier 1 active builds, Tier 2 live Claude-assisted, Tier 3 legacy.
