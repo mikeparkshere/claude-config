@@ -284,6 +284,24 @@ Pick the **dark** logo variant (dark elements, meant for light backgrounds) — 
 
 Seen on 10.3 (Punch, 2026-10-06). `seopress_social_facebook_app_id_hook()` and `seopress_social_facebook_link_ownership_id_hook()` guard with `'' !== $value` on a key that's NULL when never saved, so every page gets `<meta property="fb:app_id" content="">` and `<meta property="fb:pages" content="">`. Unlike the X tags (gotcha #3), neither emitter has an output filter. **Fix in config, not code:** save both keys as `''` in `seopress_social_option_name` (`seopress_social_facebook_app_id`, `seopress_social_facebook_link_ownership_id`). Saving `seopress_social_accounts_twitter` as `''` would fix gotcha #3 the same way. Add all three to the baseline.
 
+### 11. SEOPress 9.9+ names the classic SEO box `seopress_metabox_opener` — `seopress_cpt` guards miss it
+
+Seen on 10.3 (ECT, 2026-10-06). `src/Actions/Admin/ModuleMetabox.php` registers the classic-editor box as
+`seopress_metabox_opener` (context filterable via `seopress_metabox_opener_context`). Removing only
+`seopress_cpt` / `seopress_content_analysis`, as `business-manager-role-playbook.md` and KB `03` describe,
+**leaves the SEO box visible to a client role.** Fix for non-admins: filter `seopress_metaboxe_seo` to `[]`,
+remove all three IDs in every context at `PHP_INT_MAX`, and strip `seopress*` list columns. Verify as the
+role over HTTPS **with an admin control**. ECT's first check "passed" for both roles because it grepped
+for the wrong ID. Reference: `app-ectlive` `ect-core/includes/seopress.php`.
+
+### 12. `seopress_get_json_data_organization` sees unresolved `%%placeholders%%`
+
+Seen on 10.3 (ECT, 2026-10-06). The data filter gets `'sameAs' => ['%%social_account_twitter%%', …]` and
+`'description' => '%%social_knowledge_description%%'`. Values resolve afterward. Put structural changes
+(`@type`) in the data filter and any value comparison (de-duping `sameAs` against the core plugin's own
+social URLs, dropping a description that just repeats the name) in `seopress_schemas_organization_html`,
+which receives the finished JSON. Done the other way round, the X URL shipped twice.
+
 ### 9. Page cache holds sitemap XML
 
 RunCloud Hub Native cache serves `/sitemaps.xml` and its children. Always `wp runcloud-hub purgeall` after sitemap option changes, and cache-bust (`?cb=$RANDOM`) when verifying by curl.
@@ -364,6 +382,30 @@ Second port, and the **first with redirects**. Tier 3, 7 public URLs, 3 active R
 - **Physical `robots.txt`** (nginx-served) holds the old `sitemap_index.xml` line. The 301 covers it, but edit the line.
 - **Verification trap:** a `?cb=` cache-buster on `/sitemap_index.xml` makes SEOPress's redirect miss and WordPress 301s to the homepage instead. Test that one URL without a query string.
 - `/author/<login>/` was live under Rank Math. SEOPress's author-archive disable 301s it home, which stops exposing the admin login.
+
+### 7c. Measured: East Coast Talents, 2026-10-06
+
+Third port, and **the first with real volume**: ~60 organic clicks/day, 67 sitemap URLs, 10 active
+redirects (one at 62,505 hits), Rank Math-owned schema and a load-bearing talent title template.
+**46 seconds of maintenance mode**; about 45 minutes of verification after it. Prep took a session:
+the schema emitter (ect-core 1.0.13), a URL Inspection replacement for Rank Math's (1.0.12), and
+capture / configure / port / redirect artifacts. Runbook: `app-ectlive` box, `~/backups/ectlive-s9/RUNBOOK.md`.
+
+- **Head diff by script, not by eye.** `capture.py before|after|diff` over 80 URLs (sitemap + noindex
+  privacy terms, pagination, author, attachment, search, 404, sitemap, robots.txt), with an accepted-list.
+  It surfaced the one real regression: a news post with no Rank Math description, whose SEOPress
+  `%%post_excerpt%%` ran past 250 characters. Fixed by pinning the old one-liner as `_seopress_titles_desc`.
+- **`max-image-preview:large` is automatic** on every indexable page in SEOPress Free. Rank Math had
+  been omitting it on CPT archives, so the switch was an improvement there.
+- **`RedirectMatch` after `# END WordPress` fires** (mod_alias), even though a mod_rewrite rule there
+  wouldn't. It was probed live with a throwaway path, anchored and unanchored, before relying on it. Rank
+  Math's "contains" match maps to an unanchored pattern. Query strings pass through, as Rank Math did.
+- **`bricks_template` is a public post type** (and `template_tag`/`template_bundle` public taxonomies).
+  Noindex them and keep them out of the sitemap in `configure.php`, or SEOPress seeds them as indexable.
+- **Runbook order:** maintenance **off**, *then* purge and warm. A warm under maintenance asserts 503s.
+- **Cloudflare can hold the old `robots.txt`** (4 h max-age) after the switch; the old sitemap URL
+  301s, so it's harmless. Purge it if the zone token allows.
+- New gotchas: #11 (metabox opener ID), #12 (organization filter runs pre-resolution).
 
 ---
 
