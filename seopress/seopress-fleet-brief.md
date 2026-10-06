@@ -354,6 +354,17 @@ Either way: **run with both plugins active**, verify, then deactivate RankMath. 
 - **Run validator.schema.org on the core plugin's node during the port.** It caught a pre-existing invalid `@type` (`BarberShop` isn't in schema.org; `HairSalon` is the barber type). Rank Math's suppressed graph had hidden nothing, but nobody had validated the replacement node in three months.
 - **New gotcha found:** #10 (empty `fb:` tags, no filter).
 
+### 7b. Measured: Decades Nightclub, 2026-10-06
+
+Second port, and the **first with redirects**. Tier 3, 7 public URLs, 3 active Rank Math redirects, Rank Math-owned LocalBusiness schema. About 45 minutes including the audit. Copied Punch's `configure.php` / `port.php` / `inc/seopress.php` nearly verbatim.
+
+- **Redirects didn't force Pro.** On a RunCloud `hybrid` webapp, `RedirectMatch 301` lines in `.htaccess` (after `# END WordPress`) replace a small Rank Math redirect map with no plugin at all. Confirm by the absence of `X-Redirect-By: Rank Math` on the response. Revise §7 step 2 accordingly: Pro becomes necessary for a *large or client-edited* redirect map, not for any map.
+- **Rank Math's schema was worse than nothing**: `NightClub` with the 9–5 default hours on every day, no address or phone, a `Person` node naming the admin login, and `Article` on the homepage. Replaced by a core-plugin node (0 errors on the validator). Audit the live JSON-LD before deciding it's worth preserving.
+- **Two more parity keys for the baseline:** `seopress_social_twitter_card_img_size = 'large'` (otherwise X cards drop from `summary_large_image` to `summary`), and CPT archive descriptions (`seopress_titles_archive_titles[<cpt>]['description']`), which Rank Math had and SEOPress seeds empty.
+- **Physical `robots.txt`** (nginx-served) holds the old `sitemap_index.xml` line. The 301 covers it, but edit the line.
+- **Verification trap:** a `?cb=` cache-buster on `/sitemap_index.xml` makes SEOPress's redirect miss and WordPress 301s to the homepage instead. Test that one URL without a query string.
+- `/author/<login>/` was live under Rank Math. SEOPress's author-archive disable 301s it home, which stops exposing the admin login.
+
 ---
 
 ## 8. Decision inputs
