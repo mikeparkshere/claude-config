@@ -1,6 +1,6 @@
 # SEOPress — Fleet Evaluation Brief
 
-> **Status: evaluation, not adopted.** Fleet convention is currently RankMath Pro. Oakham Trailer Sales (`app-oakham`) is the first and only SEOPress site, configured 2026-09-07 on **SEOPress Free 10.2**. The fleet decision is pending; this document accumulates everything needed to make it, and everything needed to execute it if the answer is yes.
+> **Status: evaluation, not adopted.** Fleet convention is currently RankMath Pro. Oakham Trailer Sales (`app-oakham`) was the first SEOPress site, configured 2026-09-07 on **SEOPress Free 10.2**. Punch Barber Shop (`app-punch`) is the first **Rank Math → SEOPress port**, 2026-10-06 on 10.3 (§7a). The fleet decision is pending; this document accumulates everything needed to make it, and everything needed to execute it if the answer is yes.
 >
 > Two migration paths will exist if we adopt: **RankMath → SEOPress ports** (most Tier 2/3 sites) and **clean installs** (new builds). Both are covered below.
 >
@@ -280,6 +280,10 @@ Pick the **dark** logo variant (dark elements, meant for light backgrounds) — 
 
 `TitleOption` has `getSeparator()`. Calling the plausible-sounding `getTitleSeparator()` throws a fatal that takes down every front-end page. Generally: **verify SEOPress service method names against source before shipping a filter that calls one** — a typo here is a white screen, not a warning.
 
+### 10. Empty `fb:app_id` / `fb:pages` tags — same NULL guard bug, and **no filter**
+
+Seen on 10.3 (Punch, 2026-10-06). `seopress_social_facebook_app_id_hook()` and `seopress_social_facebook_link_ownership_id_hook()` guard with `'' !== $value` on a key that's NULL when never saved, so every page gets `<meta property="fb:app_id" content="">` and `<meta property="fb:pages" content="">`. Unlike the X tags (gotcha #3), neither emitter has an output filter. **Fix in config, not code:** save both keys as `''` in `seopress_social_option_name` (`seopress_social_facebook_app_id`, `seopress_social_facebook_link_ownership_id`). Saving `seopress_social_accounts_twitter` as `''` would fix gotcha #3 the same way. Add all three to the baseline.
+
 ### 9. Page cache holds sitemap XML
 
 RunCloud Hub Native cache serves `/sitemaps.xml` and its children. Always `wp runcloud-hub purgeall` after sitemap option changes, and cache-bust (`?cb=$RANDOM`) when verifying by curl.
@@ -288,7 +292,7 @@ RunCloud Hub Native cache serves `/sitemaps.xml` and its children. Always `wp ru
 
 ## 7. RankMath → SEOPress port
 
-**Not yet executed — Oakham had no SEO plugin to migrate from.** This section is read from the importer source and is the plan of record, not a tested procedure. **Dry-run it on a staging clone before any live port.**
+**First executed 2026-10-06 on Punch Barber Shop (`app-punch`, SEOPress 10.3)**: live, no staging, because the site is 4 URLs with 0 redirects. The importer-source notes below still stand; the measured result is in **§7a**. On a site with real volume, a redirect map or plugin-owned schema, **dry-run on a staging clone first.**
 
 ### What SEOPress's importer covers
 
@@ -338,6 +342,18 @@ Either way: **run with both plugins active**, verify, then deactivate RankMath. 
 7. Deactivate RankMath. Keep it installed for one indexing cycle.
 8. Resubmit the sitemap in Search Console — **the URL changes** (`/sitemap_index.xml` → `/sitemaps.xml`).
 
+
+### 7a. Measured: Punch Barber Shop, 2026-10-06
+
+**Scale:** 4 public URLs, 0 redirects, schema already in the core plugin. **Time:** about 20 minutes of execution after a 30-minute audit. The duplicate-head window (both plugins active) was about 2 minutes.
+
+- **Port script, not the importer.** 10 values: 3 titles, 4 descriptions, 3 focus keywords, plus one `rank_math_robots` noindex → `_seopress_robots_index=yes`. Variable translation `%sep%`→`%%sep%%`, `%sitename%`→`%%sitetitle%%`, `%title%`→`%%post_title%%`. Skip empty values: Rank Math stores empty `canonical_url`/`facebook_image` rows on attachments and posts, and copying them is noise. Skip the bookkeeping keys (`internal_links_processed`, `analytic_object_id`, `seo_score`). Dry run by default, with an `apply` arg. Reference copies are in `/home/runcloud/backups/punch/{configure,port}.php` on that box.
+- **Verify by head diff against a pre-switch capture, not by eye.** Parse title/meta/canonical from saved HTML of every URL before and after. Expected and accepted differences: no `og:updated_time`, no `og:image:type`, `og:type` `website` instead of Rank Math's `article` on singulars, and robots directive order.
+- **The OG image chain matches Rank Math's** when `seopress_social_facebook_img` is the default and `seopress_social_facebook_img_default` is **unset**: post meta → featured image → global default. Setting `_img_default` = `1` forces the global image over featured images.
+- **Sitemap continuity is free.** SEOPress 301s `/sitemap_index.xml` → `/sitemaps.xml` itself (`src/Actions/Sitemap/Render.php`), and Rank Math's unnumbered child names (`page-sitemap.xml`) still resolve because the rewrite's page number is optional. Free **does** append the `Sitemap:` line to virtual robots.txt; no `robots_txt` filter was needed.
+- **Run validator.schema.org on the core plugin's node during the port.** It caught a pre-existing invalid `@type` (`BarberShop` isn't in schema.org; `HairSalon` is the barber type). Rank Math's suppressed graph had hidden nothing, but nobody had validated the replacement node in three months.
+- **New gotcha found:** #10 (empty `fb:` tags, no filter).
+
 ---
 
 ## 8. Decision inputs
@@ -356,7 +372,7 @@ Either way: **run with both plugins active**, verify, then deactivate RankMath. 
 - Migration cost is per-site and non-trivial for anything with schema or redirects.
 
 **Still unknown**
-- No RankMath port has been executed. Cost and fidelity are estimated from source, not measured. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
+- One RankMath port executed (Punch, §7a): small, clean, about 20 minutes. Still unmeasured on a site with volume, redirects or plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
 - SEOPress Pro has not been trialled on any site.
 - No SEOPress site has been through a full indexing cycle yet, so there is no ranking or Search Console evidence either way.
 
