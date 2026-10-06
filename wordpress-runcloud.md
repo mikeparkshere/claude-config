@@ -102,10 +102,12 @@ cd /home/runcloud/webapps/[APP_NAME]/
 wp plugin list --status=active
 wp cache flush
 wp core version
-wp db export backup.sql
+wp db export ~/backups/[APP_NAME]/db-$(date +%Y%m%d-%H%M%S).sql   # NEVER a relative path — see below
 wp user list
 wp db query "SELECT * FROM wp_posts LIMIT 5"
 ```
+
+⛔ **Never export a database into the webapp root.** The webroot is served, and a relative path like `wp db export backup.sql` lands there. On app-decadescle a `backup.sql` made exactly that way sat in the webroot from 2026-01-27 and was downloaded in full 89 times by 63 IPs before it was found (2026-10-06): user accounts, ~500 form submissions, API keys. Export to `~/backups/<app>/` (outside every webroot, `chmod 600` the file), and when you find a `.sql`, `.zip` or `.daf` inside a webroot, check the nginx access log for downloads before moving it.
 
 ---
 
