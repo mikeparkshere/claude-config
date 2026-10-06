@@ -739,6 +739,15 @@ wp eval 'wp_set_current_user(9); ob_start(); prefix_render_submissions_page(); e
 #    (both secure_auth and logged_in, or wp-admin 302s you off). Expect:
 #      edit.php?post_type=bricks_template  -> 302 to /wp-admin/
 #      a CPT list screen                   -> 200 with NO 'bulk-action-selector-top'
+#      allowed screens -> 200, blocked screens -> 403
+#    The CLI cannot show you the admin menu (plugins only register menus inside a real admin
+#    request; a `wp eval` dump of $menu prints one item and proves nothing) -- this is the only check.
+#    ⚠️ Cookie values contain `|` — write them to a file and cat them; `eval "$(wp eval …)"`
+#    splits on the pipes and every request goes out anonymous (all 302s). Do not POST to
+#    wp-login.php on Bricks builds with a front-end auth page — it redirects the POST.
+wp eval '$e=time()+900; file_put_contents("/tmp/ck.txt","wordpress_sec_".COOKIEHASH."=".wp_generate_auth_cookie(9,$e,"secure_auth")."; wordpress_logged_in_".COOKIEHASH."=".wp_generate_auth_cookie(9,$e,"logged_in"));'
+CK=$(cat /tmp/ck.txt); for u in wp-admin/ "wp-admin/admin.php?page=prefix-submissions" "wp-admin/edit.php?post_type=page" "wp-admin/edit.php?post_type=bricks_template" wp-admin/plugins.php "wp-admin/admin.php?page=bricks"; do curl -s -H "Cookie: $CK" -o /tmp/p.html -w "%{http_code} $u\n" "https://example.com/$u"; done; rm /tmp/ck.txt
+#    Also grep the dashboard for id="menu-…" / id="toplevel_page_…" to see the exact menu set the role gets.
 #    Delete the throwaway user afterwards.
 
 # 6. Create the client account when ready
@@ -790,7 +799,15 @@ WS Form data model the viewer relies on:
 - [ ] Add every post type whose menu you hide to the `admin_init` URL guard. `bricks_template` is always on it.
 - [ ] Verify with the Step 5 commands, then create the client account.
 - [ ] If wp-login.php is not redirected on this build, add login branding.
+- [ ] **Form allow-list.** Not every published form belongs in the client's viewer (newsletter signups, internal
+  forms). Add `define( 'PREFIX_SUBMISSIONS_FORM_IDS', array( 1, 2 ) );` and filter the `get_all( true )` result
+  inside `prefix_submissions_resolve_form()` — the selector and the requested-id validation then both honor it.
+- [ ] **Menus beyond WS Form.** The role also surfaces **Comments** and **Tools** ("Available Tools"); add
+  `remove_menu_page( 'edit-comments.php' )` + `remove_menu_page( 'tools.php' )` to the same `admin_menu` hook
+  unless the client actually moderates comments.
+- [ ] **Bricks check is free.** `wp eval 'wp_set_current_user(9); var_dump(Bricks\Capabilities::current_user_can_use_builder($page_id));'`
+  → `false` proves the builder is out of reach even where the role can edit the post type.
 
 ---
 
-*Origin: KSCBS build (`kscbs-functionality` v1.5.2), 2026. Proven in production on OpenLiteSpeed / lsphp / RunCloud.*
+*Origin: KSCBS build (`kscbs-functionality` v1.5.2), 2026. Proven in production on OpenLiteSpeed / lsphp / RunCloud. Third deployment: Clemente (`clemente-functionality`), 2026-09-09, RunCloud hybrid / php84rc — LIVE first, ported to a surviving staging sandbox.*
