@@ -1,0 +1,166 @@
+/*
+ * mpd-core 0.2.0 — framework CSS
+ *
+ * Consumes tokens from the Bricks Style Manager; defines none (one source of truth).
+ * Most framework defaults live in the Bricks Theme Style as typed settings (typed-settings-first):
+ * root size, type, links, focus outline, container width, section padding, container/block row-gap,
+ * buttons. This file holds only what Theme Style cannot express. No utility classes ship in alpha.
+ *
+ * Cascade:
+ *   @layer bricks            Bricks base CSS (frontend-layer.min.css)
+ *   @layer mpd-core.defaults zero-specificity defaults; beat Bricks base, lose to every unlayered rule
+ *   unlayered                Theme Style, global classes, and the patterns below (single class)
+ */
+
+@layer bricks, mpd-core;
+
+/* -------------------------------------------------------------------------------------------- defaults */
+
+@layer mpd-core.defaults {
+	/* Theme Style sets the focus outline; it has no control for the offset. */
+	:where(:focus-visible) {
+		outline-offset: var(--focus-offset);
+	}
+
+	/* Theme Style has no control for code elements; without this they fall back to the UA's `monospace`. */
+	:where(code, kbd, samp, pre) {
+		font-family: var(--font-mono);
+	}
+
+	/*
+	 * Builder-made lists are layout, not prose: no markers, no indent. Bricks has no list-style control.
+	 * A Block or Div set to ul/ol carries a brxe- class; rich-text and post-content lists don't, so they
+	 * keep their markers. Safari drops list semantics under list-style none: give the list role="list".
+	 */
+	:where(ul[class*="brxe-"], ol[class*="brxe-"]) {
+		list-style: none;
+		padding-left: 0;
+	}
+
+	/* Same reasoning for a builder-made <dl>: the UA indents <dd> 40px. Rich-text description lists keep it. */
+	:where(dd[class*="brxe-"]) {
+		margin-left: 0;
+	}
+
+	/*
+	 * Sticky footer: on a page shorter than the viewport, the footer sits at the bottom of the screen instead of
+	 * mid-page. Theme Style has no control for the page shell. The body becomes a flex column and <main> takes the
+	 * slack. Every other body child (skip links, the new-tab description, the admin bar, scripts) is out of flow, so
+	 * only header, main and footer take part. Scoped to the front end: the builder canvas drops bricks-is-frontend,
+	 * and :has(> #brx-content) leaves Bricks' component preview (which has no <main>) alone.
+	 * Logged in, WordPress pushes <html> down by the admin bar, so subtract its height or a short page scrolls by 32/46px.
+	 */
+	:where(body.bricks-is-frontend:has(> #brx-content)) {
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
+		min-height: 100dvh;   /* mobile: the visible viewport, not the one behind the browser chrome */
+	}
+	:where(body.bricks-is-frontend.admin-bar:has(> #brx-content)) {
+		min-height: calc(100vh - var(--wp-admin--admin-bar--height, 32px));
+		min-height: calc(100dvh - var(--wp-admin--admin-bar--height, 32px));
+	}
+	:where(body.bricks-is-frontend > #brx-content) {
+		flex-grow: 1;
+	}
+}
+
+/* -------------------------------------------------------------------------------------------- patterns */
+
+/*
+ * clickable-parent — the whole card is clickable through its heading link.
+ *
+ * Markup: the card carries .clickable-parent; its primary link sits inside a heading (the link's text is
+ * the card's accessible name). That link's ::after stretches over the card.
+ *
+ * Secondary links (tags, meta) stay independently clickable: they're lifted above the stretched area.
+ *
+ * Breaks silently if (03, "Stretched-link cards break three silent ways"):
+ *   - any element between the card and the heading link is positioned (the ::after anchors to it instead)
+ *   - the heading link uses clip-path or position:absolute (common visually-hidden techniques)
+ * Prefer the visible-anchor card pattern (01) when a card has several links.
+ */
+.clickable-parent {
+	position: relative;
+}
+
+.clickable-parent :is(h1, h2, h3, h4, h5, h6) a::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+}
+
+.clickable-parent a:not(:is(h1, h2, h3, h4, h5, h6) a) {
+	position: relative;
+	z-index: 1;
+}
+
+/*
+ * focus-parent — move the keyboard focus ring from the focused child to the parent.
+ *
+ * Keyboard-only (:focus-visible), so a mouse click doesn't ring the card.
+ * The child's own ring is removed. The doubled class (0,3,0) beats the Theme Style focus rule,
+ * `body.bricks-is-frontend :focus-visible` at (0,2,1). Without it, both rings show.
+ * Use on cards whose only focusable element is the primary link; with secondary links, the parent ring
+ * can't say which link has focus, so keep per-link rings there instead.
+ */
+.focus-parent--shadow:has(:focus-visible) {
+	box-shadow: 0 0 0 var(--focus-width) var(--focus-color);
+}
+
+.focus-parent--outline:has(:focus-visible) {
+	outline: var(--focus-width) solid var(--focus-color);
+	outline-offset: var(--focus-offset);
+}
+
+.focus-parent--shadow.focus-parent--shadow :focus-visible,
+.focus-parent--outline.focus-parent--outline :focus-visible {
+	outline: none;
+}
+
+/* -------------------------------------------------------------------------------------------- WS Form bridge */
+
+/*
+ * WS Form keeps its own styler (decided 2026-10-07; no ACSS form layer on this stack). Its skin derives
+ * every component value from a small set of root variables declared at :where([data-wsf-style-id]), zero
+ * specificity, so remapping the roots here re-skins every form without a single rule against .wsf-field
+ * or .wsf-label (`03`, "WS Form — skin it by overriding root --wsf-form-* vars").
+ *
+ * Roots first, then the few component values a flat recolor can't express on a dark surface: base feeds
+ * both the field text and the field border, and base-contrast feeds both the button text and the field
+ * fill, so those pairs are split here.
+ * Purpose tokens only. A light context re-points the purpose tokens; this block doesn't change.
+ */
+.wsf-form {
+	--wsf-form-color-base: var(--color-text);
+	--wsf-form-color-base-contrast: var(--color-text-on-accent);   /* text on a filled button */
+	--wsf-form-color-primary: var(--color-accent);
+	--wsf-form-color-accent: var(--color-accent);
+	--wsf-form-color-secondary: var(--color-text-secondary);
+	--wsf-form-color-neutral: var(--color-border-strong);
+	--wsf-form-color-success: var(--color-success);
+	--wsf-form-color-info: var(--color-info);
+	--wsf-form-color-warning: var(--color-warning);
+	--wsf-form-color-danger: var(--color-danger);
+	--wsf-form-font-family: var(--font-sans);
+	--wsf-form-font-size: var(--text-m);
+	--wsf-form-font-size-small: var(--text-s);
+	--wsf-form-font-size-large: var(--text-l);
+
+	--wsf-field-color-background: var(--color-surface-raised);
+	--wsf-field-border-color: var(--color-border-input);   /* a control's edge needs 3:1 (WCAG 1.4.11); --color-border* are decorative */
+	--wsf-field-border-color-hover: var(--color-text-secondary);
+	--wsf-field-border-color-focus: var(--color-accent);
+	--wsf-field-border-radius: var(--radius);
+	--wsf-field-padding-vertical: var(--space-xs);
+	--wsf-field-padding-horizontal: var(--space-s);
+	--wsf-field-color-placeholder: var(--color-text-secondary);   /* placeholder is text: 4.5:1 needed, muted is 4.1 */
+	--wsf-field-box-shadow-width-focus: var(--focus-width);
+	--wsf-field-box-shadow-color-focus: var(--focus-color);
+	--wsf-field-label-font-weight: 500;
+	--wsf-field-help-color: var(--color-text-secondary);
+	--wsf-field-button-primary-color-background-hover: var(--color-accent-hover);
+	--wsf-field-button-primary-border-color-hover: var(--color-accent-hover);
+	--wsf-field-button-primary-color-background-focus: var(--color-accent-active);
+	--wsf-field-button-primary-border-color-focus: var(--color-accent-active);
+}
