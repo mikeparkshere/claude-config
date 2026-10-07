@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-267 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+283 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~31,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -162,6 +162,18 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks re-grants revision support to every Bricks-enabled post type at `init` 999 — a default-priority `remove_post_type_support()` silently loses
 - Bricks `altText` — an empty string is indistinguishable from unset, so you cannot force `alt=""`
 - Bricks image-as-figure puts `brxe-<id>` on the `<figure>`, not the `<img>` — naive verification greps find nothing
+- Bricks Color Manager: a color row is `{id, raw, light}` and `light` accepts `var(--…)` — a two-tier palette works
+- Opening the Bricks Color Manager writes the 18-color Default palette into an empty `bricks_color_palette`
+- Theme Style `containerMaxWidth` only reaches ROOT containers — a container inside a section stays at Bricks' 1100px
+- Bricks' base `:where(p) { margin-block: 0 1.2em }` stacks with flex `row-gap` — use Theme Style contextual spacing, not CSS
+- Bricks contextual spacing: setting "Fallback spacing" silently overrides the Heading spacing
+- Enabling Bricks Query Filters from WP-CLI doesn't create their tables — the indexer then logs DB errors on every cron tick
+- Advanced Themer option names changed between versions — `bricks-advanced-themer__brxc_*` (3.3.x) vs `bricks-advanced-themer_brxc_*` (3.5)
+- Bricks nav-menu ships `.sub-menu { line-height: 60px }` and `li { margin-left: 30px }` — both survive a typed `menuGap`
+- Bricks text elements don't run shortcodes — use the Shortcode element (Post Content does)
+- Re-running a WP-CLI build script silently reverts every builder edit made since its last run — dry-run it against the live DB first
+- Front-end-only CSS: the builder canvas strips `bricks-is-frontend`, and Bricks' component preview keeps it — scope page-shell rules to both facts
+- Bricks image element has no `sizes` control — WordPress derives `sizes` from the chosen image size, so Full ships the original
 
 **BricksExtras**
 
@@ -234,10 +246,11 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACF `url` field type rejects relative paths and query strings
 - An ACF repeater round-trip bakes `new_lines` formatting into storage — `get_field()` → `update_field()` is lossy
 - Bricks ACF query loop: `objectType: acf_<field>`; repeater subfields are `{acf_<repeater>_<subfield>}`
-- ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
+- ACF `gallery` / `image` fields are NOT loopable in Bricks — a repeater's image SUBFIELD renders per row only with return format `id`
 - An ACF options page sizes its labels at (0,3,2) — `.acf-field .acf-label label` only restyles the nested ones
 - ACF left-placed tabs: `.acf-tab-wrap.-left` and `.acf-fields.-sidebar` are JS-applied — curl never shows them
 - A submenu under an ACF options page must hook `admin_menu` above 99 — earlier, its link is a bare `/wp-admin/<slug>` that 404s
+- Renaming an ACF options-page group subfield orphans its value unless both option rows move
 
 **WordPress core — CPTs, rewrites, canonical, mail**
 
@@ -309,6 +322,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WS Form submission retention hides in a JSON-inside-serialized-PHP blob — and `''` means OFF, not "unset"
 - WS Form Google Sheets: a header cell is NOT a mapping — an unmapped column looks wired and silently writes blank
 - Reading a WS Form–linked Google Sheet from the server: use the add-on's credential, not a service account
+- WS Form REST submit from the CLI returns a bare 403 unless it carries `wsf_post_mode=submit`
+- WS Form `wsf_pre_render` runs at render AND at submit — the hook for runtime options and a hidden recipient
 
 **Fluent Forms**
 
@@ -369,6 +384,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Verify link presence against BOTH absolute and relative hrefs — Bricks emits relative
 - Headless Chrome clamps the layout viewport to a ~500px minimum — a `--window-size=375` screenshot is a CROP of a 500px layout
 - A regex delete across a PHP file can silently remove hundreds of lines — and `php -l` will not notice
+- A hidden tab freezes transitions and `requestAnimationFrame` — a focus ring "missing" and a measurement script that hangs
 
 ## WordPress + Bricks Builder
 
@@ -755,10 +771,11 @@ stat -c '%y %s %n' wp-content/uploads/bricks/css/*.min.css    # Linux
 # run the regen, list again — anything whose mtime did not change is not managed by regen
 ```
 Then confirm the palette option is clean (`bricks_color_palette` — singular, see its own entry), park a backup of the suspect file, and delete it. Bricks recreates it, empty, on the next builder load or save.
-⚠️ **On `bricks-native` the file is a duplicate. The hazard is staleness, not deletion.** Where the Style Manager is the token home, `style-manager.min.css` is populated: it re-declares every `light`-format color, plus scale variables if any exist. Those same tokens are also emitted to `color-palettes.min.css` and `global-variables.min.css`, which the regen does rebuild. The file loads **after** them, so a stale copy overrides fresh values, and deleting it drops nothing. The detection above will flag it, since it doesn't move across a CLI regen, and that flag is correct. After a CLI palette write, refresh it with `\Bricks\Ajax::generate_style_manager_css_file()` (then run `regenerate_css_files()` in a **separate** request), or delete it.
+⚠️ **On `bricks-native` the file is a duplicate. The hazard is staleness, not deletion.** Where the Style Manager is the token home, `style-manager.min.css` is populated: it re-declares every `light`-format color, plus scale variables if any exist. Those same tokens are also emitted to `color-palettes.min.css` and `global-variables.min.css`, which the regen does rebuild. The file loads **after** them, so a stale copy overrides fresh values, and deleting it drops nothing. The detection above will flag it, since it doesn't move across a CLI regen, and that flag is correct. After a CLI palette write, refresh it with `\Bricks\Ajax::generate_style_manager_css_file()` (public static, no nonce, reads options fresh, returns false on a write failure), then run `regenerate_css_files()` in a **separate** request, or delete it.
+⚠️ **Why the separate request:** the palette file is rebuilt from `Database::$global_data['colorPalette']`, which is loaded once per request (`files.php`, ~L724). A regen in the same `wp eval` as the `update_option` writes the **pre-update** palette, so the front end serves the old colors while the option reads new.
 **First seen:** Nametank (ext-mem), 2026-08-13 — after the BRAND v1.1 reconciliation emptied `bricks_global_variables` and moved the pinned brand tokens to ACSS Global CSS, the tokens stopped resolving on the front end. Root cause was a `style-manager.min.css` compiled in April, before the cleanup, re-declaring the pinned tokens as `var(--ms-*)` pointers to the deleted globals. Deleting it fixed it, and the file has stayed empty since. Sessions in between debugged the *convention* — which token home was correct — instead of the stale compiled artifact.
 **Mechanism corrected:** SLVPR, 2026-09-21 — verified on Bricks 2.3.13 by running `regenerate_css_files()` and diffing mtimes: `color-palettes`, `global-variables` and `theme-style-mpd` all rebuilt; `style-manager.min.css` did not. But it is 0 bytes on all three installs checked (SLVPR, the `stack-0626` template, and Nametank's own since its fix), so the palette/token output has moved and the original "it carries the tokens" mechanism no longer describes a current install. Reframed as a carried-forward hazard and the detection generalised, because grepping the named file on a modern site returns nothing and reads as "not my problem."
-**Corrected:** pkjsupport, 2026-10-04 (Bricks 2.4.2). The Stage 0 `bricks-native` warning said the file was the live token output and that deleting it would drop the tokens. Tested false: all 27 of its declarations were also in `color-palettes.min.css`. With the file moved aside it was no longer enqueued, and all 107 Style Manager tokens still resolved by `getComputedStyle`.
+**Corrected:** pkjsupport, 2026-10-04 (Bricks 2.4.2). The Stage 0 `bricks-native` warning said the file was the live token output and that deleting it would drop the tokens. Tested false: all 27 of its declarations were also in `color-palettes.min.css`. With the file moved aside it was no longer enqueued, and all 107 Style Manager tokens still resolved by `getComputedStyle`. The same session found the same-request regen revert above, during a CLI palette write.
 
 ### Bricks' palette option is `bricks_color_palette` — SINGULAR, and the wrong name fails differently in PHP than in WP-CLI
 **Symptom / When:** A read of the Bricks colour palette comes back empty, and the conclusion drawn is "this install has no palette" or "the palette got wiped." In PHP the read returns `false` and flattens silently to nothing in any `foreach` or `json_encode`; from WP-CLI the same wrong name errors instead.
@@ -800,7 +817,12 @@ This is generic `get_option()` behaviour rather than a Bricks quirk, and it is t
 wp post list --post_type=bricks_fonts --fields=ID,post_title
 ```
 System stacks work as literals (`"sans-serif"` is a valid CSS keyword). Named families always go through `custom_font_<id>`.
-**First seen:** TAB, 2026-04-25 — Global Class typography assignments; both `var(--heading-font-family)` and `"Jost, sans-serif"` produced quoted output. `custom_font_169` resolved it.
+**The fallback stack has its own key.** The emitter appends `fallback` verbatim after the resolved family (`assets.php`, ~L4044); it's the typed "Fallback" field in the font control. Without it, a slow font load renders the browser default:
+```php
+'_typography' => [ 'font-family' => 'custom_font_8', 'fallback' => 'system-ui, -apple-system, "Segoe UI", sans-serif' ],
+// emits font-family: "Switzer", system-ui, …   — works inside Theme Style typographyBody / typographyHeadings too
+```
+**First seen:** TAB, 2026-04-25 — Global Class typography assignments; both `var(--heading-font-family)` and `"Jost, sans-serif"` produced quoted output. `custom_font_169` resolved it. · **Extended:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — the `fallback` key, verified in the Theme Style CSS file.
 
 ### Bricks image element with `tag=figure` collapses to content size — `:where(.brxe-image).tag` forces `width:auto; height:fit-content`
 **Symptom / When:** An image-as-figure (image element, `tag: "figure"`) built for a fill-the-container treatment — absolute-inset-0 hero with `_objectFit: cover` — renders at its natural intrinsic dimensions and gets clipped instead of scaled-and-cropped. Toggling `_objectPosition` in the UI has no visible effect; the lever feels dead.
@@ -1078,8 +1100,9 @@ curl -s <url> | grep -oE 'data-x="[^"]*"'
 **Symptom / When:** You write Global Class settings via `wp eval`, verify the **raw DB + rendered CSS** both show the change, then minutes later the option has reverted — sometimes **partially** (one class sticks, others revert), which reads like a race. `update_option` returned `true`; the immediate re-read was correct; the revert happens later with **no CLI write in between**.
 **Why:** An open builder tab holds the entire Global Classes collection in browser memory. On heartbeat autosave (or any manual save) it writes the **whole** option back from that stale copy, clobbering out-of-band CLI edits. Advanced Themer's class manager makes the builder especially write-happy. The reverse also bites: a CLI write can clobber unsaved builder work.
 **Fix:** Treat `bricks_global_classes` as **single-writer**. Close every builder tab for the site before editing via CLI; after writing, re-read after **~90s** (one heartbeat window) to confirm it stuck — don't trust the immediate read. If coordination isn't possible, make the change in the builder UI instead. Per-post `_bricks_page_content_2` isn't affected the same way *unless that page is open in the builder*.
+**Detect an open tab before writing, not after.** The builder renews the post's `_edit_lock` (`<unix time>:<user id>`) on heartbeat, so a lock younger than WordPress's 150-second window means someone has that template open now. Gate the write on the check, as a separate command: `wp eval '…if ( time() - $t < 150 ) exit( 1 );…' && wp eval-file build.php`. Checking in the same command as the writes only tells you afterward. If a lock was live during a write, have the editor reload that tab **without saving**, then re-read.
 **PHP-side trap in the same area:** mutating the classes array through nested references (`foreach($gc as &$c){ $s =& $c['settings']; … }`) can leave the saved value unchanged. Index by position instead: `$gc[$i]['settings'][...] = …`.
-**First seen:** TAB, 2026-06-22 — typed-setting edits on four shared classes verified live in raw DB + render, then reverted (3 of 4) within ~2 min while a builder tab was open. Held permanently once the builder was closed.
+**First seen:** TAB, 2026-06-22 — typed-setting edits on four shared classes verified live in raw DB + render, then reverted (3 of 4) within ~2 min while a builder tab was open. Held permanently once the builder was closed. · **Extended:** pkjsupport, 2026-10-07 — a template was open in the builder (lock 12s old) while the CLI removed fields from it; caught only because a lock query happened to run in the same command. The gate above came out of it.
 
 ### Deleting a global class in the Bricks Style Manager leaves DANGLING refs in element `_cssGlobalClasses`
 **Symptom / When:** After pruning classes, elements still list the deleted id (e.g. `["aheyb1","mhawiz"]` where `aheyb1` no longer exists). Renders nothing, but clutters the tree and shows up as phantom "co-classes" in usage audits.
@@ -1665,6 +1688,92 @@ The `brxe-<id>` and the global classes land on the **figure**. The inner `<img>`
 **Fix:** Match the wrapper first, then take the first `<img>` inside it. The id sits on the `<img>` only when the image element has **no** `tag` set. (Pairs with the `.tag` entries above the seam — same mechanism, different failure: those are about layout, this is about *verification lying to you*.)
 **Also:** an element with no element-level CSS and no script renders **without** its `brxe-<id>` class and without an `id` attribute at all. A section carrying only global classes, an `_attributes` entry and a condition renders as `<section class="brxe-section section--s bg--white" aria-labelledby="…">`. Bricks only emits the per-element hooks when it has something to bind to them. So `#brxe-<id>` / `.brxe-<id>` is not a reliable verification or screenshot target. Target by a stable attribute (`section[aria-labelledby="events-title"]`) or a global class, and treat a missing `brxe-<id>` as expected, not as a strip.
 **First seen:** TAB, 2026-07-15 — alt-text audit; three elements read as un-rendered and were all fine. · **Id omitted entirely:** WCDP, 2026-09-11 — three failed screenshot runs on an events section before the rendered opening tag was checked.
+
+### Bricks Color Manager: a color row is `{id, raw, light}` and `light` accepts `var(--…)` — a two-tier palette works
+**Symptom / When:** You want the Bricks color picker to offer purpose tokens (`--color-bg`) that point at raw palette values, and you need the stored shape before writing ~30 rows from WP-CLI.
+**Why:** Bricks 2.4 takes the variable name from `raw`; there's no `name` key on a color row. It emits `--<name>: <light>` with `light` passed through verbatim, into `color-palettes.min.css` (and again into `style-manager.min.css`, see "Bricks never rebuilds `style-manager.min.css`"). Shades and `.bg-*` / `.text-*` utility classes exist only as extra rows or a non-empty `utilityClasses`, so a palette written without them stays clean. Legacy `hex` / `rgb` keys override `light`, so never write them. The same `--name` must not exist in both the Color Manager and the Variable Manager.
+**Fix:** Builder-saved shapes are in `02` → "Bricks Style Manager — Color Manager and Variable Manager rows." Put the purpose tier in the Color Manager (it feeds the color picker) and raw palette values in a Variable Manager category. ⚠️ Bricks doesn't validate references: a `light` pointing at a variable that doesn't exist saves fine and emits a dead `var()`. Resolve every reference with `getComputedStyle` on the front end after a write.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — a builder discovery save. `light: "var(--test-hex)"` saved as written, and the readback also caught a typo'd `raw` that left a reference dangling.
+
+### Opening the Bricks Color Manager writes the 18-color Default palette into an empty `bricks_color_palette`
+**Symptom / When:** A palette option that read `[]` suddenly holds a "Default" palette after someone opens the Style Manager, and `--bricks-color-*` variables appear in the picker and on every page.
+**Why:** With an empty option, Bricks falls back to its default palette (`database.php`, ~L1597–1650), and the first builder save persists it. `regenerate_css_files()` also falls back to it when the option is empty.
+**Fix:** Write your own non-empty palette option so the fallback never triggers. Replace the whole option (dropping "Default") rather than appending a palette to it.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — appeared during a builder discovery save; removed when the project palette was written.
+
+### Theme Style `containerMaxWidth` only reaches ROOT containers — a container inside a section stays at Bricks' 1100px
+**Symptom / When:** You set container width to `var(--content-width)` in the Theme Style, the Theme Style CSS shows it, and every container inside a section still renders 1100px wide.
+**Why:** `general → containerMaxWidth` targets `.brxe-container.root` (a top-level container). In the standard `SECTION > CONTAINER` structure the container isn't root, so it keeps Bricks' base `@layer bricks` rule, `.brxe-container { width: 1100px }`.
+**Fix:** Set the **container group's** `width` control (`bricks_theme_styles[<key>]['settings']['container']['width']`, a number+units field targeting `.brxe-container`). Keep `containerMaxWidth` too, for root containers. Verify with `getBoundingClientRect().width` on a container inside a section, not by reading the Theme Style CSS. `01` → Theme Style requirements names this control.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — the first section built on the stack rendered at 1100px with `containerMaxWidth` set. Fixed through the container group; it measured 1366px at a 1634px viewport.
+
+### Bricks' base `:where(p) { margin-block: 0 1.2em }` stacks with flex `row-gap` — use Theme Style contextual spacing, not CSS
+**Symptom / When:** Paragraphs stacked in a container with `row-gap` are spaced wider than the gap (49px apart instead of 30px), while heading-to-paragraph spacing is right.
+**Why:** Bricks' base layer (`frontend-layer.min.css`, `@layer bricks`) gives every non-last paragraph a 1.2em bottom margin, and a flex gap adds to margins rather than replacing them. Headings and lists carry UA margins the same way. The rule mentions no class, so it's invisible from a class audit; it was found by walking `document.styleSheets` for rules matching the element.
+**Fix:** Theme Style → `contextualSpacing`:
+```php
+'contextualSpacingRemoveDefaultMargins' => [ 'h1,h2,h3,h4,h5,h6', 'p', 'ul', 'ol', 'figure', 'blockquote' ],  // emits `… {margin: 0;}` unlayered at (0,0,1)
+'contextualSpacingHeading'   => 'var(--space-l)',   // flow spacing inside .brxe-text / post content only (`* + h*`)
+'contextualSpacingParagraph' => 'var(--space-s)',   // `* + p`
+'contextualSpacingCustomTarget' => [ [ 'id' => 'abc123', 'selector' => 'ul', 'marginStart' => 'var(--space-s)' ], /* ol, figure, blockquote likewise */ ],
+```
+⚠️ **Don't set `contextualSpacingFallback`.** It silently disables the heading spacing; see the next entry.
+Removing margins without the contextual values collapses multi-paragraph rich text, where there's no gap to take over. Set both together. BEM classes (0,1,0) still override both rules.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — a defaults-only test section. Gaps measured 30 / 49 / 49px before the fix and 30 / 30 / 30px after.
+
+### Bricks contextual spacing: setting "Fallback spacing" silently overrides the Heading spacing
+**Symptom / When:** Theme Style contextual spacing has Heading = `var(--space-l)` and Fallback = `var(--space-s)`. Inside rich text, paragraphs space correctly but headings get the *fallback* value. The heading rule is in the CSS and simply loses.
+**Why:** Specificity. The heading selector is `.brxe-text * + :is(h1, …, h6)`, which is (0,1,1). The fallback is `.brxe-text * + *:not(.woocommerce-mini-cart__total, .woocommerce-checkout *, .brxe-woocommerce-account-form-edit-account *)`, and `:not()` takes the specificity of its most specific argument, a class, so it comes out at (0,2,0) and beats every heading. The paragraph rule carries the same `:not()` on `p` (0,2,1), so paragraphs are unaffected, which is why the bug only shows on headings.
+**Fix:** Leave `contextualSpacingFallback` unset. Give lists, figures and blockquotes their spacing through `contextualSpacingCustomTarget` rows (`{ id, selector, marginStart }`). Those emit `.brxe-text * + :is(<tag>)` at (0,1,1) on different elements, so nothing collides.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — an `<h5>` in rich text measured 20px (`--space-s`) instead of 45px (`--space-l`). After the swap: h5 45px, p and ul 20px.
+
+### Enabling Bricks Query Filters from WP-CLI doesn't create their tables — the indexer then logs DB errors on every cron tick
+**Symptom / When:** After writing `enableQueryFilters: true` into `bricks_global_settings` with `update_option` (for example while copying settings from a sibling), the PHP error log fills with `Table '…_bricks_filters_index_job' doesn't exist` from `Bricks\Query_Filters_Indexer`.
+**Why:** The admin settings-save handler (`includes/admin.php`, ~L950) calls `Query_Filters::get_instance()->maybe_create_tables()` when the setting is on. A direct option write skips that handler, along with its other side effects (form-submission table, remote templates, capability defaults, a CSS regen when the cascade-layer setting changes).
+**Fix:** After any CLI write of `bricks_global_settings` that turns on query filters: `wp eval 'wp_set_current_user(1); \Bricks\Query_Filters::get_instance()->maybe_create_tables();'`, then confirm the `bricks_filters_index`, `_element` and `_index_job` tables exist. Read the save handler for any other setting you enable from the CLI.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — aligning Bricks settings to a sibling build. Tables created after the fact; no further errors.
+
+### Advanced Themer option names changed between versions — `bricks-advanced-themer__brxc_*` (3.3.x) vs `bricks-advanced-themer_brxc_*` (3.5)
+**Symptom / When:** A cross-site read or copy of Advanced Themer settings finds zero rows on one install, though `get_field()` returns values there.
+**Why:** AT stores its settings as ACF options under post ID `bricks-advanced-themer`. AT 3.3.15 installs show option rows with a **double** underscore; AT 3.5 on ACF 6.8 writes the standard single underscore. Field names (`brxc_*`) are unchanged.
+**Fix:** Copy AT settings with ACF's API, not raw option rows: `acf_get_field( 'brxc_<name>' )` to resolve the field on the *target* version, then `update_field( $field['key'], $value, 'bricks-advanced-themer' )`, which also writes the field-key reference rows. Drop checkbox values the target's `choices` no longer offer (three class-tweak values disappeared between 3.3.15 and 3.5). When grepping options, match both patterns.
+**First seen:** pkjsupport, 2026-10-04 — copying AT settings from two AT 3.3.15 siblings to AT 3.5.
+
+### Bricks nav-menu ships `.sub-menu { line-height: 60px }` and `li { margin-left: 30px }` — both survive a typed `menuGap`
+**Symptom / When:** A nav-menu styled through typed controls renders dropdown items about 87px tall, and in a column layout every item is indented 30px from its siblings (logo, CTA). On a row layout the 30px stacks on top of `menuGap`.
+**Why:** Element default CSS: `:where(.brxe-nav-menu) .bricks-nav-menu .sub-menu { line-height: 60px }` and `… > li { margin: 0 0 0 30px }`. `menuGap` emits `gap` on the `<ul>`, so it doesn't replace the margin. `subMenuTypography` targets the `<a>`, so `line-height: inherit` there just inherits the 60px from the `<ul>`.
+**Fix:** On the nav class, set `menuMargin => [ 'left' => '0' ]` (selector `.bricks-nav-menu > li`) and an explicit `line-height` in `subMenuTypography` (and in `menuTypography` if top-level items need it). Measure the item height after; don't trust a screenshot of one item. Shapes: `02` → nav-menu.
+**First seen:** pkjsupport, 2026-10-04 (Bricks 2.4.2) — site header. The sibling the header was modeled on carried both overrides, which is how the defaults were identified.
+
+### Bricks text elements don't run shortcodes — use the Shortcode element (Post Content does)
+**Symptom / When:** `[my_shortcode]` typed into a Basic Text (`text-basic`) or Rich Text (`text`) element prints literally on the page.
+**Why:** Both elements pass their content through `render_dynamic_data()` (Bricks `{tags}`) and nothing else. `do_shortcode` runs only in the **Shortcode** element (`includes/elements/shortcode.php`) and in Post Content (`the_content`). The mirror image of "Bricks dynamic tags do NOT parse inside raw `post_content`".
+**Fix:** The Shortcode element, `'shortcode' => '<p>© [year_sc] [name_sc]</p>'`. Surrounding HTML and text pass through, and dynamic tags render first. Output wraps in `div.brxe-shortcode`. Shape: `02`.
+**First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — footer copyright year.
+
+### Re-running a WP-CLI build script silently reverts every builder edit made since its last run — dry-run it against the live DB first
+**Symptom / When:** A project builds its pages from idempotent scripts (rebuild = re-run), and the client or designer also edits in the builder. A script re-run for an unrelated change quietly puts back old copy, old column counts and old class values, and drops elements added in the builder. Nothing errors, and the readback stays clean, because the reverted state is valid too.
+**Why:** The script writes its whole tree and its whole class set. The builder's edits exist only in the database. "Idempotent" means the script reproduces *its own* output, not the site's current state.
+**Fix:** Before any re-run, dry-run the script with every write intercepted and diff what it would write against the live DB. Copy each live value into the script until it reads identical. The interception:
+- `update_post_metadata` returning `true` (captures `_bricks_page_*_2` and blocks the write)
+- `pre_update_option_bricks_global_classes` returning `$old` (captures, blocks)
+- a blanket `pre_update_option` returning `$old`
+- `wp_insert_post_empty_content` returning `true` (blocks page creation)
+
+Prove the harness with a known difference first, and check the class option's hash is unchanged afterward. For an element the builder added, keep the builder's element ID in the script (a literal-ID key), or the dry run reports it as different forever.
+**First seen:** pkjsupport, 2026-10-07 — four builder edits (a capitalized title class, intro copy, a 3-column grid, a footer statement) would have been reverted by the next script run. Caught by the first dry run, which then became a standing step (`site-build/drift-check.php` in that project). Later the same day it caught a footer link and a line break added in the builder.
+
+### Front-end-only CSS: the builder canvas strips `bricks-is-frontend`, and Bricks' component preview keeps it — scope page-shell rules to both facts
+**Symptom / When:** A page-shell rule (sticky footer, body flex, full-height layout) in a framework or plugin stylesheet that also loads in the builder canvas reshapes the canvas, or Bricks' component preview.
+**Why:** `Setup::body_class()` adds `brx-body bricks-is-frontend wp-embed-responsive` on the front end. The builder canvas removes exactly those three (`builder.php`, `$frontend_only_classes`). The component preview (`components.php`) writes its own `<body class="brx-body bricks-is-frontend …">` with no `#brx-content`.
+**Fix:** `body.bricks-is-frontend:has(> #brx-content)` for the shell, and `body.bricks-is-frontend > #brx-content` for the growing child. For a viewport-height rule, subtract the admin bar when logged in, or short pages scroll by 32/46px: `body.admin-bar { min-height: calc(100dvh - var(--wp-admin--admin-bar--height, 32px)) }`. WordPress core defines that variable at both breakpoints. Every other body child on a Bricks page (skip links, the new-tab description span, the admin bar, scripts) is out of flow, so a flex column lays out only header, main and footer.
+**First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — a framework sticky-footer default. Verified with the footer at the viewport bottom and 0 scroll at 4 sizes, logged in and out.
+
+### Bricks image element has no `sizes` control — WordPress derives `sizes` from the chosen image size, so Full ships the original
+**Symptom / When:** A hero image set to size Full renders `sizes="(max-width: 1920px) 100vw, 1920px"`, and a desktop downloads the 1920 original for a ~585px column, even though `srcset` lists smaller files.
+**Why:** WordPress builds `sizes` from the width of the size the element requests. Bricks passes its `image.size` setting through and exposes no separate `sizes` control.
+**Fix:** Set the typed `image.size` to the registered size closest to the rendered width (and its `url` to that size's URL). `medium_large` (768w) gave `sizes="(max-width: 768px) 100vw, 768px"`, which means 768w on a 1x desktop and 1536w on 2x from the same `srcset`. Keep `loading: 'eager'` on an above-the-fold image (`02`); Bricks / WordPress already add `fetchpriority="high"`.
+**First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — home hero photo.
 
 ## BricksExtras
 
@@ -2334,17 +2443,27 @@ add_filter( 'bricks/query/run', function ( $results, $query ) {
 **Relationship / post-object loops are the same, so they cannot paginate.** `set_loop_query()` returns `get_field()`'s whole array for those too, with no `paged` slicing, no `found_posts` and no `max_num_pages`, so a Pagination element shows nothing. For a paginated grid driven by a relationship field, resolve the IDs yourself and feed them to an `objectType: 'post'` loop as `post__in`, in a `bricks/posts/query_vars` filter scoped to that element (keep the element's own `posts_per_page`). That's a real `WP_Query`, and native pagination works. On a singular template, also see "`redirect_canonical` 301s requests you meant to serve…".
 **First seen:** TAB, 2026-05-29 — repeater loops rendered correct row counts with literal subfield tags; grepping `provider-acf.php` gave the namespaced format. · **Extended:** WCDP, 2026-08-10 — capping a repeater list in the global footer while its own page shows the full set. · **Extended:** THM, 2026-08-30 — a 9-per-page grid on a CPT single, rebuilt from an ACF relationship loop to a `post__in` query and confirmed across two pages.
 
-### ACF `gallery` / `image` fields are NOT loopable in Bricks — including repeater image subfields
-**Symptom / When:** Two faces of one bug. (1) A loop set to `objectType: acf_<gallery_field>` renders the loop shell (`data-start=0 data-end=0`) but **zero items**, though the field has images. (2) A repeater loop renders the right row count and text subfields resolve, but an **image** subfield bound to a Bricks image element renders an empty `<img>`.
-**Why:** Bricks builds its loop-tag registry from a field-type→context map (`provider-acf.php` ~L1088). `gallery` and `image` map to `[CONTEXT_TEXT, CONTEXT_IMAGE]` — **not `CONTEXT_LOOP`**. Only `relationship`, `post_object`, `repeater`, `flexible_content` and `group` get `CONTEXT_LOOP`. A gallery field is never registered as a loop tag, so the query matches nothing; a repeater's image subfield can't be pulled per-row.
+### ACF `gallery` / `image` fields are NOT loopable in Bricks — a repeater's image SUBFIELD renders per row only with return format `id`
+**Symptom / When:** (1) A loop set to `objectType: acf_<gallery_field>` renders the loop shell (`data-start=0 data-end=0`) but **zero items**, though the field has images. (2) A repeater loop renders the right row count and text subfields resolve, but an **image** subfield bound to a Bricks image element renders nothing.
+**Why:** Bricks builds its loop-tag registry from a field-type→context map (`provider-acf.php` ~L1088). `gallery` and `image` map to `[CONTEXT_TEXT, CONTEXT_IMAGE]` — **not `CONTEXT_LOOP`**. Only `relationship`, `post_object`, `repeater`, `flexible_content` and `group` get `CONTEXT_LOOP`. A gallery field is never registered as a loop tag, so the query matches nothing.
+**Face (2) is a different mechanism: the subfield's return format.** The repeater *is* a loop, and `{acf_<repeater>_<image subfield>}` does resolve per row, but only when the image subfield returns an ID. Tested on Bricks 2.4.2 against one options-page repeater (10 rows, 9 with images), switching only the subfield's `return_format`:
+
+| `return_format` | Images rendered | Per-row `empty_not` gate on the same tag |
+|---|---|---|
+| `id` | 9 of 9 | correct (9 pass, 1 falls back) |
+| `array` | **0**, no `<img>` emitted | **still passes**, so the tiles render blank |
+| `url` | **0** | resolves empty, so all 10 fall back |
+
+`array` is the worst case: the gate says the image is there, and the image element prints nothing.
 **The golden-rule trap:** the provider's loop *handlers* (`set_loop_query`/`set_loop_object`) both have `case 'gallery'`, which reads like support. **The registration is the source of truth, not the render handlers.** Verify the registered loop tags (dump the provider's `loop_tags` via reflection); don't trust a switch statement.
-**Fix:** Expose the images as a **custom query type** returning plain attachment IDs, plus a loop-aware image tag returning `[ $id ]` in image context (see the image-context array entry above):
+**Fix for a repeater image subfield:** set the subfield's `return_format` to `id` and bind `'image' => [ 'useDynamicData' => '{acf_<repeater>_<subfield>}', 'size' => '…' ]`. No custom code. Gate a per-row fallback with `_conditions` on the same tag.
+**Fix for a gallery field:** expose the images as a **custom query type** returning plain attachment IDs, plus a loop-aware image tag returning `[ $id ]` in image context (see the image-context array entry above):
 ```php
 // query run: return get_field('<gallery>', get_the_ID(), false)   // raw attachment IDs
 // tag:       return $context === 'image' ? [ $att_id ] : (string) $att_id;
 //            $att_id from \Bricks\Query::get_loop_object()
 ```
-**First seen:** TAB, 2026-06-08 — a gallery loop returned 0 items. **Same mechanism again:** TAB, 2026-06-10 — a repeater's logo-image subfield looped (chips rendered) but every `<img>` was empty.
+**First seen:** TAB, 2026-06-08 — a gallery loop returned 0 items. **Same mechanism again:** TAB, 2026-06-10 — a repeater's logo-image subfield looped (chips rendered) but every `<img>` was empty. · **Corrected:** pkjsupport, 2026-10-07 — a repeater image subfield rendered natively on Bricks 2.4.2, which conflicted with "including repeater image subfields." Resolved at harvest by test: the original title held only for the `array` and `url` return formats, and the "can't be pulled per-row" mechanism was wrong. TAB's return format wasn't recorded, so whether its failure was the format or its older Bricks is unknown; the table above is what holds on 2.4.2. Test reproducible in one request: reset `acf_get_store( 'fields' )`, filter `acf/load_field` to change the subfield's `return_format`, and render the tree with `\Bricks\Frontend::render_data()`. ⚠️ A `acf/load_field/name=<subfield>` filter added after ACF has loaded the group never fires; reset the store first, or the test proves nothing.
 
 ### An ACF options page sizes its labels at (0,3,2) — `.acf-field .acf-label label` only restyles the nested ones
 **Symptom / When:** Custom admin CSS to resize ACF field labels applies to **sub-fields inside groups and repeaters** but leaves the **top-level** labels at their original size. The rule is valid, enqueued and visible in DevTools, but it's outranked, and only on some labels. That makes it look like a caching or specificity fluke rather than a miss.
@@ -2373,6 +2492,19 @@ add_action( 'admin_menu', 'prefix_submenu', 100 );
 ```
 **Verify:** over real authenticated HTTP, and `grep` the dashboard HTML for `href='admin.php?page=<slug>'`. A CLI `do_action('admin_menu')` can't load ACF's admin classes and misreports this; see "Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP".
 **First seen:** WCDP, 2026-09-30 — a 404-log screen under the site's settings page, reported by Michael on launch day. The bug was also in dev, but nobody had clicked the link there.
+
+### Renaming an ACF options-page group subfield orphans its value unless both option rows move
+**Symptom / When:** A subfield inside an options-page group is renamed (`address` → `mailing_address`), and the field comes up empty although the old value is still in the database.
+**Why:** ACF stores an options group subfield as two `wp_options` rows: `options_<group>_<sub>` (the value) and `_options_<group>_<sub>` (the field-key reference). The name is part of both option names, so a rename points the field at rows that don't exist.
+**Fix:** Keep the field **key** and move both rows:
+```php
+foreach ( [ '', '_' ] as $p ) {
+    update_option( "{$p}options_company_mailing_address", get_option( "{$p}options_company_address" ), false );
+    delete_option( "{$p}options_company_address" );
+}
+```
+Copy the raw option, not `get_field()` output, which applies formatting (`new_lines` → `<br />`) that would then be applied twice.
+**First seen:** pkjsupport, 2026-10-07 — an address field renamed to say what it's for.
 
 ## WordPress core — CPTs, rewrites, canonical, mail
 
@@ -2430,7 +2562,8 @@ Bricks' loop reads `paged` as a fallback after `page` (`Query::get_paged_query_v
   Cleaner variant — hook core's own size list instead of hand-listing sizes, so it tracks whatever core registers: `require_once ABSPATH . 'wp-admin/includes/class-wp-site-icon.php'; add_filter( 'intermediate_image_sizes_advanced', [ new WP_Site_Icon(), 'additional_sizes' ] );` then regenerate as above. **Verify:** `get_site_icon_url( 32 )` must end in `-32x32.png` — an option that is set proves nothing, since `wp option update site_icon` succeeds with no crops at all.
 - SVG favicon → emit it yourself in the core plugin (bundled asset, brand constant): `add_action('wp_head', fn() => printf('<link rel="icon" href="%s" type="image/svg+xml">', esc_url($url)), 2)`. Modern browsers prefer the SVG; Safari/iOS/Android use the native raster set. Add `<meta name="theme-color">` alongside. An SVG with `<style>@media (prefers-color-scheme: dark){...}</style>` gives a free dark-mode favicon.
 **Root-path icons need real files.** Browsers request `/favicon.ico`, and iOS requests `/apple-touch-icon.png` and `/apple-touch-icon-precomposed.png`, straight from the document root regardless of any `<link>` tag; no markup suppresses that. Put real files at the web root for those three: the web server answers them without booting PHP (they keep working if WordPress is down or a plugin is deactivated, and the 404s stay out of the log). Everything else (SVG icon, manifest, PNG icons) is discovered via `<link>` and can live with the plugin.
-**First seen:** Highland, 2026-06-14 — programmatic Site Icon generated only `thumbnail`; added the size filter + a plugin SVG-favicon module (`inc/favicon.php`). · **Extended:** WCDP, 2026-08-08 — `wp media import` + `wp option update site_icon` left `get_site_icon_url(32)` returning a 250×250 file (regenerated via `WP_Site_Icon::additional_sizes()`), and the access log filled with 404s for the three root icon paths. WP 7.0.3.
+**Alternative — keep the Site Icon convention, own the tags.** `site_icon_meta_tags` filters the array `wp_site_icon()` prints on `wp_head`, `admin_head` and `login_head`, so returning your own set (ico + svg + apple-touch + manifest + theme-color) replaces core's four tags everywhere with no duplicates. ⚠️ `wp_site_icon()` returns early when `! has_site_icon()`, so **the filter never runs until `site_icon` is set**: point it at a 512px attachment (admin, login, the Customizer and REST `site_icon_url` read it) even though the front end uses your tags. A maskable manifest icon needs a full-bleed background with the mark inside the 80% safe circle; headless Chrome rasterizes an SVG to PNG when nothing else is installed (`--headless=new --screenshot --window-size=512,512`, and see the headless entry for its exit trap).
+**First seen:** Highland, 2026-06-14 — programmatic Site Icon generated only `thumbnail`; added the size filter + a plugin SVG-favicon module (`inc/favicon.php`). · **Extended:** WCDP, 2026-08-08 — `wp media import` + `wp option update site_icon` left `get_site_icon_url(32)` returning a 250×250 file (regenerated via `WP_Site_Icon::additional_sizes()`), and the access log filled with 404s for the three root icon paths. WP 7.0.3. · **Extended:** pkjsupport, 2026-10-07 — the `site_icon_meta_tags` route, WP 7.1.2.
 
 ### `remove_action()` on `admin_head` needs core's REAL priority AND must run after the admin bootstrap
 **Symptom / When:** A plugin removes a core callback (e.g. `wp_site_icon`) from `wp_head`, `login_head` and `admin_head` with the same priority. The first two work, and the `admin_head` removal silently returns `false`.
@@ -3209,6 +3342,18 @@ token-check method before provisioning anything.
 
 **First seen:** TAB, 2026-09-11.
 
+### WS Form REST submit from the CLI returns a bare 403 unless it carries `wsf_post_mode=submit`
+**Symptom / When:** Testing a form end to end with `curl -X POST …/wp-json/ws-form/v1/submit/ -F wsf_form_id=N -F field_<id>=…` returns `403` with an **empty body**: no JSON, no log line. It reads as a nonce or permissions problem, and isn't one (logged out, `security_nonce` off, no nonce is checked).
+**Why:** `WS_Form_Submit::setup_from_post()` calls `return_forbidden()` (`header('HTTP/1.0 403 Forbidden'); exit;`) when `wsf_post_mode` isn't one of `submit|save|action`. WS Form's JS always sends it, so only a hand-built request hits this. The honeypot, limits and a bad `wsf_hash` take the same silent exit.
+**Fix:** Add `-F wsf_post_mode=submit`. Choice fields post as arrays (`-F "field_77[]=Value"`). The JSON response carries `error_validation` and the per-field messages, so server-side `required` is testable from the shell. On Local, Mailpit's API (`http://localhost:<mailpit web port>/api/v1/messages`, port in `sites.json`) shows the recipients; Reply-To shows only in `/api/v1/message/<ID>/headers`, not the list. A tracing mu-plugin (`rest_pre_dispatch` plus a shutdown `http_response_code()` log) separated "never routed" from "routed, then exited".
+**First seen:** pkjsupport, 2026-10-07 (WS Form Pro 1.12.12) — the first test submission of a support form.
+
+### WS Form `wsf_pre_render` runs at render AND at submit — the hook for runtime options and a hidden recipient
+**Symptom / When:** A select's options should come from somewhere WS Form can't read (an ACF options-page **repeater**: WS Form's ACF data source reads a field's *choices*, not repeater rows), or the email recipient should come from site options rather than be typed into the form.
+**Why:** `wsf_pre_render` / `wsf_pre_render_<id>` is applied in `class-ws-form-public.php` (render) **and** in `WS_Form_Submit::db_form_object_read()` (submit, `class-ws-form-submit.php`), so rows injected there exist at both ends. The rendered page inlines the whole form definition, actions included, so anything injected at render is public.
+**Fix:** One filter. Rows are always injected (find the field by a `class_field_wrapper` marker, not by ID, since IDs change on a rebuild). The recipient is injected only when `wp_is_serving_rest_request()`, i.e. while handling the submit, so it never reaches the page (verified: address absent from the page source, present in the delivered mail). ⚠️ **WS Form does not validate a select's posted value against its options:** `field_77[]=Made-up value` was accepted. Treat select values as untrusted text.
+**First seen:** pkjsupport, 2026-10-07 (WS Form Pro 1.12.12) — a site dropdown fed by an options-page repeater, and the recipient read from site options.
+
 ## Fluent Forms
 
 ### Fluent Forms `fluentform_submission_success` never bubbles from the `<form>` — an `e.target` listener reads an empty form id
@@ -3474,8 +3619,9 @@ curl -s https://example.com/wp-content/uploads/_diag.php; rm <WEBROOT>/wp-conten
 ### Local: `wp db query` fails on the mysql socket; `wp eval`/`wp option get` work
 **Symptom / When:** `wp db query "…"` errors `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`, while `wp option get`, `wp eval`, `wp post list` in the same shell work.
 **Why:** `wp db query` shells out to the `mysql` client, which needs the live socket path; Local's bundled MySQL uses its own socket and is only up while the site runs (and not at `/tmp/mysql.sock`). PHP-based WP-CLI commands connect via `DB_HOST`/mysqli and are unaffected. (A fully stopped Local site fails all DB access — no `mysqld`.)
-**Fix:** Use PHP-path WP-CLI (`wp eval`, `wp eval-file`, `wp option get/update`, `wp post *`) for DB work on Local; avoid `wp db query`/`wp db cli`. If everything DB-related fails, start the Local site first.
-**First seen:** MMHN, 2026-07-16.
+**Fix:** Use PHP-path WP-CLI (`wp eval`, `wp eval-file`, `wp option get/update`, `wp post *`) for DB work on Local; avoid `wp db query`/`wp db cli`, and use `$wpdb` inside `wp eval` for SQL. If everything DB-related fails, start the Local site first.
+**No flag rescues it.** Passing Local's real socket (`--socket=…/Local/run/<siteId>/mysql/mysqld.sock`) fails with the identical `/tmp/mysql.sock` error: WP-CLI runs a SQL-modes preflight query before yours, and the preflight ignores pass-through flags. `wp db export` does work on the same box, so the failure is specific to `query` / `cli`.
+**First seen:** MMHN, 2026-07-16. · **Extended:** pkjsupport, 2026-10-04 — `query` and `query --socket` both exit 1, `wp db export` exits 0.
 
 ### `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 **Symptom / When:** `wp media import icon.svg` errors "Sorry, you are not allowed to upload this file type" even though SVG uploads work fine in wp-admin and Bricks' SVG support is enabled.
@@ -3767,26 +3913,25 @@ grep -oE 'href="(https://site\.tld)?/path/"' page.html | wc -l
 **Symptom / When:** Verifying mobile layout headlessly: an element that should be visible at 375px is absent from every screenshot, and probing finds a phantom "mobile overflow" — body `scrollWidth` reads ~485–500, elements sit at x > 375, and even a page reduced to a bare skip-link still measures 500px wide.
 **Why:** `--headless=new --window-size=375,…` enforces a ~500px minimum window width for *layout* while the screenshot canvas honours the requested 375 — so the page lays out at 500px and the PNG is a left-edge crop. Media queries keyed at ≥500px (e.g. ≤991 mobile rules) still match, so mid-size breakpoints behave normally and the artifact only bites at true-phone widths — exactly when you are least likely to suspect the tool.
 The general form, which outlives any Chrome version: **a screenshot is evidence about the harness as much as about the page.** A tool that silently substitutes its own viewport converts "I could not measure this" into "this is broken" — the same false-conclusion shape as the empty-grep trap in `00` → Evidence discipline.
-**Fix:** For sub-500 viewports, embed the page in an iframe of the target width inside a wider headless window (`<iframe src="…" style="width:375px">` — cross-origin blocks script probes into it, but the screenshot is honest), or drive a real browser with proper device emulation. Before trusting a negative, sanity-check the harness: render a page you know is correct at the same width, and if that looks broken too, the tool is the problem.
+**Fix:** For sub-500 viewports, embed the page in an iframe of the target width inside a wider headless window (`<iframe src="…" style="width:375px">` — cross-origin blocks script probes into it, but the screenshot is honest), or drive a real browser with proper device emulation.
+**Windowed Chrome has the same floor, and the same-origin iframe beats it with full script access.** A browser driver's `resize_window` to 360px silently leaves `innerWidth` at the old width (OS / Chrome minimum window width), so every "mobile" measurement is desktop. From the page's own JS context, create `<iframe src="{same page}?cb=…" style="width:360px;height:800px;opacity:0;position:fixed">`, wait for `onload` and `contentDocument.fonts.ready`, measure with `contentWindow.getComputedStyle` / `getBoundingClientRect`, then remove it. Same origin, so full DOM access at an exact viewport width. Repeat at the minimum, midpoint and maximum of a fluid range: midpoint values landing exactly halfway confirm the clamp math. A long page adds a ~15px scrollbar inside the iframe; account for it before calling a width wrong.
+**Companion trap: `--screenshot` writes the file and never exits.** With `--virtual-time-budget`, headless Chrome writes the PNG and keeps running, so the shell call runs to its own timeout and looks like a failed capture. Wrap each capture in a hard limit and treat the file as the result: `perl -e 'alarm 30; exec @ARGV' "$CHROME" --headless=new … --screenshot=out.png URL`, then `pkill` the profile dir. A `file://` harness iframing an `https` page with a self-signed cert hung outright; use a real page. Before trusting a negative, sanity-check the harness: render a page you know is correct at the same width, and if that looks broken too, the tool is the problem.
 Companion diagnostic when no CDP tooling is available: save the page locally, append a `<script>` that writes `getComputedStyle` / `getBoundingClientRect` results into `document.title`, and read it back via `--dump-dom` — a poor man's headless evaluate. Same family as "Diagnostic JS via a Bricks code element".
 **First seen:** Nametank (ext-mem), 2026-08-13 — the new header burger appeared "missing" in every 375px screenshot after the offcanvas build; an hour of cascade archaeology chased a phantom overflow (solo body children each "measuring" ~500) before the clamp was identified. The layout had been correct all along; an iframe-embedded 375px viewport showed the burger rendering perfectly.
 ⚠️ **UNVERIFIED SINCE.** The ~500px figure is a claim about a tool, not about the stack, and Chrome moves. Re-verify against the current Chrome before relying on the number. Consider also whether raw headless-Chrome CLI is still the house method for visual verification — if a real-browser driver with `resize_window` has replaced it, this entry's audience is narrower, though the principle and the `--dump-dom` fallback both survive.
-
----
-
-> Project copy of the canonical knowledgebase gotcha catalog. This file holds **only TAB-discovered entries** (below the seam) that were candidates for harvest into the master at TAB go-live.
->
-> For the established / inherited gotcha catalog, read `~/claude-config/knowledgebase/03-stack-gotchas.md`. Do NOT duplicate established entries here — the canonical file is the source of truth.
->
-> Restructured 2026-05-28. The seam structure follows the convention in `~/claude-config/knowledgebase/00-operating-rules.md` "Write protocol."
-
----
+**Re-confirmed for windowed Chrome:** pkjsupport, 2026-10-04 — `resize_window` to 360px left `innerWidth` at 1634; the same-origin iframe measured 360 / 863 / 1366 exactly. The headless no-exit trap: pkjsupport, 2026-10-07.
 
 ### A regex delete across a PHP file can silently remove hundreds of lines — and `php -l` will not notice
 **Symptom / When:** After "removing one function" from a plugin file with a Python/sed regex, unrelated features die quietly. Dynamic tags render as their literal `{tag}` text, and a section gated on one of them disappears. Nothing fatals and the linter passes.
 **Why:** A pattern like `/\*\*\n \* (?:[^\n]*\n)*? \*/\nfunction target_fn` anchors on the FIRST docblock in the file (the file header). The lazy quantifier then walks forward until it reaches the target, deleting everything in between. What's left is still valid PHP, so `php -l` tests nothing. The failure only shows on the rendered front end, on whichever page depended on the code that was cut.
 **Fix:** Never delete across a PHP file with a regex. Anchor on the function's exact text: a `str.replace` of the verbatim block with `assert s.count(old) == 1`. Assert the line count moved by the expected amount before writing. Keep the plugin in git, or snapshot the file before any structural edit; on a dev box with no backups there is no other copy.
 **First seen:** WCDP, 2026-09-13 — retiring one Bricks dynamic tag deleted 380 lines of the tag-registration file: the tag map, all three Bricks filters and seven value functions. The Home events carousel vanished because its `compare: empty` gate tag now rendered literally. The file was rebuilt from the session's earlier readbacks plus each tag's documented behaviour.
+
+### A hidden tab freezes transitions and `requestAnimationFrame` — a focus ring "missing" and a measurement script that hangs
+**Symptom / When:** Two faces, both from an automation tab that isn't in front. (1) Checking a focus style: the element matches `:focus` and `:focus-visible`, the custom properties resolve, yet computed `border-color` / `box-shadow` still show the unfocused values. It reads as an a11y failure. (2) A measurement script that waits on `requestAnimationFrame` hangs until the tool times out ("renderer may be frozen").
+**Why:** Chrome doesn't advance CSS transitions or fire rAF in a tab whose `document.visibilityState` is `hidden`. With a transition on the property (WS Form: 0.2s on border-color and box-shadow), computed style reports the start value indefinitely.
+**Fix:** Check `document.visibilityState` first. To measure a transitioned end state, set `el.style.transition = 'none'`, re-focus, read, then restore. Wait with `setTimeout(…, 80)`, not rAF. Same family as `00`'s "a real result that measures the wrong property."
+**First seen:** pkjsupport, 2026-10-07 — a WS Form field's focus ring (accent border plus a 2px `--focus-color` ring) read as absent until the transition was suppressed. Later the same day a rAF-based measurement hung in a background tab.
 
 # === PROJECT SECTION — "we learned" ===
 

@@ -217,7 +217,7 @@ If a setting persisted in the DB but emitted no CSS, the schema shape is wrong �
 
 **Typed setting persists but emits no CSS.** The setting saves to the DB, readback looks correct, but the rendered page has no corresponding CSS. Cause: wrong schema shape — Bricks' emitter walks specific keys and ignores anything else, without stripping it. Most common with `_border` (flat shape required, not per-side nested) and breakpoint suffixes (must be on the outer key, not nested inside a typed dict). See `03`.
 
-**Dynamic tags not parsed in arbitrary query fields.** `post__not_in: ["{post_id}"]` does not work — Bricks does not resolve dynamic tags inside that array. Use the dedicated `exclude_current_post: true`. General rule: where Bricks has a native key for a behavior, use that key; do not reach the same behavior via raw WordPress query keys.
+**Dynamic tags not parsed in arbitrary query fields (before Bricks 2.4).** Before 2.4, `post__not_in: ["{post_id}"]` did not work: Bricks didn't resolve dynamic tags inside that array. **From 2.4 it does:** `Query::parse_dynamic_id_in_vars()` (`@since 2.4`, `includes/query.php`) runs each include/exclude value through `bricks_render_dynamic_data()` and splits the result on commas (tested on 2.4.2: `["{post_id}"]` excluded the current post, identical to the literal ID). The general rule still stands: where Bricks has a native key for a behavior, use that key. For the current post that is `exclude_current_post: true`, which applies only when `is_single() || is_page()` (or a builder call), so it's a no-op on an archive or a CLI render.
 
 ---
 
@@ -239,7 +239,9 @@ Lookup tier. Each schema below was discovered via the golden rule and is verifie
 ```
 
 - `post_type` is an array, not a string.
-- Exclude current post: `exclude_current_post: true`. Never `post__not_in: ["{post_id}"]` — the dynamic tag does not parse there and the invalid shape may get the whole query rejected on builder load.
+- Exclude current post: `exclude_current_post: true`. Below Bricks 2.4, never `post__not_in: ["{post_id}"]`: the tag doesn't parse there and the invalid shape may get the whole query rejected on builder load. From 2.4 the tag parses (Failure modes above), but the native key is still the right one for the current post.
+- Exclude fixed posts (builder-saved, Bricks 2.4.2 — pkjsupport, 2026-10-07): the Query panel's Exclude control stores `post__not_in` as **string** IDs, `[ '41' ]`. Resolve the ID by slug at build time in a CLI script, since IDs differ between installs. The builder clears `post__in` / `post__not_in` whenever `post_type` changes.
+- Ordering (same readback): editing the Query panel rewrites `orderby` and `order` as **arrays**, `'orderby' => [ 'menu_order' ], 'order' => [ 'ASC' ]`. Plain strings written by the CLI render and survive a save that doesn't touch the panel, but write the array form so CLI and builder output match.
 - Bricks fills `posts_per_page`, `orderby`, `order` from main-query defaults if omitted.
 
 **Loop riding an archive's main query** (verified — WCDP, 2026-08-20, builder-saved readback from a sibling install, proven rendering):
@@ -331,7 +333,33 @@ Static images default to lazy **even as the LCP hero** — set `loading: 'eager'
 ```
 
 - The Link control on Container/Block elements appears only when the HTML tag is `a`. Change the tag first.
-- For non-dynamic external URLs: `"type": "external", "url": "..."`.
+- For non-dynamic external URLs: `"type": "external", "url": "..."`. Root-relative `url` values (`/legal/…`) work in `external` links and survive a domain change.
+- New tab (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2): `"newTab": true`, a **boolean**. Bricks adds `target="_blank"` and `aria-describedby="brx-new-tab-link-description"`, pointing at a visually hidden description it prints once per page (`base.php`).
+
+## Heading with a link, and rich text (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
+
+```php
+[ 'name' => 'heading', 'settings' => [ 'tag' => 'h3', 'text' => 'Privacy policy', 'link' => [ 'type' => 'external', 'url' => '#doc-privacy' ] ] ]
+// → <h3 class="brxe-heading"><a href="#doc-privacy">Privacy policy</a></h3>
+[ 'name' => 'text', 'settings' => [ 'text' => '<h4>…</h4><p>…</p><ul><li>…</li></ul>' ] ]
+```
+
+- The Heading's `link` renders the `<a>` **inside** the heading (`includes/elements/heading.php`, ~L247–259), which is the shape the clickable-parent pattern needs (`01`). Same `link` control as Button and Container. Passed real-click and Tab tests with clickable-parent and focus-parent.
+- Rich text is `Element_Text`: `name` = `text`, an `editor` control keyed `text`, an HTML string. Its descendants are what Theme Style contextual spacing targets (`.brxe-text * + p`; `03`).
+- `text` and `text-basic` don't run shortcodes; the `shortcode` element does (below, and `03`).
+
+## Text link, Shortcode and WS Form elements (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2)
+
+Read from the element control definitions, rendered, then opened and saved in the builder with no changes; every key survived.
+
+```php
+[ 'name' => 'text-link', 'settings' => [ 'text' => '{post_title}', 'link' => [ 'type' => 'meta', 'useDynamicData' => '{post_url}' ] ] ]
+// renders a bare <a class="brxe-text-link">; inside a native posts loop {post_url} resolves per item (verified over 5)
+[ 'name' => 'shortcode', 'settings' => [ 'shortcode' => '<p>© [year_sc] [name_sc]</p>' ] ]
+// surrounding HTML passes through, dynamic tags render first; wraps in div.brxe-shortcode
+[ 'name' => 'ws-form-form', 'settings' => [ 'form-id' => '7' ] ]
+// WS Form Pro's own Bricks element (third-party/bricks); the id is read with absint()
+```
 
 ## Block HTML tag options (native, no `customTag` needed)
 
@@ -541,6 +569,16 @@ Partial keys work at breakpoints because typed spacing emits **longhands** (`pad
 '_cssTransition'    => 'border-color .2s ease, transform .2s ease',   // plain string, raw CSS value
 ```
 The `:hover` suffix rides the **outer** key exactly like a breakpoint suffix, and the value is a *partial* of the base control's shape. Emits `.class:hover { … }` at `(0,2,0)`. Element-level control keys take it too (`subMenuBackground:hover`, `buttonBorder:hover` on nav/pagination elements).
+
+**Filters, blend mode and isolation** (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2; read from the control definitions and the CSS generator, rendered, then survived a builder save):
+```php
+'_cssFilters'   => [ 'saturate' => '0', 'contrast' => '110', 'brightness' => '115' ],
+// Bricks appends the unit (% for brightness/contrast/invert/opacity/saturate/sepia, px blur, deg hue-rotate)
+// and emits in array order. There's no grayscale key: saturate 0 is grayscale.
+'_mixBlendMode' => 'multiply',   // select, Setup::$control_options['blendMode'] (normal … luminosity)
+'_isolation'    => 'isolate',    // select, auto | isolate
+```
+On the **image** element, `_cssFilters` is re-routed to `&:not(.tag), img`, so the filter lands on the `<img>` whether or not the image has a wrapper tag; `_mixBlendMode` stays on the element root. Brand duotone with no `_cssCustom`: the wrapper takes `_background` (the brand color) plus `_isolation: isolate`, and the image takes `saturate(0)` plus `multiply`.
 
 **Two-colour border.** Typed `_border` is single-colour. For e.g. a gold top plus a light all-round: set 1px all sides via typed `_border`, then add `_cssCustom: ".class{ border-top:3px solid var(--secondary); }"` (literal selector).
 
@@ -827,7 +865,27 @@ Password field with the eye toggle (an entry in `settings.fields[]`):
 ```
 Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `html` field types take `'width' => '50'` for a half-width pair. Importing the SVG attachments from WP-CLI needs `wp --user=1 media import` (`03`).
 
-## BricksExtras Pro OffCanvas + Burger Trigger (verified — Highland, 2026-07-02, BE 1.6.9)
+## Nav menu and logo (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
+
+Sibling builder-saved readback on Bricks 2.3.8, keys re-checked against the 2.4.2 control definitions, rendered and function-tested, then survived a builder open-and-save with no changes.
+
+```php
+// nav-menu element
+'menu' => '<menu term_id as string>', 'mobileMenu' => 'never', 'submenuStatic' => 'true',   // static = in-flow accordion (panel nav)
+'menuIcon' => <icon shape below>,   // dropdown toggle; Bricks renders a <button aria-expanded> per parent item
+'_attributes' => [ [ 'id' => 'a1', 'name' => 'aria-label', 'value' => 'Main navigation' ] ],   // lands on the inner <nav>, not the outer div
+// nav-menu class (element-level controls on a global class emit as `.class .bricks-nav-menu …`)
+'menuGap', 'menuMargin' (spacing → `> li`), 'menuAlignment' => 'column', 'menuTypography' (+ ':hover'),
+'menuIconMargin', 'subMenuBackgroundList' (color), 'subMenuBorder' (flat _border shape), 'subMenuPadding', 'subMenuTypography' (+ ':hover')
+
+// logo element: alt = logoText, else the site name. Default loading is eager.
+'logo' => [ 'id', 'filename', 'size', 'full', 'url' ], 'logoText' => 'Brand name',
+// logo class: 'logoWidth' => 'calc(…)'   (number control → `.class .bricks-site-logo { width }`)
+```
+
+⚠️ Bricks ships `li { margin-left: 30px }` and `.sub-menu { line-height: 60px }` on the nav-menu, and `menuGap` replaces neither. Set `menuMargin` left 0 and an explicit `line-height` in `subMenuTypography` (`03`). `_alignSelf` (align-items type) places a child in a flex-column block.
+
+## BricksExtras Pro OffCanvas + Burger Trigger (verified — Highland, 2026-07-02, BE 1.6.9; BE 1.7.4 changes below)
 
 ```php
 'name' => 'xoffcanvasnestable', // one nestable child block = panel content
@@ -847,6 +905,16 @@ Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `ht
 ],
 // Burger: 'name' => 'xburgertrigger', 'settings' => [ 'aria_label' => 'Open main menu' ]
 ```
+
+**BE 1.7.4 changes** (pkjsupport, 2026-10-04, Bricks 2.4.2; control definitions re-read, rendered, builder round-trip clean). These go on a global class and emit on `.class .x-offcanvas_inner`, `calc()` included:
+```php
+'offcanvas_width' => 'calc(…)',                 // SCALAR number control on 1.7.4 — the per-side object above is the 1.6.9 shape
+'offcanvas_color' => [ 'raw' => 'var(--…)' ],   // BE ships the panel WHITE, 300px wide, 30px padding
+'content_padding' => [ 'top' => …, 'right' => …, 'bottom' => …, 'left' => … ],
+// burger element: 'burger_animation' => 'x-hamburger--slider' MUST be written. Its default exists only in the builder UI;
+// with the key absent, the active (close) state still draws ☰.
+```
+BricksExtras elements are switched on from the CLI with `update_option( 'bricksextras_<element>', '1' )` (`bricksextras_offcanvas_nestable`, `bricksextras_burger_trigger`). Confirm with `isset( \Bricks\Elements::$elements['xoffcanvasnestable'] )`.
 
 ⚠️ **The three a11y flags default OFF.** Set `esc_to_close` / `trapFocus` / `preventScroll` explicitly on every build. ⚠️ **But never write `returnFocus`** (THM, 2026-08-11, BE 1.7.1): the render tests `'enable' === $settings['returnFocus']` while the control's options are `'true'`/`'false'`, so *any* stored value, "Enable" included, renders `"returnFocus": false`. Unset is the only ON (`03`). Renders `.x-offcanvas_backdrop` + `.x-offcanvas_inner` (role=dialog, `inert` when closed); config lands in `data-x-offcanvas` JSON — verify via curl. BE base CSS gives the inner 300px width + 30px padding; zero it on your own class. Burger renders a real `<button>` with aria wired at runtime by JS (curl won't show it).
 
@@ -920,6 +988,30 @@ update_option( 'bricks_theme_styles', $ts );
 ```
 
 The control definitions are authoritative for both the group key and the control key: `includes/theme-styles/controls/typography.php` and `includes/theme-styles/controls/element-heading.php` each `return [ 'name' => …, 'controls' => … ]`. The heading element reads `$this->theme_styles['tag'] ?? 'h3'`, so an unset tag is h3, not h2. `htmlFontSize` in `includes/i18n.php` belongs to the Style Manager and is a red herring.
+
+**Container width** goes through the **container group**, not `general → containerMaxWidth`, which reaches root containers only (`03`; pkjsupport, 2026-10-04, Bricks 2.4.2):
+```php
+$ts[ $k ]['settings']['container']['width'] = 'var(--content-width)';   // targets .brxe-container
+```
+**Font fallback stack:** `typographyBody` / `typographyHeadings` (and any `_typography`) take `'fallback' => 'system-ui, sans-serif'` next to `'font-family' => 'custom_font_<id>'` (`03`).
+
+## Bricks Style Manager — Color Manager and Variable Manager rows (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
+
+Builder-saved readback. The token home on `stack: bricks-native` (`stacks/`), and the shape for any CLI token write.
+
+```php
+// bricks_color_palette: [ { id, name, colors[] } ]   — one palette, written whole (03: the Default palette trap)
+[ 'id' => 'abcdef', 'raw' => 'var(--color-bg)', 'light' => 'var(--slate-810)' ]
+// raw = the variable name (no `name` key on a color row); light = the value, passed through verbatim.
+// Never write legacy hex / rgb keys: they override light. No extra shade rows, empty utilityClasses = no shades, no utility classes.
+
+// bricks_global_variables: variable row
+[ 'id' => '…', 'name' => 'space-m', 'value' => 'clamp(…)', 'category' => '<category id>' ]   // name has no leading --
+// bricks_global_variables_categories: category row
+[ 'id' => '…', 'name' => 'Spacing' ]
+```
+
+A two-tier palette works: purpose tokens in the Color Manager (they feed the color picker) pointing at raw values in a Variable Manager category. A `--name` must not exist in both managers. After a CLI write, refresh the CSS in two requests (`03`: "Bricks never rebuilds `style-manager.min.css`").
 
 ## Bricks custom fonts — `bricks_font_faces` meta shape (verified — Highland, 2026-06-13)
 

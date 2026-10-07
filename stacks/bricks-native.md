@@ -2,7 +2,7 @@
 
 **Status: STUB (alpha).** Real content arrives at mpd-core spec Stage 8, after the proving project ships. Until then this file points at the project that owns the rules.
 
-A `bricks-native` site runs Bricks with **no Automatic.css installed**, ever: not deactivated, not "for reference." Tokens live in the Bricks Style Manager. A small framework plugin, **mpd-core**, reproduces the subset of ACSS v3 conventions in actual use, **under the same names**, so the KB's untagged conventions and habits carry over.
+A `bricks-native` site runs Bricks with **no Automatic.css installed**, ever: not deactivated, not "for reference." Tokens live in the Bricks Style Manager. A small framework plugin, **mpd-core**, reproduces the subset of ACSS v3 conventions in actual use. **ACSS names are kept where they already say what a token is for** (`--space-*`, `--section-space-*`, `--text-*`, `--h1`–`--h6`, `--content-width`, `--gutter`, `--grid-*`, `--focus-*`), so the KB's untagged conventions and habits carry over. **Color is named purpose-first**: a raw palette tier plus purpose tokens (`--color-bg`, `--color-text`, `--color-accent`, status roles) that components consume. Don't assume an ACSS color name resolves here; check `TOKENS.md`.
 
 ## How this file is used
 
@@ -27,7 +27,7 @@ Summary of the replacements, so a session can orient without opening the project
 | Child-theme CSS as the third styling surface | mpd-core plugin CSS for framework-level rules only; component styles stay in BEM classes |
 | ACSS configuration via `save_settings()` | Not applicable. Token values entered in the Style Manager per `TOKENS.md` |
 | ACSS token map required before a build | `TOKENS.md` + the Style Manager export |
-| ACSS owns the WS Form layer (`option-forms`, `--f-*`) | **Open.** Until decided, `03` → "WS Form — skin it by overriding root `--wsf-form-*` vars" is the live fallback |
+| ACSS owns the WS Form layer (`option-forms`, `--f-*`) | WS Form keeps its own styler. mpd-core CSS carries a `.wsf-form` bridge that remaps the styler's root `--wsf-form-*` vars (plus a few field vars) to purpose tokens (`03` → "WS Form — skin it by overriding root `--wsf-form-*` vars"). Decided 2026-10-07 |
 
 ## Known open questions (alpha)
 

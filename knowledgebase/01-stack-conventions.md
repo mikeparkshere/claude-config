@@ -41,6 +41,10 @@ Why, mechanically: styling typed onto an element emits an **ID selector**, `#brx
 
 The practical test when building: after typing a value into a Bricks panel, look at what is selected in the class bar. If it is the element and not a class, stop and make the class first.
 
+**Per-instance values travel as data, not as element CSS.** When instances of one component differ by a single value (a swatch color, a bar width, a status color, a column template), put that value in a custom property on the element's `style` attribute, `_attributes: [ { name: 'style', value: '--swatch: var(--color-bg)' } ]`, and let one global class consume it (`background: var(--swatch)`). The class owns the styling, the element carries only data, and no `#brxe-<id>` rule is emitted. The `_attributes` value is dynamic-data-parsed, so it can come from a field per loop item.
+
+> **(pkjsupport, 2026-10-04.)** One class each carried 52 color swatches, 12 spacing bars, 6 grid demos and 3 status pills, with zero element-bound CSS.
+
 **Every element gets a named BEM class, styled or not.** An unstyled element still gets one, with empty settings (`[]`). That emits no CSS, so it costs nothing. It gives the next person a named hook, so when the element does need styling, the styling lands on a class instead of the element. Empty settings are the correct signal that nothing was overridden. This includes pure wrappers and list items. Name a wrapper for what it holds (`.legal-doc__row`, `.site-footer__item`), never `__wrapper` or `__inner`.
 
 **The block class goes on the Section.** The Container takes `block__container`. Don't move the block name down to the Container and leave the Section bare. `[stack:acss]` A Section using ACSS section spacing carries both: the block class first, then `section--m`. Framework pattern classes (`clickable-parent`, `focus-parent--*`) are added alongside the element's BEM class and never replace it.
@@ -132,7 +136,7 @@ SECTION (Bricks Section element, BEM block class: .block)
 **Bricks Theme Style requirements** — set per project (where each lives, and the unset-tag default of h3: `02` → Theme Style keys):
 
 - HTML font-size = `var(--root-font-size)`
-- Container width = `var(--content-width)`
+- Container width = `var(--content-width)`, on the Theme Style **container group's `width`** control. `containerMaxWidth` reaches root containers only, so a container inside a section keeps Bricks' 1100px (`03`; `02` → Theme Style keys)
 - Default heading tag = H2
 - Disable class chaining = ON (Bricks performance setting; required)
 
