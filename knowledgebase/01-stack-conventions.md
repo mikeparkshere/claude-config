@@ -39,9 +39,15 @@ This is the most-violated rule in the build, named as a core principle in `00` a
 
 Why, mechanically: styling typed onto an element emits an **ID selector**, `#brxe-<id> {…}` at specificity `(1,0,0)` (see `03`). That is the worst of all worlds — it cannot be reused, it does not appear in the Style Manager, a client or another dev working through the panels will not find it, and it outranks every class rule anyone writes later, so the first override attempt fails for reasons that are invisible from the CSS. A Global Class emits at `(0,1,0)`: reusable, listed, overridable, and greppable.
 
-The practical test when building: after typing a value into a Bricks panel, look at what is selected in the class bar. If it is the element and not a class, stop and make the class first. The corollary is that structural elements carrying **no** CSS need no class — a Section whose only class is ACSS `section--m`, a wrapper that exists purely to nest. Empty typed settings (`[]`) are the correct signal that nothing was overridden.
+The practical test when building: after typing a value into a Bricks panel, look at what is selected in the class bar. If it is the element and not a class, stop and make the class first.
 
-Templates in particular: give every styled element a template-specific class even when it is unstyled today, so future styling has a named hook instead of arriving as element-bound CSS. Where a shared class and a template-specific class both apply, list the shared one **first** and the specific one **second** — Bricks keys global-class CSS in first-encountered element-class order, so the later class wins at equal specificity.
+**Every element gets a named BEM class, styled or not.** An unstyled element still gets one, with empty settings (`[]`). That emits no CSS, so it costs nothing. It gives the next person a named hook, so when the element does need styling, the styling lands on a class instead of the element. Empty settings are the correct signal that nothing was overridden. This includes pure wrappers and list items. Name a wrapper for what it holds (`.legal-doc__row`, `.site-footer__item`), never `__wrapper` or `__inner`.
+
+**The block class goes on the Section.** The Container takes `block__container`. Don't move the block name down to the Container and leave the Section bare. `[stack:acss]` A Section using ACSS section spacing carries both: the block class first, then `section--m`. Framework pattern classes (`clickable-parent`, `focus-parent--*`) are added alongside the element's BEM class and never replace it.
+
+> **(pkjsupport, 2026-10-07.)** This section used to say both "structural elements carrying no CSS need no class" and, two paragraphs later, "give every styled element a … class even when it is unstyled today." Builds followed the first reading. A later audit found 19 elements with no class to style through, and five sections whose block name had slid down onto the Container. The pattern was set on the first template and copied to four more pages. The project's readback tool flagged only element-bound styling, so it reported all of them clean. It now also flags an element with no class and a section with no block class.
+
+Where a shared class and a template-specific class both apply, list the shared one **first** and the specific one **second** — Bricks keys global-class CSS in first-encountered element-class order, so the later class wins at equal specificity.
 
 **Component vs site-wide.** Component-scoped layout — grid, gap, padding, alignment, typography on a specific block — lives in that block's Bricks Global Class typed settings. Site-wide context systems — dark-section overrides, brand button systems, a `.display em` accent, a `.bg--primary` system — live in the child theme `style.css`. The split is: does this rule belong to one component, or to the whole site.
 
@@ -115,7 +121,7 @@ Scroll reveal on this stack is the in-house toolkit, **not** Bricks' or Advanced
 Every section follows one nesting pattern:
 
 ```
-SECTION (Bricks Section element, BEM block class)
+SECTION (Bricks Section element, BEM block class: .block)
   └── CONTAINER (ACSS class — handles max-width and centering)
         └── BEM elements (.block__header, .block__grid, .block__item)
 ```
