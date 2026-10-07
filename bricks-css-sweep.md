@@ -2,7 +2,7 @@
 
 **Michael Parks Design — Claude Code slash command**
 
-Version 1.0 — Generated April 2026
+Version 1.1 — stack-aware, October 2026 (1.0: April 2026)
 
 ---
 
@@ -24,7 +24,7 @@ Before invoking this prompt, confirm:
    - The core functionality plugin name and path
    - Database access method (WP-CLI availability, direct DB access, etc.)
 3. The plugin has an `assets/css/` directory
-4. The plugin's main PHP file enqueues `sections.css` with ACSS as a dependency (if not, Claude Code flags this and halts until added)
+4. The plugin's main PHP file enqueues `sections.css` with the stack's framework stylesheet as a dependency (if not, Claude Code flags this and halts until added). Read the `stack:` line in the project `CLAUDE.md` first (`00`, read protocol step 4): no line or `stack: acss` means the ACSS handle (`automatic-css`); `stack: bricks-native` means the mpd-core handle (`mpd-core`). The dependency is what makes `sections.css` load after the framework CSS, so its rules win on source order.
 5. A backup of the page exists (Bricks template export, database backup, or site snapshot)
 
 If any prerequisite fails, halt and report. Do not proceed with partial state.
@@ -81,7 +81,7 @@ Wait for confirmation before Phase 2.
 
 ### Phase 2: Consolidation and File Generation
 
-1. Organize extracted CSS by BEM block name. Block name is derived from the primary custom class on each element (the first class that is not an ACSS utility and not a Bricks internal).
+1. Organize extracted CSS by BEM block name. Block name is derived from the primary custom class on each element: the first class that is not a framework class and not a Bricks internal. Framework classes are `[stack:acss]` ACSS utilities, or on `stack: bricks-native` the mpd-core pattern classes (`clickable-parent`, `focus-parent--shadow`, `focus-parent--outline`). mpd-core ships no utilities, so a card's CSS must never be filed under `.clickable-parent`.
 
 2. For each block, consolidate the CSS rules. If the same selector appears in both page-level CSS and element-level CSS for the same block, merge them, with element-level rules winning on conflicts (since they are scoped to the specific instance). Flag any conflicts in the sweep report.
 
@@ -203,7 +203,7 @@ Cleanup complete:
 1. Read the plugin's main PHP file. Check for the presence of an `wp_enqueue_style` call that:
    - Registers a handle (any handle name, but typically `{plugin-slug}-sections`)
    - Points to `assets/css/sections.css`
-   - Has ACSS (`automatic-css` or similar) as a dependency
+   - Has the stack's framework handle as a dependency: `[stack:acss]` `automatic-css` (or similar), or on `stack: bricks-native` `mpd-core`
    - Uses `filemtime()` for the version parameter
 
 2. If the enqueue exists and looks correct, confirm:
@@ -212,7 +212,7 @@ Cleanup complete:
 Enqueue verified:
   Handle: {handle}
   File: {path}
-  Dependency: {acss_handle}
+  Dependency: {framework_handle}
   Version: filemtime() (cache-busting active)
 ```
 
@@ -227,7 +227,7 @@ add_action('wp_enqueue_scripts', function() {
         wp_enqueue_style(
             '{plugin-slug}-sections',
             plugin_dir_url(__FILE__) . 'assets/css/sections.css',
-            ['automatic-css'],
+            ['{framework_handle}'],   // automatic-css on ACSS; mpd-core on bricks-native
             filemtime($file)
         );
     }
@@ -284,10 +284,14 @@ At every halt point, Claude Code reports clearly and does not attempt "smart" re
 - The developer is running this at pre-launch with a page in locked state
 - A backup exists
 - The plugin structure is standard for Michael Parks Design projects
+- The project `CLAUDE.md` declares its `stack:` (no line = ACSS, the fleet default)
 
 ---
 
 ## Changelog
+
+**v1.1 — October 2026**
+- Stack-aware: the `sections.css` dependency and the block-name exclusions follow the project's `stack:` line. ACSS sites behave exactly as before; `stack: bricks-native` depends on `mpd-core` and skips the mpd-core pattern classes. Before this, the sweep halted at prerequisite 4 on any site without ACSS.
 
 **v1.0 — April 2026**
 - Initial version
