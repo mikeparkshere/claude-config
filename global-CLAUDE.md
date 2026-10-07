@@ -123,6 +123,15 @@ apply, set FPM in the panel before the site takes traffic. Check `"type"` with a
 ⚠️ **New server: set the CLI PHP too** — RunCloud starts `php` (what WP-CLI runs) on the *lowest* installed
 version regardless of the webapp's FPM version. `PATCH /servers/{id}/php/cli` `{"phpVersion":"php84rc"}`, then
 verify `wp eval 'echo PHP_VERSION;'` (mmhn26 ran WP-CLI on 8.1 until caught, 2026-10-01).
+⚠️ **firewalld can be silently down after a reboot — check it, don't assume it** (found 2026-10-07). jbm003
+ran ~145 days with firewalld `inactive` after a May reboot; agents before **2.20.0** never check it. Read it as
+`runcloud` with `systemctl is-active firewalld` (no root). Useful read-only endpoints for fleet sweeps:
+`GET /servers/{id}/logs` (activity log — the firewalld alert and the `Auto Healing restarted the Firewall service`
+line both land here), `GET /servers/{id}/hardwareinfo` (`uptime`), `GET /servers/{id}` (`agentVersion`).
+`PUT /servers/{id}/security/firewalls` re-deploys the rule set but does **not** start a stopped firewalld.
+2.20's auto-heal (30 min) is real but not guaranteed — it never fired on jbm003. SSH "Connection refused" from an
+outside IP on these boxes is usually **fail2ban** (sshd jail, iptables REJECT, 10 h ban), not the firewall.
+Full record: `server-provisioning.md` (private repo).
 ⚠️ **Before booking panel time for a server-level directive, check the webapp's `stack`.** A `hybrid`
 webapp is nginx → Apache → FPM and **honors `.htaccess`**, so Apache directives work with no root, no
 sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
