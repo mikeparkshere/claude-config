@@ -109,7 +109,9 @@ idle worker, so every burst starts cold. Note the failure tracks *concurrency*, 
 tight burst exhausts a 5-worker pool while many times that number spread over hours does nothing, so a
 volume-vs-errors correlation will look like noise and can wrongly exonerate the pool.
 Confirm with FPM's own `server reached pm.max_children setting` log line (root-only). Changing the
-values *afterwards* is panel-only — webapp → Settings; the form mirrors these field names one-to-one.
+values *afterwards*: `PATCH /servers/{id}/webapps/{w}/settings/fpmnginx` is the documented writable editor
+(verified for `openBasedir`, MMHN 2026-07-21; **untested** for the `processManager*` fields), so for those the
+panel stays the safe route — webapp → Settings; the form mirrors these field names one-to-one.
 ✅ **But set them at creation through the API** (verified 2026-10-01, MMHN): `POST /servers/{id}/webapps/custom`
 accepts the same `processManager*` / `memoryLimit` / `maxExecutionTime` / `timezone` fields and applies them, so
 a new webapp never has to ship on the 5-worker default. Read back `/settings` to confirm.

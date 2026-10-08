@@ -297,6 +297,35 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 }, 10, 2 );
 ```
 
+**Options-page-fed variant** (builder-verified — MMHN, 2026-07-21). Bricks' ACF loop (`objectType: acf_<field>`) resolves against the current post, so a Relationship or Taxonomy field on an ACF **options page** never loops. Read the option in a custom type instead:
+
+```php
+add_filter( 'bricks/query/run', function( $results, $query ) {
+    if ( $query->object_type !== '<prefix>_featured_products' ) return $results;
+    $ids = array_map( fn( $p ) => is_object( $p ) ? $p->ID : (int) $p, (array) get_field( 'featured_products', 'option' ) );
+    if ( ! $ids ) return [];   // or a fallback order (menu_order / newest)
+    return get_posts( [ 'post_type' => 'product', 'post__in' => $ids, 'orderby' => 'post__in', 'numberposts' => -1 ] );
+}, 10, 2 );
+```
+
+- Return **`WP_Post`** objects so post-context tags resolve per item. `orderby => post__in` keeps the client's drag-order, which is the point of a curated field.
+- **Terms** (Taxonomy field, `field_type => 'multi_select'`, `save_terms => 0`, `load_terms => 0` — mandatory on an options page): there is no `post__in` for `get_terms()`, so loop the stored IDs and `get_term()` each in order, returning **`WP_Term[]`**. Consumed by a `hasLoop` block (e.g. `tag: li`). Don't assume native term tags resolve in that loop; register project tags that read `\Bricks\Query::get_loop_object()` directly.
+
+**Loop-context resolver — use in every custom dynamic tag that can run in a custom query loop** (MMHN, 2026-07-20, builder-verified 2026-07-21). Bricks parses an element's `text` inside loop context but `_cssClasses` (and other root attributes) in page context, so on a *custom* query type a tag in `_cssClasses` answers about the page, silently (lost Woo `ajax_add_to_cart` classes). Ask Bricks for the loop object first:
+
+```php
+function <prefix>_current_loop_id( $post = null ) {
+    if ( class_exists( '\Bricks\Query' ) ) {
+        $obj = \Bricks\Query::get_loop_object();
+        if ( $obj instanceof WP_Post ) { return (int) $obj->ID; }
+    }
+    if ( is_object( $post ) && isset( $post->ID ) ) { return (int) $post->ID; }
+    return (int) get_the_ID();
+}
+```
+
+Term loops need their own resolver (`instanceof WP_Term`). The same split makes `{woo_product_price}` render empty inside an ACF relationship loop (it reads the global `$product`); a project price tag through this resolver fixes it. Full entry in `03`.
+
 ## Image with dynamic src
 
 ```json
@@ -320,6 +349,22 @@ add_filter( 'bricks/query/run', function( $results, $query ) {
 ```
 
 Static images default to lazy **even as the LCP hero** — set `loading: 'eager'` on the above-the-fold image.
+
+**Image fed from an options page — `bricks/element/settings`, keyed on element id** (builder-verified — MMHN, 2026-07-21). `{acf_*}` tags can't reach an options page, and a custom tag in `image.useDynamicData` fails (a string lands raw in `src`; an array fatals in the dynamic-data parser). Inject the static-image shape at render instead:
+
+```php
+add_filter( 'bricks/element/settings', function ( $settings, $element ) {
+    if ( ! isset( $element->id ) || '<element-id>' !== $element->id ) { return $settings; }
+    $img = (int) get_field( 'hero_image', 'option' );   // ACF image field, return format = ID
+    if ( $img ) {
+        $settings['image']   = [ 'id' => $img, 'url' => wp_get_attachment_image_url( $img, 'full' ), 'size' => 'full' ];
+        $settings['altText'] = get_post_meta( $img, '_wp_attachment_image_alt', true );
+    }
+    return $settings;
+}, 10, 2 );
+```
+
+Full `srcset`, the attachment's own alt, field stays client-editable. Works for any element setting (e.g. `loading: 'lazy'` on an image hidden in a mega-menu panel). Element ids are per install: resolve them at build time, and note a builder re-insert changes the id.
 
 ## Link (on container with tag=a, or on a button)
 
@@ -804,6 +849,27 @@ Element type is `xproslider`. Each slide block (typically `block` with `tag: "li
 
 Renders `<div class="x-slider-control" data-x-slider-control='{…"type":"navArrow"}'><button class="x-slider-control_nav x-slider-control_nav--prev" type="button" disabled aria-label="…">`. The button ships `disabled` and BE's JS enables it — curl shows it disabled. Style through a global class on the root: the `navbutton*` controls are element-level BE CSS and hit the CLI-regen gap (`03`).
 
+## BricksExtras Pro Accordion — child tree (verified — MMHN, 2026-07-21 build; builder-save readback clean 2026-09-06)
+
+Element type `xproaccordion`; opt-in `bricksextras_pro_accordion`. The child tree is replicated from the plugin's own `get_nestable_item()` (`components/classes/x-pro-accordion.php`), i.e. exactly what the builder inserts:
+
+```
+xproaccordion                  faqSchema OFF (default — leave it unset)
+└ block                        _hidden._cssClasses = x-accordion_item      ← put the query loop here to repeat items
+   ├ block tag=h4              _hidden = x-accordion_heading-wrapper
+   │  └ block                  _hidden = x-accordion_header   (+ _alignItems/_direction/_justifyContent/_flexWrap,
+   │     │                                                     _attributes role=button, tabindex=0)
+   │     ├ text-basic tag=span _hidden = x-accordion_title
+   │     └ icon                _hidden = x-accordion_icon
+   └ block                     _hidden = x-accordion_content
+      └ div                    _hidden = x-accordion_content-inner
+```
+
+- The identity classes go in **`_hidden._cssClasses`**, never `_cssGlobalClasses`: BE's JS finds its parts by those names and breaks silently without them. Your styling classes ride alongside in `_cssGlobalClasses`.
+- **`faqSchema` stamps `itemscope itemtype=FAQPage` on `<body>`** (site-scoped, via `bricks/body/attributes`). Where a plugin owns JSON-LD, leaving it off is the only way to emit exactly one FAQPage (`03`).
+- BE's visual defaults are `:where()` (zero specificity), so one class overrides them. State rules like `.x-accordion_header[aria-expanded=true] .brxe-icon` sit at (0,2,1); beat those with a doubled class.
+- The same `get_nestable_item()` read works for any BE nestable element: it is builder-authoritative by construction.
+
 ## Bricks native Form element — auth action settings (verified — Highland, 2026-08-04, Bricks 2.3.10)
 
 Read back from working login / lost-password / reset-password forms. The action set lives in **`actions` (plural array)** — not `action`. Field bindings are by **field id**, not name:
@@ -884,6 +950,36 @@ Sibling builder-saved readback on Bricks 2.3.8, keys re-checked against the 2.4.
 ```
 
 ⚠️ Bricks ships `li { margin-left: 30px }` and `.sub-menu { line-height: 60px }` on the nav-menu, and `menuGap` replaces neither. Set `menuMargin` left 0 and an explicit `line-height` in `subMenuTypography` (`03`). `_alignSelf` (align-items type) places a child in a flex-column block.
+
+**Mega menu on the native `nav-menu`** (builder-verified — MMHN, 2026-10-02, Bricks 2.4.2; CLI-written, survived a builder save of both the header and the panel template). Keeps the primary nav on a WP menu, no `nav-nested` restructure:
+
+```php
+// Panel: a bricks_template with _bricks_template_type = 'section' (tree in _bricks_page_content_2).
+// Attach it to a WP menu ITEM (nav_menu_item post meta, string):
+update_post_meta( $menu_item_id, '_bricks_mega_menu_template_id', (string) $template_id );
+// nav-menu element:
+'menu' => '<menu term_id as string>', 'megaMenu' => true,
+'megaMenuSelector' => '#brx-header',   // panel takes this node's width + left position
+'megaMenuToggleOn' => 'both',          // 'click' | 'hover' | 'both' (unset = hover)
+```
+
+Renders `li.brx-has-megamenu[data-toggle][data-mega-menu] > .brx-megamenu`; the caret is a real `<button aria-expanded>` and Escape closes. Any host element with mega enabled renders the item's template, so the mobile menu can share it (Slide Menu below).
+
+## BricksExtras Slide Menu (verified — MMHN, 2026-10-02, BE 1.7.4 `x-slide-menu.php` controls + builder save)
+
+Opt-in: `update_option( 'bricksextras_slide_menu', '1' )`.
+
+```php
+[ 'name' => 'xslidemenu', 'settings' => [
+    'menuSource' => 'dropdown', 'menu' => '<menu term_id as string>',
+    'megaMenu'   => true,                         // renders the menu item's mega template (nav-menu block above)
+    'subMenuAriaLabel' => 'Show sub menu',   // from plugin source, not yet seen in a builder save
+    'icon' => [ 'library' => 'custom_<setId>', 'svg' => [ 'id' => <attachment>, 'icon_id' => '<icon row id>', 'url' => '<url>' ] ],   // dropdown toggle; Icon settings shape
+] ],
+// Element-level style keys, on the slide menu's global class: 'menuTypography', 'menuPadding', 'subMenuTypography'
+```
+
+With `megaMenu` on, the item renders its template inside `.brxe-xslidemenu_mega-menu.sub-menu`, toggled by `button.x-slide-menu_dropdown-icon` inside the item's `<a>`, and that item's WP child items are dropped. Inside an offcanvas panel that is a flex row, set the panel's inner wrapper to `nowrap`, or the opened panel wraps the menu into an off-screen second column.
 
 ## BricksExtras Pro OffCanvas + Burger Trigger (verified — Highland, 2026-07-02, BE 1.6.9; BE 1.7.4 changes below)
 
