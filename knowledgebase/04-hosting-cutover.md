@@ -54,6 +54,7 @@ wp runcloud-hub purgeall
 curl -sI $O https://<domain>/ | grep -i x-runcloud-cache   # expect MISS
 ```
 **First seen:** JBM, 2026-09-03 — verifying a Hub purge produced two confident opposite wrong conclusions in one afternoon ("`purgeall` is broken", then "Hub isn't caching at all"), both from reading the right header through the wrong instrument.
+**Addendum (MMHN, 10/08/2026): `.zip` is nginx-served too, which matters for backup plugins.** In a scratch dir with `Require all denied`, a probe `.log` → **403** but `x_archive.zip` → **200**. So `.htaccess` cannot protect backup archives on a hybrid webapp. Duplicator 5's `wp-content/duplicator-backups/` (archives + build logs that name them) served 200 until a panel NGINX rule (`location.main-before`, its own entry, no comments): `location ^~ /wp-content/duplicator-backups/ { return 404; }`. `^~` stops nginx from evaluating the regex static-file locations. Verify with fresh probe files (`.zip`, `.daf`, `logs/*.log`) from outside, then delete them.
 
 *(Open: the mode behaviour is verified but unexplained. On JBM both `httpd` and `nginx-rc` run workers as `runcloud`, the file owner, so the "Nginx doesn't run as the owner" explanation does not hold. Recorded as observation, not mechanism.)*
 **Fix:** Perms first, then a deny as the net that catches the next file:
@@ -239,6 +240,7 @@ Write-only routes confirmed this way: `PATCH /webapps/{id}/settings/php` (PHP ve
 **Symptom / When:** A site with subscription renewals relies on visitor traffic to fire `wp-cron.php`. On a low-traffic site, scheduled payments fire late or not at all — and nothing alerts you.
 **Fix:** A RunCloud cron job (`*/5 * * * *`, `php<ver>rc wp-cron.php`) plus `DISABLE_WP_CRON = true` in `wp-config.php`. **Reset the FPM opcache after the wp-config edit** so running workers pick it up. Verify: the due-event backlog drains to 0 and the expected scheduled action row still exists.
 **First seen:** VMG, 2026-07-14 — renewal billing on a live subscription had no guaranteed heartbeat.
+**Addendum (MMHN, 10/08/2026): a full-page cache makes this every WooCommerce site's problem, not just billing.** With RunCache (or any page cache) serving anonymous views without PHP, almost nothing triggers WP-Cron overnight. That starves Woo's Action Scheduler, scheduled emails and **Duplicator schedules** (its runner also starts from a PHP request). Same fix, on every cached Woo site. Body for `POST /servers/{id}/cronjobs`: `label, username, command, minute, hour, dayOfMonth, month, dayOfWeek` (see the split-fields entry); log stderr to `~/cron-logs/<app>.log`. **Clean proof:** set `DISABLE_WP_CRON` first, so visits can't confound it, then watch a recurring hook's next timestamp (e.g. `action_scheduler_run_queue`) advance across the job's run.
 
 ## Cloudflare
 
@@ -647,6 +649,19 @@ Matching images skip the count and are lazy-loaded normally.
 - **Inject values without echoing them to the transcript** — `read -rs` into a `sed` replace.
 - Token scopes are deliberately narrow, so a call can fail on permissions while the token still verifies as active. Check the scope before concluding the API is broken. A second cause of the same symptom on Cloudflare: a token whose start date is in the future — see "A Cloudflare API token with a future start date…" under Cloudflare.
 **First seen:** 2026-06-07.
+
+### Duplicator Pro 5.0: schedules stop silently until someone opens wp-admin; settings moved to `DynamicGlobalEntity`
+**Symptom / When:** After a 4.x → 5.0.x update (auto-update, WP-CLI, or a bulk update nobody follows into wp-admin), `wp plugin list` shows "version higher than expected" and **scheduled backups stop**, with no error and no email.
+**Why:** The 4→5 data migration runs only from `Bootstrap::pluginsLoaded()`, which returns on `!is_admin()`. Until an admin request runs it, `dupli_opt_version` keeps the old value and `initialChecks()` won't start the backup runner (it bails while stored ≠ installed version). The migration also renames `wp-content/backups-dup-pro` → `wp-content/duplicator-backups`; on a hybrid webapp that folder is downloadable (see the static-files entry addendum).
+**Fix:** After every Duplicator update, load one wp-admin page per site, then check `wp option get dupli_opt_version` equals `wp plugin get duplicator-pro --field=version` (append `|PRO`). Fleet sweep = that comparison per webapp. **Configuring by code:** engine/SSL/dump settings now live in `DynamicGlobalEntity`, and the same-named props on `GlobalEntity` are stale (set with `$save=false` + `GlobalEntity::save()` → silently nothing). Use the setters with default `$save=true`, read back via getters (`getBuildMode()`, `isMysqldumpEnabled()`, `isSslVerifyEnabled()`). Schedules: `new ScheduleEntity()`, set the public props, `setStartDateTime('HH:MM')` (site-local), `setActive(true)`, invoke the protected `updateCronSchedule()`, `save()`; `insertNewPackage(true)` = Run Now. `wp duplicator build` is local-only, so it can't test a remote storage. Retention is **per storage**: weekly vs monthly with different keep counts need separate storages (separate folders), or the dailies push out the monthlies. Remote-only schedules delete the local copy after upload. On MariaDB 11 point the dump path at `mariadb-dump`.
+**Defaults worth changing:** the stock template includes "other" root files, so tooling, caches and big static assets in the web root all ship in every archive (MMHN: 5.8 GB → 490 MB after exclusions). SSL verification for remote uploads shipped **disabled**.
+**First seen:** MMHN, 10/08/2026 (reference script `app-mmhn/scratchpad/duplicator-config.php`).
+
+### Maintenance page: Bricks maintenance mode does not cover WordPress's own update window
+**Symptom / When:** A branded Bricks maintenance template exists "for plugin updates," but mid-update visitors still get *"Briefly unavailable for scheduled maintenance."*
+**Why:** Core writes `ABSPATH/.maintenance` while updating and `wp_maintenance()` dies before the theme loads, showing `WP_CONTENT_DIR/maintenance.php` if present. Bricks maintenance mode (`maintenanceMode` + `maintenanceTemplate`) only covers a window you open manually; its picker lists `content` templates only, so the template must carry no conditions.
+**Fix:** Build both from one design: the Bricks template for planned windows, plus a self-contained `maintenance.php` drop-in (no WP functions; send `503` + `Retry-After` + `no-store` yourself; `if (!defined('ABSPATH'))` → 404 so a direct hit can't render it). Keep the canonical copy in the core plugin and deploy by copy. With a page cache, purge after turning Bricks maintenance on **and** off.
+**First seen:** MMHN, 10/08/2026.
 
 ---
 

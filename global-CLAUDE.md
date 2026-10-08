@@ -142,6 +142,11 @@ pre-change copies and will show a 200 over a rule that is already working, while
 `DYNAMIC` and looks innocent. A security rule "verified" without a cache-buster can be recorded as fixed
 over a still-live exposure. A belief that `.htaccess` was inert here had already cost one project a PHP
 redirect layer it never needed.
+⚠️ **But only for requests that reach Apache.** nginx serves common static extensions itself and never
+reads `.htaccess` for them: `.html`, `.txt`, `.css`, `.js`, images and **`.zip`** (MMHN 2026-10-08: a
+`Require all denied` blocked a `.log` 403 while the `.zip` beside it stayed 200). So `.htaccess` cannot
+protect backup archives or static docs. Use file mode (`600`) or a panel NGINX rule
+(`location ^~ /path/ { return 404; }`). Full matrix: KB `04`, the hybrid static-files entry.
 
 ## Cron (server jbm001, all 11 webapps)
 WP-Cron disabled site-side (`DISABLE_WP_CRON=true` in every wp-config.php). Driven by the
