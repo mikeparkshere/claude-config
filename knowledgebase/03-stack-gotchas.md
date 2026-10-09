@@ -2147,7 +2147,7 @@ Worth auditing at ACSS configuration time on every project — the symptom is si
 **First seen:** TAB, 2026-06-25 — class-consolidation sweep; 17 column-stack classes re-pointed to `gap--{xs,m,l,xl}`.
 
 ### `_inner` is dead — the ACSS Container replaces it
-`[stack:acss]` Layout pattern is SECTION > CONTAINER (ACSS class) > BEM elements. Do not add `__inner` BEM elements; the ACSS Container handles max-width and centering. Padding is stripped from BEM containers; section spacing utilities handle it. (Full convention in `01`.)
+`[stack:acss]` Layout pattern is SECTION > CONTAINER (ACSS class) > BEM elements. Do not add `__inner` BEM elements; the ACSS Container handles max-width and centering. Padding is stripped from BEM containers; vertical section spacing goes on the Section's block class, and an override is a BEM modifier of that block, not an ACSS `section--*` utility (which loses to the block class). (Full convention in `01`, corrected 2026-10-09.)
 
 ### ACSS — "Remove Deactivated Classes" toggle is the master ACSS→Bricks sync switch (misnamed) `[stack:acss]`
 **Symptom / When:** Right-clicking a color field in the Bricks builder shows only the "Default" palette — no ACSS-named palettes — even though ACSS is configured and the variables render fine on the front end. `wp option get bricks_color_palette` returns `[]`.
