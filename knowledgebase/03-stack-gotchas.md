@@ -2081,6 +2081,7 @@ document.querySelectorAll(STAGGER_SELECTORS).forEach(function (el) {
 ```
 The CSS `nth-child` rules still drive per-child `transition-delay`, so the cascade is preserved. Alternatively, on AJAX-rendered lists, make each card a standalone `.anim-fade-up` rather than a stagger child.
 **First seen:** AHML, 2026-04-30 — Blog Archive post grid.
+**Folded into the toolkit 2026-10-09** (`assets/animations/animations.js`, hardening item 7). The 08-11 hardened build claimed the AJAX re-scan fixed this but still had the bug; a SLVPR harness reproduced it against that file before the fix. The shipped fix only catches up parents that have already fired (a parent not yet in view reveals its new children when it arrives). Projects that copied the toolkit before 2026-10-09 still carry the bug.
 
 ### Frontend Toolkit — never put `.anim-*` on a content wrapper taller than the viewport
 **Symptom / When:** On page load a long content block (single blog post body, area community section) renders at `opacity: 0` and only appears once the user scrolls a little. Small hero elements animate in normally.

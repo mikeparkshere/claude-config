@@ -21,7 +21,10 @@
    file when Perfmatters is switched on at launch.
    ========================================================================== */
 
-:root {
+/* Defaults at zero specificity (2026-10-09): this file loads after ACSS's inline
+   Global CSS, so plain `:root` here beat a project's `:root` override there on
+   source order. `:where(:root)` lets any override win, wherever it loads. */
+:where(:root) {
 	--anim-duration:     .6s;
 	--anim-delay:        0ms;
 	--anim-easing:       cubic-bezier(.25, .46, .45, .94);
@@ -69,6 +72,11 @@ html.js-anim .anim-blur-in     { transform: translateY(12px); filter: blur(8px);
    If you ever change the scoping on one block, change it on both.
    `will-change: auto` releases the compositor hint once the element has
    arrived — the original left it promoted for the life of the page.
+   End states are `none`, not identity values (2026-10-09). `translateY(0)`,
+   `scale(1)` and `blur(0)` look the same but still make the element a stacking
+   context and the containing block for absolute and fixed descendants, which
+   clips a stretched clickable-parent link and traps a popover. `none` releases
+   both, and the transition from a translate or scale to `none` animates the same.
    -------------------------------------------------------------------------- */
 html.js-anim :is(
 	.anim-fade-up,
@@ -77,20 +85,20 @@ html.js-anim :is(
 	.anim-slide-right
 ).anim-visible {
 	opacity: 1;
-	transform: translateY(0) translateX(0);
+	transform: none;
 }
 
 html.js-anim .anim-fade-in.anim-visible { opacity: 1; }
 
 html.js-anim :is(.anim-scale-in, .anim-scale-up).anim-visible {
 	opacity: 1;
-	transform: scale(1);
+	transform: none;
 }
 
 html.js-anim .anim-blur-in.anim-visible {
 	opacity: 1;
-	transform: translateY(0);
-	filter: blur(0);
+	transform: none;
+	filter: none;
 }
 
 html.js-anim .anim-visible { will-change: auto; }

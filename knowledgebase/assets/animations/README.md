@@ -27,7 +27,7 @@
 
 **Body config:** `data-anim-threshold` (default `0.1`, **`0` is honoured**) · `data-anim-margin` (default `-40px`) · `data-anim-once` (`false` to re-trigger) · `data-anim-observe-dom` (`false` to disable the AJAX re-scan)
 
-**Tokens** — retune motion from `:root` rather than editing rules:
+**Tokens** — retune motion from `:root` in ACSS Global CSS (the token home, `01`) rather than editing rules. The file's own defaults are zero-specificity, so the override wins wherever it loads:
 
 ```css
 :root {
@@ -55,6 +55,16 @@
 **5. `will-change` released on reveal.** It was permanent on every reveal element; `.anim-visible { will-change: auto }` drops the compositor hint once the element has arrived.
 
 **6. Tokenised, and `!important` removed.** Modifiers set tokens instead of fighting the base rule, so all six `!important` declarations are gone. The delay modifiers use the doubled-class trick (`.anim-delay-1.anim-delay-1`, `(0,2,0)`) so an explicit delay still beats a stagger container's computed one — same outcome, without poisoning the property for later overrides. Stagger collapsed from 36 near-identical rules to 15 by putting the step in a token the container sets.
+
+**7. Injected stagger children reveal (2026-10-09).** Item 2 was incomplete. The re-scan skipped an already-observed stagger parent and also skipped every element inside a stagger parent, so cards that pagination or a filter added to a grid that had already revealed were watched by neither observer and stayed at `opacity: 0`. `03` had recorded this since AHML (2026-04-30), but it was never folded in here. The engine now remembers which stagger parents have fired and reveals new children on the next scan; the `nth-child` delays still stagger them.
+
+**8. The gate has a fallback (2026-10-09).** The gate only failed open when *no* JavaScript ran. When the inline gate ran but `animations.js` never arrived (a 404, a blocker, an optimiser's **Delay JavaScript**, which holds scripts until the visitor interacts, and crawlers never interact), everything below the fold stayed hidden. The gate now removes `js-anim` after 3 seconds unless the engine has arrived. The engine sets `window.mpdAnim` the moment it is evaluated, so a slow page keeps its animations, and it stands down if the fallback already fired.
+
+**9. End states are `none` (2026-10-09).** Revealed elements ended at `translateY(0)`, `scale(1)` and `blur(0)`. Those look the same as no transform, but each still makes the element a stacking context and the containing block for absolutely and fixed-positioned descendants. That clips a stretched clickable-parent link to the animated wrapper and traps any popover inside. They now end at `transform: none` / `filter: none`.
+
+**10. Token defaults yield to the project (2026-10-09).** The defaults sat on `:root`, and the file is enqueued after ACSS's inline Global CSS. So a project's `--anim-*` override in Global CSS, the one token home (`01`), lost on source order at equal specificity, silently. The defaults are now declared on `:where(:root)`, specificity 0.
+
+Fixes 7–10 were tested on a Local harness against the previous file as a control, with a stub IntersectionObserver (an automation tab in a hidden window never gets IO callbacks; `03`).
 
 ---
 
@@ -84,13 +94,14 @@ add_action( 'wp_enqueue_scripts', function() {
     }
 } );
 
-// The gate. Inline and in <head> — animations.js is deferred and would arrive
-// after first paint, producing exactly the flash the gate prevents.
+// The gate. Inline and in <head> — animations.js loads in the footer and would
+// arrive after first paint, producing exactly the flash the gate prevents.
+// The timer lifts the gate if the engine hasn't arrived in 3s (hardening item 8).
 add_action( 'wp_head', function () {
     if ( bricks_is_builder_main() || bricks_is_builder() || isset( $_GET['bricks'] ) ) {
         return;
     }
-    echo "<script>document.documentElement.classList.add('js-anim');</script>\n";
+    echo "<script>(function(d){d.classList.add('js-anim');setTimeout(function(){if(!window.mpdAnim){d.classList.remove('js-anim');}},3000);})(document.documentElement);</script>\n";
 }, 1 );
 ```
 
@@ -123,10 +134,12 @@ Site-wide does **not** mean motion on everything. Subtle and consistent reads ex
 ## Stack interactions
 
 - **Remove-Unused-CSS (Perfmatters and friends).** The `.anim-*` rules are applied by JS, so RUCSS treats them as unused and strips them — leaving every animated element permanently hidden. **Exclude `animations.css`.** Put it on the go-live checklist the moment RUCSS is switched on.
+- **Delay JavaScript (Perfmatters and friends).** Delaying `animations.js` until interaction hides everything below the fold for 3 seconds on every visit, until the fallback lifts the gate, and it never animates. **Exclude `animations.js`** (and leave the inline gate alone). Same checklist line as RUCSS.
+- **Own transitions.** The hidden rule sets `transition-property: opacity, transform, filter` at `(0,2,1)`, which replaces any transition the element already has: a card's `border-color` hover goes instant for good. Put the reveal on an inner wrapper, or on the card's parent with `anim-stagger`, rather than on an element that has its own transition.
 - **Reduced motion** — handled in both CSS and JS; motion-sensitive users get instant, static content. Aligns with a WCAG 2.1 AA target.
 - **CWV** — negligible, and off the LCP path provided nothing above the fold is animated.
 - **Tall wrappers** — an element taller than ~10× the viewport can never cross the default 0.1 threshold. Animate the small pieces, not the container that grows with content. `data-anim-threshold="0"` is the escape hatch and now actually works.
 
 ---
 
-*Hardened 2026-08-11 on the WCDP build, from the 2026-06-28 review of the WPCodeBox-migrated original. Verified against Bricks 2.3.10 / ACSS 3.3.6 / WordPress 7.0.*
+*Hardened 2026-08-11 on the WCDP build, from the 2026-06-28 review of the WPCodeBox-migrated original. Verified against Bricks 2.3.10 / ACSS 3.3.6 / WordPress 7.0. Items 7–9 added 2026-10-09 on SLVPR (Bricks 2.4.2).*

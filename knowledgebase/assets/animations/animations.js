@@ -13,10 +13,16 @@
  *     itself out of sequence when it enters the viewport before its container
  *   - exposes window.mpdAnim.refresh() for anything that swaps DOM without
  *     a detectable mutation
+ *   - (2026-10-09) children injected into a stagger parent that has already
+ *     revealed are revealed too; before, the re-scan skipped both the parent
+ *     (already observed) and its children (owned by the parent) — 03, AHML
+ *   - (2026-10-09) sets window.mpdAnim on arrival, so the head gate's fallback
+ *     timer can tell a missing engine from a slow one, and stands down if the
+ *     fallback already lifted the gate
  *
  * The `js-anim` gate that makes the hidden state fail-safe is set inline in
- * <head> (see functions.php), not here — this file is deferred and would
- * arrive after first paint.
+ * <head> (see README → Integration), not here — this file loads in the footer
+ * and would arrive after first paint.
  */
 (function () {
 	'use strict';
@@ -45,7 +51,13 @@
 		'.anim-stagger-wide',
 	].join(',');
 
+	// The inline <head> gate removes `js-anim` if this file hasn't arrived within
+	// its timeout (see README). Marking arrival at evaluation time, not at
+	// DOMContentLoaded, keeps a slow-but-arriving page from losing the gate.
+	window.mpdAnim = window.mpdAnim || { refresh: function () {} };
+
 	var observed = new WeakSet();
+	var fired    = new WeakSet();   // stagger parents currently revealed
 	var elementObserver;
 	var staggerObserver;
 	var config;
@@ -76,7 +88,13 @@
 		}
 
 		document.querySelectorAll( STAGGER_SELECTORS ).forEach( function ( el ) {
-			if ( observed.has( el ) ) { return; }
+			if ( observed.has( el ) ) {
+				// Children injected (pagination, filters, load-more) into a parent
+				// that has already revealed would otherwise be watched by neither
+				// observer and stay hidden. The nth-child delays still apply.
+				if ( fired.has( el ) ) { el.querySelectorAll( ANIM_SELECTORS ).forEach( reveal ); }
+				return;
+			}
 			observed.add( el );
 			staggerObserver.observe( el );
 		} );
@@ -93,6 +111,11 @@
 
 	function init() {
 		var body = document.body;
+
+		// Gate already lifted by the head fallback: nothing is hidden, so there is
+		// nothing to reveal. Re-adding the class here would hide on-screen content
+		// and flash it back in.
+		if ( ! document.documentElement.classList.contains( 'js-anim' ) ) { return; }
 
 		reduced = window.matchMedia( '(prefers-reduced-motion: reduce)' ).matches;
 
@@ -124,9 +147,11 @@
 					var children = entry.target.querySelectorAll( ANIM_SELECTORS );
 					if ( entry.isIntersecting ) {
 						children.forEach( reveal );
+						fired.add( entry.target );
 						if ( config.once ) { staggerObserver.unobserve( entry.target ); }
 					} else if ( ! config.once ) {
 						children.forEach( function ( c ) { c.classList.remove( 'anim-visible' ); } );
+						fired.delete( entry.target );
 					}
 				} );
 			}, opts );
@@ -153,7 +178,7 @@
 			} ).observe( document.body, { childList: true, subtree: true } );
 		}
 
-		window.mpdAnim = { refresh: scan };
+		window.mpdAnim.refresh = scan;
 	}
 
 	if ( document.readyState === 'loading' ) {
