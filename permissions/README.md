@@ -31,8 +31,8 @@ workspace trust dialog. Only `allow` rules and `additionalDirectories` require t
 | `DEV` | *(none)* | Inherits auto. Sprints. `set-phase.sh` removes any stale file. |
 | `STAGING` | `staging.settings.json` | Auto mode, `ask` on twelve destructive WP-CLI forms. |
 | `STAGING+TXN` | `staging-txn.settings.json` | As STAGING, plus `deny` on Woo, Action Scheduler and manual cron runs. A staging site pointed at a live gateway can email real customers and fire real webhooks; the scheduler is the thing that does it. |
-| `LIVE` | `live.settings.json` | Starts in **plan mode**. Broad `ask`, `deny` on the three irreversible DB commands. |
-| `LIVE+TXN` | `live-txn.settings.json` | As LIVE, plus `deny` on options, users, posts, Woo and Action Scheduler. |
+| `LIVE` | `live.settings.json` | Starts in **plan mode**. `ask` on write verbs, `deny` on the three irreversible DB commands. The same rules again for `wp-remote`, plus remote post/option/config gates and `ask` on `ssh`, `scp`, `sftp` and `rsync`. |
+| `LIVE+TXN` | `live-txn.settings.json` | As LIVE, plus `deny` on options, users, posts, Woo and Action Scheduler, local and `wp-remote` alike. Remote `option patch` and `option add` are denied too, not asked. |
 
 Unmarked project → LIVE. Fail closed.
 
@@ -44,6 +44,27 @@ Unmarked project → LIVE. Fail closed.
 - **No `curl` argument rules.** Bash patterns that try to constrain arguments are fragile: options
   before the URL, protocol swaps, redirects and variables all slip past. Panel-API restrictions
   belong in `autoMode.soft_deny` prose, where the classifier reads intent rather than string shape.
+- **LIVE gates write verbs, not whole command groups.** `plugin`, `theme`, `core`, `user`, `site` and
+  `rewrite` are enumerated by verb (`plugin install|update|activate|…`, `core update|update-db|…`), so
+  `list`, `get`, `version`, `status` and `verify-checksums` run without a prompt, locally and remotely.
+  Same click-through reasoning as `db export`. Exceptions that still prompt on reads: `db query` and
+  `eval`/`eval-file`, which can't be told apart from writes by pattern, and `wp config *`, whose
+  `get`/`list` print DB credentials. LIVE+TXN keeps `user` as a blanket `deny` (local and remote);
+  it isn't narrowed.
+- **`wp config *` is in `ask` because `Edit(**/wp-config.php)` can't see it.** `wp config set` rewrites
+  the file from a Bash call, which the Edit rule never matches.
+- **LIVE gates the remote path too.** A Mac session reaches production through `wp-remote <alias> …`
+  and `ssh <host> …`, and none of the `Bash(wp …)` rules match either one: before this, a LIVE
+  project's gate covered only its Local clone, and the live box was guarded by plan mode alone.
+  `wp-remote` mirrors the local `ask`/`deny` lists as `Bash(wp-remote * <subcommand> *)` (the alias
+  is the wildcard), and adds remote-only gates on `post meta update|delete|patch`, `post update`,
+  `post create`, `option patch` and `option add` — content writes that the local list leaves alone so
+  on-box Bricks builds (which live on `post meta update`) aren't slowed. Plus `eval`, `eval-file` and
+  `--shell`, which run arbitrary code.
+  `ssh`, `scp`, `sftp` and `rsync` get a **blanket** `ask`: a raw shell command can't be classified by
+  pattern (see the `curl` note), and `rsync` looks the same pushing as it does pulling. That's
+  noisier during planning; it's the price of a box with no other brake. Found 2026-10-10, when a
+  LIVE session moved files out of a production docroot over `ssh` with no prompt.
 - **LIVE uses plan mode rather than a slow mode.** One gate per task, not one per action. The plan
   approval prompt offers "Yes, and use auto mode", so the work runs at full speed once agreed.
 - **STAGING's brake is light on purpose.** By the phase definition it covers most of a project's
