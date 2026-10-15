@@ -23,6 +23,41 @@ The reason for the plugin/theme split: field groups and functionality defined in
 
 ---
 
+## Security baseline — user enumeration
+
+Every WordPress install ships four unauthenticated ways to hand over the admin's identity. Core does this by default; no plugin or misconfiguration is required. Close all four at build time.
+
+| Vector | Default behavior | What it discloses |
+|---|---|---|
+| `/wp-json/wp/v2/users` | 200 | Display name, login slug, `is_super_admin` |
+| `/wp-json/wp/v2/users/<id>` | 200 | Same, per user |
+| `?author=<id>` | 301 → `/author/<slug>/` | Maps a user ID to the login slug |
+| oEmbed response | 200 | `author_name` and `author_url` |
+
+**The standard:** every site gets the `mp-user-enumeration-hardening` plugin. A regular plugin, not an mu-plugin — it is reused across sites, so it needs a version number, a visible entry in the plugin list, and a normal deploy path. Every hook it uses (`rest_endpoints`, `parse_request`, `oembed_response_data`, `login_errors`) fires well after plugin load, so mu-plugins' only real advantage does not apply. An invisible mu-plugin across a nine-site fleet is a maintenance trap: the next person debugging a 401 on `/wp/v2/users` has no reason to look in the Must-Use tab.
+
+**Gate anonymous callers only.** Preserve core's original `permission_callback` and delegate to it for logged-in users, rather than unsetting the routes. That keeps Gutenberg author pickers, WooCommerce Analytics, and key-authenticated `wc/v3` calls working — they all carry a user context. Blanket-removing the routes breaks them.
+
+**Block `?author=` on `parse_request`, not `template_redirect`.** `redirect_canonical` runs at `template_redirect` priority 10 and will have already issued the 301 that leaks the slug. `parse_request` is upstream of it.
+
+Per-site opt-outs, as `wp-config.php` constants rather than an options page, so rollout stays declarative:
+
+```php
+define( 'MP_UEH_BLOCK_AUTHOR_ARCHIVES', false );  // site has real author bylines
+define( 'MP_UEH_GENERIC_LOGIN_ERRORS', false );   // client objects to the wording
+```
+
+**Check before deploying** — the only two real breakage risks:
+
+1. **Author archives.** Blocking them 404s `/author/<slug>/`. Fine on a site with no blog; on a site with indexed author archives it 404s live URLs. Check post count and RankMath indexing, then set the constant.
+2. **Decoupled front-ends** reading `/wp/v2/users` anonymously. Uncommon, but it is the one integration pattern this breaks by design.
+
+The stakes scale with what is behind the login, not with whether the leak exists — it is identical on every install. A site with WooCommerce, customer PII, and card gateways in PCI scope is handing an attacker a confirmed super-admin username to spray against.
+
+**First applied:** PAWS (pawsforwcds.org), 2026-10-15 — found during a PCI remediation. Live Tier 2 site, not a new build, so note the scope seam in `00`: this standard is fleet-wide, while the knowledgebase is otherwise scoped to new builds. Treat it as a backfill item for existing sites, not just a kickoff step.
+
+---
+
 ## Styling layers — the priority order
 
 This is the most-violated rule in the build, named as a core principle in `00` and stated here in full. Before writing any CSS for anything, check whether Bricks exposes a typed control for it. If it does, use the control.
