@@ -782,3 +782,87 @@ Matching images skip the count and are lazy-loaded normally.
 # === PROJECT SECTION — "we learned" ===
 
 *Empty at kickoff. New hosting/cutover/performance gotchas discovered during this project append below, in the entry format above. At go-live these are reviewed and the validated ones fold into the established section of the master.*
+
+*⚠️ The seven entries below were written into the **master's** project section, not a project copy — PAWS is a live Tier 2 site with no project knowledgebase copy to append to. They are unharvested and unreviewed; treat them as staged for Michael's review, same bar as any project-section entry.*
+
+### Cloudflare's default Minimum TLS 1.0 fails a PCI scan while every browser works — and the origin is usually already compliant
+**Symptom / When:** A client's bank or card processor reports an ASV scan "Fail" for "TLS Version 1.0 Protocol Detection" and "TLS Version 1.1 Deprecated Protocol" on port 443, and tells them the *hosting provider* must reconfigure the web server. The site works in every browser, and the host will correctly reply that the server is already TLS 1.2+.
+**Why:** On a Cloudflare-proxied domain the scanner reaches the **edge**, not the origin. Cloudflare's `min_tls_version` defaults to **`1.0`** and is a per-zone setting, so the edge completes TLS 1.0 and 1.1 handshakes regardless of what the origin allows. The origin's own TLS policy is never tested.
+**Fix:** One zone setting — dashboard SSL/TLS → Edge Certificates → Minimum TLS Version → **TLS 1.2**, or:
+```bash
+curl -sS -X PATCH -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  --data '{"value":"1.2"}' \
+  "https://api.cloudflare.com/client/v4/zones/$Z/settings/min_tls_version"
+```
+Available on Free. Test **each leg separately** before accepting the finding — origin via `127.0.0.1` with an SNI and Host override, edge via the public name — or you remediate the wrong layer. Compatibility cost is negligible: TLS 1.0/1.1-only clients are Android ≤4.3, IE10 on XP/Vista, and old Java.
+**First seen:** PAWS, 2026-10-15 — the bank's letter named the server. The origin refused TLS 1.0/1.1 outright while the edge served HTTP 200 over both, and `min_tls_version` read `"1.0"`, the zone default, never set by anyone.
+
+### `openssl s_client` prints `Protocol: TLSv1` on a handshake that **failed** — read the cipher, not the protocol
+**Symptom / When:** Probing which TLS versions a host accepts, `openssl s_client -tls1` appears to succeed everywhere, including against hosts that genuinely refuse TLS 1.0. Grepping the output for `Protocol` or `New, TLS` returns a false positive on every target.
+**Why:** `s_client` prints the *attempted* protocol in its session summary even when no cipher was negotiated. A refused handshake still shows `Protocol : TLSv1`, alongside `Cipher : 0000` and `New, (NONE), Cipher is (NONE)`.
+**Fix:** Gate on the cipher, or push a real request through the session:
+```bash
+out=$(printf 'GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$H" \
+  | openssl s_client -connect "$H:443" -servername "$H" -tls1 -cipher 'ALL:@SECLEVEL=0' -quiet 2>&1)
+echo "$out" | grep -q '^HTTP/1' && echo ACCEPTED || echo refused
+```
+⚠️ **`curl --tlsv1.0` cannot test this.** A modern OpenSSL build refuses legacy TLS **client-side** (`error:0A0000BF: no protocols available`), so curl fails identically against a compliant host and a vulnerable one — a client limitation that reads as a server result. `s_client` with `-cipher 'ALL:@SECLEVEL=0'` is the tool; curl is not.
+**First seen:** PAWS, 2026-10-15 — the first pass reported the origin as accepting TLS 1.0/1.1 and nearly sent a compliant server to be "fixed." The `Cipher is (NONE)` line in the same output was the tell.
+
+### Cloudflare Flexible SSL is visible from the origin — `HTTPS=on` with `SERVER_PORT=80`
+**Symptom / When:** You need to know whether a proxied zone runs Flexible (plaintext to origin) or Full/Full-strict, without dashboard access. An Origin CA cert is installed and `https://127.0.0.1` answers 200, which looks like proof of Full. It is not.
+**Why:** On Flexible, Cloudflare fetches over **port 80** and the stack synthesizes `HTTPS` from the forwarded header. The combination is unambiguous: `HTTPS='on'` *and* `SERVER_PORT='80'` *and* `HTTP_X_FORWARDED_PROTO='https'` means the origin leg is plaintext. Under Full (strict) the same probe reports `SERVER_PORT='443'`. A listening 443 with a valid cert proves only that Cloudflare *could* use it.
+**Fix:** Drop a throwaway probe in the web root, request it **through** the edge, then delete it:
+```php
+<?php foreach (['HTTPS','SERVER_PORT','HTTP_X_FORWARDED_PROTO','HTTP_CF_VISITOR'] as $k)
+  printf("%-24s %s\n", $k, $_SERVER[$k] ?? '(unset)');
+```
+Switch with `PATCH /zones/{z}/settings/ssl` → `"strict"`, then re-run the probe and expect `SERVER_PORT 443`. Confirm the Origin CA cert's SANs cover the apex **and** `*.domain` first, or strict fails closed.
+**First seen:** PAWS, 2026-10-15 — reported as Full (strict) on the strength of the Origin CA cert being installed; the probe showed port 80 and the zone's `ssl` setting read `"flexible"`.
+
+### OpenLiteSpeed ignores `Header` in `.htaccess` — rewrite directives only
+**Symptom / When:** A security or caching header set from `.htaccess` (`Header set Strict-Transport-Security …`, wrapped in `<IfModule mod_headers.c>` or not) never appears in the response, while `RewriteRule` in the same file works.
+**Why:** OLS implements a **subset** of `.htaccess` — the rewrite engine. `mod_headers` is not part of it, and an `<IfModule mod_headers.c>` wrapper makes the block silently inert rather than erroring, so the file reads as correct.
+**Fix:** Canary it in one command rather than assuming either way:
+```bash
+printf '\n<IfModule mod_headers.c>\nHeader set X-Canary "1"\n</IfModule>\n' >> .htaccess
+curl -skI https://127.0.0.1/ -H "Host: $DOMAIN" | grep -i x-canary || echo "not honored"
+```
+Set the header at the edge (Cloudflare `security_header` for HSTS) or in PHP — the `wp_headers` filter, plus `admin_init` and `login_init`, which `wp_headers` does not cover. Prefer the edge on a proxied site: one source beats two.
+**Partially answers the open `UNVERIFIED` flag** in the `.htaccess` access-controls entry above — OLS's `.htaccess` support is rewrite-only in practice. `Require` was still not canary-tested here, so that flag stands for authorization specifically.
+**First seen:** PAWS, 2026-10-15 — HSTS was set in `.htaccess` first and verified absent, then moved to an mu-plugin, and finally to the Cloudflare edge setting once the zone was reachable.
+
+### A `RewriteRule ^ - [L]` pass-through in `.htaccess` 404s every pretty permalink
+**Symptom / When:** After adding a canonical-host or scheme-upgrade block above WordPress's own rules, the home page serves fine and **every** other URL 404s — posts, pages, `/wp-json/`. Identical direct to the origin, so it is not the CDN.
+**Why:** `[L]` on a no-op "already canonical, pass through" rule ends rewrite processing for that request, so WordPress's `RewriteRule . /index.php [L]` never runs. The front page survives because `DirectoryIndex` reaches `index.php` with no rewrite needed — which is exactly what makes it look like a permalink or database problem.
+**Fix:** Never use a pass-through `[L]`. Express the skip as negated conditions on the redirect itself and let the request fall through to the WordPress block:
+```apache
+RewriteCond %{REQUEST_URI} !^/\.well-known/
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+RewriteRule ^(.*)$ https://example.org/$1 [R=301,L]
+```
+Test a real inner permalink **and** `/wp-json/` after any `.htaccess` edit. The home page proves nothing.
+**First seen:** PAWS, 2026-10-15 — shipped to a live site and 404'd the whole site for a few minutes. Caught only because `/wp-json/` was checked alongside the home page.
+
+### OLS strips `www` at the vhost, before `.htaccess`, and preserves the request scheme
+**Symptom / When:** `http://www.domain/` takes two hops — `301 → http://domain/`, then `301 → https://domain/` — and no `.htaccess` rule can collapse it. The first `Location` keeps the plaintext scheme.
+**Why:** RunCloud's OLS vhost carries its own `www`→apex redirect that runs **upstream of `.htaccess`**, and it mirrors the incoming scheme (it honors `X-Forwarded-Proto`, so a forwarded `https` yields an `https` Location). Rules in `.htaccess` never see a `www` request at all. That vhost config is root-only and not exposed by the RunCloud API.
+**Fix:** Fix it at the edge. A Cloudflare **Single Redirect** in the `http_request_dynamic_redirect` phase evaluates ahead of Always Use HTTPS and collapses both hops into one:
+```
+expression:  starts_with(http.host, "www.")
+target:      concat("https://example.org", http.request.uri.path)   # 301, preserve query
+```
+`Always Use HTTPS` alone still leaves two hops — edge upgrade, then the origin's apex redirect. HSTS removes the plaintext hop for returning visitors either way.
+**First seen:** PAWS, 2026-10-15 — diagnosed as a Cloudflare rule first, because Cloudflare rewrites `Server:` and the origin's vhost 301 carries no `x-turbo-charged-by`. Direct-to-origin probes with a `www` Host header located it.
+
+### Confirm a Duplicator backup exists from the DB flags — the log and the UI both overstate it
+**Symptom / When:** Before removing a site you need to know a restorable backup exists. `wp-content/backups-dup-pro/` holds a log and no archive, and the log's own tail reads as a clean success.
+**Why:** Duplicator 5 records each run in **`wp_duplicator_backups`** (not `*_duplicator_pro_packages`), and the `flags` column is the truth: `HAVE_REMOTE` **without** `HAVE_LOCAL` means the archive went offsite and the local copy was purged. A run that failed before starting records `status 0`, `progress 0`, `created` and `updated_at` one second apart, **and writes no log file at all** — so the newest log on disk can belong to a much older successful run.
+**Fix:**
+```bash
+wp db query "SELECT id,status,ROUND(progress) pct,flags,created,archive_name \
+  FROM wp_duplicator_backups ORDER BY id DESC LIMIT 5"
+```
+`status 100` plus `HAVE_LOCAL` is the only combination restorable without third-party access. Treat remote-only archives as unverified unless you can list the bucket or folder — the server holds no credentials for it. Take an independent `wp db export` plus a webroot tarball before any destructive action, and verify both: `gzip -t`, archive file count against `find … | wc -l`, and the dump's `CREATE TABLE` count against `information_schema`.
+**First seen:** PAWS / app-state, 2026-10-15 — the newest log showed a clean 2026-09-09 transfer to Dropbox, the flags showed no local copy, and a 2026-10-09 scheduled run had failed at 0% with no log. The site was removed against a freshly taken, verified local snapshot instead.
