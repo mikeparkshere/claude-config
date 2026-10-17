@@ -804,7 +804,16 @@ WS Form data model the viewer relies on:
   inside `prefix_submissions_resolve_form()` — the selector and the requested-id validation then both honor it.
 - [ ] **Menus beyond WS Form.** The role also surfaces **Comments** and **Tools** ("Available Tools"); add
   `remove_menu_page( 'edit-comments.php' )` + `remove_menu_page( 'tools.php' )` to the same `admin_menu` hook
-  unless the client actually moderates comments.
+  unless the client actually moderates comments. ⚠️ **Hiding the menu doesn't close the screen** (Step 2's own
+  rule): with `edit_posts` the role can still open `edit-comments.php` and moderate or delete comments. Close both
+  in the Step 2 `admin_init` guard, before the post-type check:
+  ```php
+  if ( in_array( $pagenow, array( 'tools.php', 'edit-comments.php' ), true ) ) { wp_safe_redirect( admin_url() ); exit; }
+  ```
+  Verify as the role: both URLs 302 to `/wp-admin/`. *(Corrected 2026-10-17, SLVPR Site Manager build: both returned
+  200 with the menus hidden.)*
+- [ ] **Categories, if the client manages them.** `manage_categories` brings Bulk actions → Delete on the Categories
+  screen; add `'edit-category'` to the Step 2 bulk-actions screen list. Single-term edit and delete stay.
 - [ ] **Bricks check is free.** `wp eval 'wp_set_current_user(9); var_dump(Bricks\Capabilities::current_user_can_use_builder($page_id));'`
   → `false` proves the builder is out of reach even where the role can edit the post type.
 
