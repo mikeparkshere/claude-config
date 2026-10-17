@@ -13,6 +13,10 @@ This is the same stack shipped on KSCBS (`kscbs-functionality` core plugin). It'
 - A **read-only Form Submissions viewer** (list + single-submission detail) that reads WS Form data server-side and needs **no WS Form capability**.
 - **Self-healing** capability sync (version-stamped) so cap edits travel local → staging → production on the next load.
 
+**Then run the admin UX pass** (`admin-ux-playbook.md`): this playbook decides what the client can reach; that one
+decides what each screen looks like and says, caps revisions, locks the fields that are yours, and proves with a
+save test as the role that saving changes nothing it shouldn't.
+
 ---
 
 ## Stack assumptions
@@ -797,7 +801,7 @@ WS Form data model the viewer relies on:
 - [ ] Set `PREFIX_ROLES_VERSION` and bump it whenever you edit `$caps`.
 - [ ] Fill the bulk-actions screen list (Step 2) with every CPT list the role can see. If the site runs **SEOPress**, check a list screen as the role: its noindex/redirect bulk actions must be gone.
 - [ ] Add every post type whose menu you hide to the `admin_init` URL guard. `bricks_template` is always on it.
-- [ ] Verify with the Step 5 commands, then create the client account.
+- [ ] Verify with the Step 5 commands, then run the admin UX pass (`admin-ux-playbook.md`), then create the client account.
 - [ ] If wp-login.php is not redirected on this build, add login branding.
 - [ ] **Form allow-list.** Not every published form belongs in the client's viewer (newsletter signups, internal
   forms). Add `define( 'PREFIX_SUBMISSIONS_FORM_IDS', array( 1, 2 ) );` and filter the `get_all( true )` result
