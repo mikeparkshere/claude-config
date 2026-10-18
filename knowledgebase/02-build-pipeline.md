@@ -721,6 +721,19 @@ update_post_meta( $id, '_bricks_template_settings', [
 ] );
 // tree goes in _bricks_page_content_2 — error renders as a content-type template
 ```
+Re-verified on Bricks 2.4.3 (VMG, 2026-10-18): same meta, live 404 render, builder open-and-save round-trip left every key intact.
+
+**Maintenance template** (verified — VMG, 2026-10-18, Bricks 2.4.3; from `includes/maintenance.php` + `admin/admin-screen-settings.php`, builder round-trip clean). There is **no** `maintenance` type: the Settings dropdown lists `content` templates, and the template carries **no conditions** so it renders on no real page. Wiring and traps: `03` → "Bricks maintenance mode serves a plain unbranded page…".
+```php
+update_post_meta( $id, '_bricks_template_type', 'content' );
+update_post_meta( $id, '_bricks_editor_mode', 'bricks' );
+update_post_meta( $id, '_bricks_template_settings', [] );   // no templateConditions, on purpose
+// tree in _bricks_page_content_2 (wp_set_current_user(1) first)
+$gs = get_option( 'bricks_global_settings' ); $gs['maintenanceTemplate'] = (string) $id;   // inert until maintenanceMode is set
+update_option( 'bricks_global_settings', $gs );
+```
+Preview without enabling the mode at `/template/<slug>/` as a logged-in admin (logged out gets a 301). The preview always shows header/footer; live maintenance renders them only when `maintenanceRenderHeader` / `maintenanceRenderFooter` = `'1'`.
+
 Same map: `is_search()` → type `'search'` with condition `main: 'search'`; archives → `'archive'`.
 
 ## Bricks Query Filters — taxonomy order and button-mode pills (verified — THM, 2026-08-11 / THT, 2026-09-16; re-read THT, 2026-10-05, Bricks 2.3.12 `includes/elements/filter-base.php`)

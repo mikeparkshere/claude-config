@@ -191,6 +191,12 @@ Verify all four states with cache-busters: bare → 401, creds → 200, an ACME 
 - nginx front end → `/home/runcloud/logs/nginx/app-<name>_{access,error}.log`
 **First seen:** 2026-07-14.
 
+### RunCloud — Apache logs rotate only past 100 MB, never monthly (`size` vs `maxsize`); nginx logs rotate monthly
+**Symptom / When:** A webapp's `apache2/<app>_error.log` has run unbroken for a year or more (first line dated at the site's launch) while the nginx logs beside it rotate on the 1st of every month. The Apache access log rotates on odd dates.
+**Why:** `/etc/logrotate.d/apache2-rc` (covers `/home/*/logs/apache2/*.log`) says `monthly` + **`size 100M`**. In logrotate `size` **replaces** the time trigger, so the file rotates only when it passes 100 MB. `nginx-rc` uses **`maxsize 100M`** (monthly *or* 100 MB). A quiet site's Apache error log may never reach 100 MB, and its irregular access-log rotation dates are the size trigger firing.
+**Fix:** None from the webapp user. The files and the config are `root:root` (no truncate, no edit), and the change (`size` → `maxsize`) is fleet-wide on a file RunCloud's agent may own, so it's a RunCloud support question, not a local edit. In practice it costs nothing on disk; the cost is signal-to-noise. Search it **time-anchored and counted** (`grep -a '^\[Wed Aug 05' … | grep -ac …`, check the exit status) rather than wishing it shorter. `LogLevel` is vhost-only, so `.htaccess` can't quiet it either.
+**First seen:** VMG, 2026-10-18 — a 25 MB / 70k-line error log unbroken for 19 months; 78% of it was Apache refusing scanner directory listings (`autoindex` "Cannot serve directory"), which cost no PHP at all.
+
 ### RunCloud — writing outside the webroot: `webapps/` is root-owned, and `open_basedir` blocks `~` under PHP-FPM (but not under WP-CLI)
 **Symptom / When:** Code that writes outside the document root (backups, snapshots, export dumps, log shippers) works perfectly from WP-CLI and never writes a file from a web request. First attempt beside the webroot: `wp_mkdir_p()` returns false, no PHP error. Second attempt in the home dir: fine from the shell, while web requests log `open_basedir restriction in effect` and the writer disables itself. A log containing only `wp-cli` entries and zero web-path entries is the signature.
 **Why:** Two layers. (1) The webapp directory is owned by the site user, but its **parent** `/home/runcloud/webapps/` is **root-owned 0755**, so the site user can't create a sibling of the webroot, the most natural "just outside" spot. (2) RunCloud sets a per-webapp `open_basedir` of `/home/runcloud/webapps/<app>:/var/lib/php/session:/tmp`; the home directory isn't on it. WP-CLI runs with `open_basedir` **empty**, so it is blind to this. Also, `$HOME` is often **unset under PHP-FPM**, so env-only path resolution works from the shell and fails on the web path.
@@ -333,6 +339,25 @@ echo "decoder js: $(echo "$H" | grep -oc 'email-decode')"
 **First seen:** WCDP, 2026-09-30.
 
 
+### Bursts of FPM timeouts / 504s on a TUNED pool are single-IP scanner floods — rate-limit at Cloudflare
+**Symptom / When:** The Apache error log shows hundreds of `AH01075: Error dispatching request to : (polling)` / "The timeout specified has expired" lines **clustered in a few minutes** on a handful of days, with nothing between. `maxChildren` is already tuned (not the stock 5), and the box has free RAM.
+**Why:** A vulnerability scanner (typically one cloud-provider IP) fires its probe list (`/www.bak`, `/ws_ftp.ini`, `/webpack.config.js`, `/.env`…) for a few minutes. The rate is **modest**, ~5 requests/s (peak ~49 per 10 s), but every miss that nginx doesn't serve falls through to WordPress to render a themed 404 **in PHP**, and a few seconds of render time per probe is enough to fill the whole pool. Everything else 504s until it stops. It's the cost per request, not the rate. Raising `maxChildren` on a small box just moves the ceiling.
+**Diagnose:** bucket the timeouts by minute (`awk '{print $2,$3,substr($4,1,5)}' | uniq -c`), then read the nginx access log for the peak minutes: one client IP (the real one is the last quoted field behind Cloudflare) with 240+ requests. **Then check who actually received the 504s** before calling it an outage: on the first site measured, every 504 in two months went to the scanners or to login/xmlrpc brute-forcers. That makes it low severity on a low-traffic site, higher as real concurrency grows.
+**Fix:** A Cloudflare rate-limiting rule (per IP) that stops the flood before origin whatever the path. ⚠️ **Size it from the access log, not instinct, and exclude static assets.** A real logged-in visitor on the same site made ~50 requests per 10 s at origin (JS/CSS for My Account and a form plugin), the **same rate as the flood**. So scope the rule's expression to non-asset paths (exclude `/wp-content/`, `/wp-includes/` and static extensions) before setting a threshold of roughly 30 per 10 s. A ">60 per 10 s" rule never fires on a ~49 peak. Check the plan's rate-limit options (period and mitigation timeout are plan-limited). An `.htaccess` extension denylist (`.bak|.sql|.log|.ini|.env…` → 403 before WP) caught only **~28%** of a real probe set; the rest were `.json`, `.js`, `.sh` and extensionless paths, so it's whack-a-mole. Billing is not exposed meanwhile: renewal cron runs under CLI, and Stripe retries webhooks for days.
+**First seen:** VMG, 2026-10-18 — 6,007 timeouts over 19 months, all in bursts (571 / 601 / 621 per day on the worst days) on an 8-worker pool on 2 vCPU.
+
+### WordPress XML-RPC is open by default and draws `system.multicall` brute force — block it at the web server unless something needs it
+**Symptom / When:** The access log shows tens of thousands of `POST /xmlrpc.php` (often `//xmlrpc.php`, double slash) answered **200**, at 401–403 bytes each (the "Incorrect username or password" fault), from a handful of IPs, many claiming to be `Jetpack by WordPress.com` or `WordPress.com` on a site with no Jetpack. The admin login page shows nothing, because XML-RPC auth never touches `wp-login.php` and creates **no session**, so a cracked password leaves no `session_tokens` trace either.
+**Why:** Core enables XML-RPC with authenticated methods (`wp.getUsersBlogs`, and `system.multicall`, which batches hundreds of guesses per request). Nothing in the stack turns it off: removing pingback methods (a comment guard) leaves the auth methods live. `add_filter( 'xmlrpc_enabled', '__return_false' )` does stop **every** authenticated method (despite its name it doesn't disable XML-RPC itself, only auth-requiring methods), but each request still boots WordPress in PHP, so under a flood it still costs FPM workers.
+**Fix:** On a hybrid (nginx → Apache) webapp, deny it before PHP runs, after `# END WordPress`:
+```apache
+<Files "xmlrpc.php">
+  Require all denied
+</Files>
+```
+The double-slash form maps to the same file, so one rule covers both. Verify with a POST and a cache-buster, at origin and through Cloudflare (expect 403). **Exempt it if WooCommerce Shipping or Jetpack is installed** (see `03` → "WooCommerce Shipping label printing needs `xmlrpc.php` reachable"), and say so at the rule. Check for compromise from what *does* leave a trace: response sizes that aren't the fault size, unknown `session_tokens` IPs, application passwords, and unexpected admin users.
+**First seen:** VMG, 2026-10-18 — ~240k attempts from 2026-09-01 to 10-18 (26.6k on the worst day, still running at discovery) against a two-account live-billing site. Found while sizing a rate-limit rule; blocked the same day.
+
 ## Cutover
 
 ### Verifying a cutover *from ANY box that resolved the domain before the flip* — its DNS cache still points at the OLD origin
@@ -454,7 +479,8 @@ If HSTS is present (assume it is), go **proxy-first** and the gap disappears ent
 **Symptom / When:** A branded Bricks maintenance template exists "for plugin updates," but mid-update visitors still get *"Briefly unavailable for scheduled maintenance."*
 **Why:** Core writes `ABSPATH/.maintenance` while updating and `wp_maintenance()` dies before the theme loads, showing `WP_CONTENT_DIR/maintenance.php` if present. Bricks maintenance mode (`maintenanceMode` + `maintenanceTemplate`) only covers a window you open manually; its picker lists `content` templates only, so the template must carry no conditions.
 **Fix:** Build both from one design: the Bricks template for planned windows, plus a self-contained `maintenance.php` drop-in (no WP functions; send `503` + `Retry-After` + `no-store` yourself; `if (!defined('ABSPATH'))` → 404 so a direct hit can't render it). Keep the canonical copy in the core plugin and deploy by copy. With a page cache, purge after turning Bricks maintenance on **and** off.
-**First seen:** MMHN, 10/08/2026.
+⚠️ **Neither covers a plugin directory mid-rewrite.** A bulk in-place update replaces each plugin's files while live traffic is still bootstrapping WordPress; a plugin whose main file `require_once`s unconditionally (Duplicator Pro, Bricks Advanced Themer, WooCommerce Subscriptions were all seen) fatals the **bootstrap**, before Bricks or `.maintenance` can do anything, and real visitors get 500s for the seconds it takes. Bricks maintenance mode shrinks the exposure (visitors stop generating PHP page renders); it doesn't eliminate it. Run update passes behind it, off-peak, then scan the error log for the window. Payment webhooks and cron are unaffected by Bricks maintenance (see `03`).
+**First seen:** MMHN, 10/08/2026. · **Extended:** VMG, 2026-08-01 / 2026-10-18 — two in-place update passes each left `require_once` fatals served to Cloudflare-proxied visitors (6 in the second), on a live-billing site.
 
 ## RunCache (RunCloud Hub successor)
 
