@@ -766,7 +766,8 @@ Matching images skip the count and are lazy-loaded normally.
 **Why:** Mailgun's envelope sender (Return-Path) is `bounce+…@<sending domain>`. Receivers like Intermedia/Exchange reject mail whose envelope domain has no MX/A record. A sending subdomain with only SPF/DKIM TXT records does not resolve as a mail domain. Gmail doesn't apply that check.
 **Fix:** Add `MX 10 mxa.mailgun.org` and `MX 10 mxb.mailgun.org` on the sending subdomain (Mailgun's own setup lists them; they're easy to skip because sending works without them for Gmail).
 **Verify:** test to an address **on the client's domain**, never only Gmail, then read `GET /v3/<domain>/events?recipient=…` for `delivered`.
-**First seen:** FMED, 2026-10-19 — every form notification lost 9/9 → 10/19.
+**Trap — TXT-only "fixes" it on paper:** adding the SPF + DKIM TXT records makes the name resolve and Mailgun flip to `active`/`valid`, but the receiver still says "Domain not found" — it wants MX/A. A fix verified by Mailgun's state rather than a delivered event can leave mail broken for weeks.
+**First seen:** FMED — notifications to the client's domain failed 2026-07-18 → 10-19; a 9/9 TXT-only fix was verified by Mailgun's state and didn't hold.
 
 ### Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails
 > **Superseded for new work (2026-10-19):** fleet mail transport is the `jbm-mailgun-mailer` mu-plugin (KB 01 exception). This entry stays for sites still on a core-plugin SMTP module until they migrate; the From/Sender alignment lesson applies to the mu-plugin too.
