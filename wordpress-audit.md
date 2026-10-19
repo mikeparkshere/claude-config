@@ -162,9 +162,15 @@ wp post list --post_type=wpcodebox --fields=ID,post_title --format=table
 
 # 4. Bricks global classes (count only — full output can be large)
 wp option get bricks_global_classes --format=json | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'{len(data)} global classes registered')" 2>/dev/null
+
+# 5. ACSS + Advanced Themer: AT's right-click variable picker hides ACSS's menu (KB 03)
+wp plugin is-active automaticcss-plugin && wp plugin is-active bricks-advanced-themer && \
+  (wp option get bricks-advanced-themer__brxc_builder_tweaks_for_classes --format=json | grep -q '"variable-picker"' \
+   && echo "FLAG: AT variable picker is on, so right-click never reaches the ACSS menu" || echo "AT picker ok")
 ```
 
-Note where custom CSS lives and whether it belongs there under the MPD standard.
+Note where custom CSS lives and whether it belongs there under the MPD standard. Report a flagged AT picker
+as a finding with its fix (AT → Builder Tweaks → Classes and Styles → untick CSS Variables Picker, keep autocomplete); don't change it during the audit.
 
 ---
 

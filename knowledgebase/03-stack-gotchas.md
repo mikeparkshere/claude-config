@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-318 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+319 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -238,6 +238,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS → Bricks palette sync only hooks under `is_admin()` — CLI saves regenerate CSS but never update the color picker `[stack:acss]`
 - ACSS flow-spacing `[class*="woocommerce"] * + p > * + *` leaks into Woo form rows — and fires on every page `[stack:acss]`
 - ACSS `option-forms` ships ~145 KB of `.form--light` / `.form--dark` rules — about 40% of `automatic.css`, used only if an element carries those classes `[stack:acss]`
+- Right-click in a Bricks field opens Advanced Themer's near-empty variable panel, not the ACSS menu — AT's "CSS Variables Picker" takes the click `[stack:acss]`
 
 **ACF**
 
@@ -2389,6 +2390,16 @@ Blocks Checkout uses `.wc-block-components-*` markup and the rule already exclud
 **Why:** With `option-forms: on`, ACSS compiles a full form skin (every `.wsf-*` WS Form rule included) twice, once per context, scoped under the two context classes. The classes are auto-imported into the Bricks picker (`acss_import_form--light/dark`), which makes them look used; nothing styles unless an element actually carries one.
 **Fix:** Confirm there's no consumer: no element meta containing `form--light`, `form--dark` or `acss_import_form--`; nothing reading `var(--f-*)` (child theme, core plugin, `uploads/bricks/css`, `bricks_global_classes`); no `.wsf-` rule outside the contexts. Then set `option-forms: off` with the admin-context full-merge save ("ACSS is fully configurable headless…") and diff the rule sets: only the context rules and the `:root` `--f-*` block should go. Check `automatic-bricks.css` byte size is unchanged (the gutting canary), delete Perfmatters' minified copy of `automatic.css` if one exists, and purge the page cache.
 **First seen:** MMHN, 2026-10-03 — a render-blocking CSS pass: 348 → 199 KB raw, 309 → 170 KB served minified.
+
+### Right-click in a Bricks field opens Advanced Themer's near-empty variable panel, not the ACSS menu — AT's "CSS Variables Picker" takes the click `[stack:acss]`
+**Symptom / When:** On a site running ACSS and Advanced Themer, right-clicking a Bricks style field (font size, padding, line height) opens AT's "CSS Variables" panel, which lists only the Bricks Global Variables category (often just "AT - Clamp Settings"). None of ACSS's tokens are there, so it looks as if ACSS's builder integration is broken. Typing `var(--` in the same field *does* drop down the full ACSS list.
+**Why:** Two features want the same right-click. ACSS's Contextual Menus (`option-contextual-menus-enable`) opens its variable menu on `contextmenu` in a panel input. AT's **CSS Variables Picker** (`variable-picker` in `bricks-advanced-themer__brxc_builder_tweaks_for_classes`, trigger `brxc_variable_picker_type = mouse`) binds the same event and wins, and its panel lists Bricks Variable Manager entries only. ACSS 3.x never registers its tokens there. Everything server-side checks out (ACSS's script and settings enqueue in the builder, the user passes `Permissions::current_user_has_full_access()`), which is what makes it look like a bug. AT's *autocomplete* (`autocomplete-variable`) is a different feature: it reads every `:root` custom property from same-origin stylesheets in the preview iframe, ACSS's included, which is why typing works.
+**Fix:** Advanced Themer → Theme Settings → **Builder Tweaks → Classes and Styles → untick "CSS Variables Picker"** (stored value `variable-picker`). Leave variable autocomplete (`autocomplete-variable`) on. Afterward, left-clicking in a field brings up the Bricks variable list, and right-clicking the field's variable icon opens the ACSS menu. Check a site without opening the builder:
+```bash
+wp option get bricks-advanced-themer__brxc_builder_tweaks_for_classes --format=json | grep -q '"variable-picker"' && echo "FIX NEEDED" || echo ok
+```
+Check it in the builder: `ADMINBRXC.globalSettings.classFeatures` should not contain `variable-picker`, and right-clicking a field's variable icon should open the ACSS menu. **ACSS sites only:** on a native-Bricks (`mpd-core`) site every token lives in the Bricks Variable Manager, so AT's panel is the complete list and the right picker; leave it on there.
+**First seen:** goth-tour, 2026-10-19 — "a conventional Bricks setup so variables appear as dropdowns" looked like a missing integration. ACSS 3.3.6 / AT 3.5 / Bricks 2.4.3. Both goth-tour and goth-members had the picker on; fixed on both the same day, with the ACSS menu confirmed in the builder. Whether AT ships it on by default is unchecked, so run the check on every ACSS site that has AT.
 
 ## ACF
 
