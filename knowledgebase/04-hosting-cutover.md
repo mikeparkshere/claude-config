@@ -761,7 +761,16 @@ Matching images skip the count and are lazy-loaded normally.
 **Only if the client actually wants Mailgun analytics:** enable HTTPS on the tracking domain in the Mailgun dashboard; confirm the `email.mg` CNAME is **DNS-only / grey cloud** in Cloudflare (Mailgun cannot provision LE certs through CF's proxy — same class as the Cloudflare entry above); wait up to ~24h for the cert; then disable Mailster's own tracking to avoid double-counting.
 **First seen:** NLTA, 2026-04-29 — client reported an SSL error clicking a campaign link.
 
+### Mailgun sending domain needs MX records, or Exchange-style receivers reject it
+**Symptom / When:** Form notifications to the client's own domain never arrive; Mailgun shows `accepted` then `failed` with `450 4.1.8 <bounce+…@mailer.<domain>>: Sender address rejected: Domain not found`. A test to Gmail delivers fine, so the setup "looks" verified.
+**Why:** Mailgun's envelope sender (Return-Path) is `bounce+…@<sending domain>`. Receivers like Intermedia/Exchange reject mail whose envelope domain has no MX/A record. A sending subdomain with only SPF/DKIM TXT records does not resolve as a mail domain. Gmail doesn't apply that check.
+**Fix:** Add `MX 10 mxa.mailgun.org` and `MX 10 mxb.mailgun.org` on the sending subdomain (Mailgun's own setup lists them; they're easy to skip because sending works without them for Gmail).
+**Verify:** test to an address **on the client's domain**, never only Gmail, then read `GET /v3/<domain>/events?recipient=…` for `delivered`.
+**First seen:** FMED, 2026-10-19 — every form notification lost 9/9 → 10/19.
+
 ### Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails
+> **Superseded for new work (2026-10-19):** fleet mail transport is the `jbm-mailgun-mailer` mu-plugin (KB 01 exception). This entry stays for sites still on a core-plugin SMTP module until they migrate; the From/Sender alignment lesson applies to the mu-plugin too.
+
 **Symptom / When:** Porting the fleet core plugin's `phpmailer_init` Mailgun module to a site whose forms (e.g. WS Form) send as `#blog_admin_email`.
 **Why:** SMTP auth alone does not align SPF/DKIM with the visible From. A From on an address the Mailgun domain does not cover fails DMARC once the domain publishes a policy, and PHPMailer's envelope sender otherwise defaults to the From.
 **Fix:** In `phpmailer_init`, set `From`, `FromName` **and** `Sender` to `MAILGUN_FROM_EMAIL` (on the verified Mailgun domain), and leave Reply-To alone so replies still reach the form-filler. Keep the module inert until its constants exist (`MAILGUN_SMTP_*`, `MAILGUN_FROM_*`), and log `wp_mail_failed` to the error log, since failures are otherwise silent. Then repoint every form's notification To and send one test per form. Related in `03`: "A `wp_mail_from` filter beats an explicit `From:` header" (why a form's own From field is cosmetic) and "WooCommerce — Woo overrides `wp_mail_from`…" (the one sender that bypasses this).

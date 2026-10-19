@@ -15,6 +15,7 @@ WordPress + Bricks Builder 2.3.4+ + Automatic.css (ACSS) 3.3+ + ACF Pro + WS For
 Code ownership is strict and non-negotiable:
 
 - **All custom functionality** lives in the project's core functionality plugin — never in the theme or `functions.php`. ACF field groups are registered programmatically via `acf_add_local_field_group()` in the plugin, never UI-only. Custom post types, taxonomies, hooks, helper functions, Bricks dynamic tags — all plugin.
+- **One exception — fleet infrastructure is a managed mu-plugin, not core-plugin code.** Behavior that must run on every request, must not be deactivatable, and is *identical on every site* (per-site values in `wp-config.php` constants) lives in the private repo `jbm-mu-plugins` and is deployed with its `bin/mu-sync`. Mail transport is the model case: **`jbm-mailgun-mailer`** (Mailgun HTTP API) is the standard; don't write a `phpmailer_init` / SMTP module into a new core plugin. The test is "would this file be byte-identical on the next site?" — if not, it is site functionality and belongs in the core plugin (e.g. per-form Reply-To, a Woo From fix). Decided 2026-10-19, after three core-plugin mail modules had drifted into three implementations, two transports and three constant sets.
 - **Presentation** lives in the child theme.
 - **No WooCommerce customizations in the theme directly.**
 - BEM naming throughout.
