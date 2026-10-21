@@ -54,6 +54,8 @@ Related: **do not reach for `manage_categories` to let the client assign terms.*
 
 *Amended 2026-09-30 (WCDP "Site Manager" build): Step 2 gains a direct-URL guard (`bricks_template` is `capability_type => 'post'`, so the post caps reach the template editor by URL) and a `PHP_INT_MAX` bulk-actions filter (SEOPress re-adds noindex/nofollow/redirection bulk actions after default priority); the OPcache note is corrected. Both entries are in `03` → Roles & Capabilities.*
 
+*Corrected 2026-10-21 (SLVPR, SEOPress 10.3): `remove_meta_box( 'seopress_cpt' )` no longer hid the SEO box. SEOPress 10.x calls it `seopress_metabox_opener` and adds a block-editor panel that `remove_meta_box()` can't reach. Step 2 now blocks the role through SEOPress's own setting (`seopress_advanced_security_metaboxe_role` / `_ca_role`), with the renamed metabox as a backstop. Verified as the role over HTTPS on a CPT edit screen, a post, a category and a list screen.*
+
 ---
 
 ## Find & replace before you paste
@@ -368,16 +370,23 @@ foreach ( array( 'edit-post', 'upload' ) as $prefix_screen ) {
 unset( $prefix_screen );
 
 /**
- * SEO plugin metaboxes. Rank Math: see the user_has_cap wall in 03. SEOPress: drop
- * its metaboxes here (and list columns via manage_{type}_posts_columns if shown).
- * Removing the metabox does NOT remove SEOPress's bulk actions; the filter above does.
+ * SEO plugin metaboxes. Rank Math: see the user_has_cap wall in 03.
+ * SEOPress: block the role in SEOPress's own settings, which the classic metabox, the
+ * block-editor panel and the term screens all read (Advanced > Security, or by script):
+ *   seopress_advanced_option_name['seopress_advanced_security_metaboxe_role']    = [ 'prefix_business_manager' => '1' ]
+ *   seopress_advanced_option_name['seopress_advanced_security_metaboxe_ca_role'] = [ 'prefix_business_manager' => '1' ]
+ * The remove_meta_box() calls below are a backstop only: SEOPress 10.x renamed the post
+ * metabox to seopress_metabox_opener, and its block-editor panel is JS that
+ * remove_meta_box() never reaches. List columns: manage_{type}_posts_columns if shown.
+ * Neither removes SEOPress's bulk actions; the PHP_INT_MAX filter above does.
  */
 add_action( 'add_meta_boxes', function() {
 	if ( ! prefix_is_business_manager() ) {
 		return;
 	}
 	foreach ( get_post_types( array( 'show_ui' => true ) ) as $type ) {
-		remove_meta_box( 'seopress_cpt', $type, 'normal' );
+		remove_meta_box( 'seopress_metabox_opener', $type, 'normal' );   // SEOPress 10.x
+		remove_meta_box( 'seopress_cpt', $type, 'normal' );              // before 10.x
 		remove_meta_box( 'seopress_content_analysis', $type, 'normal' );
 	}
 }, 9999 );
@@ -800,6 +809,7 @@ WS Form data model the viewer relies on:
 - [ ] If **not** WS Form Pro: replace `inc/submissions.php`'s reads with the target plugin's read API (the role + admin-experience layers are form-agnostic). Gravity Forms → `GFAPI::get_entries()`; Fluent Forms → its submission model; etc. Keep it read-only + gated on `prefix_view_submissions`.
 - [ ] Set `PREFIX_ROLES_VERSION` and bump it whenever you edit `$caps`.
 - [ ] Fill the bulk-actions screen list (Step 2) with every CPT list the role can see. If the site runs **SEOPress**, check a list screen as the role: its noindex/redirect bulk actions must be gone.
+- [ ] If the site runs **SEOPress**, set its per-role metabox block (Step 2 comment) and check an edit screen as the role: no `id="seopress_metabox_opener"` in the HTML.
 - [ ] Add every post type whose menu you hide to the `admin_init` URL guard. `bricks_template` is always on it.
 - [ ] Verify with the Step 5 commands, then run the admin UX pass (`admin-ux-playbook.md`), then create the client account.
 - [ ] If wp-login.php is not redirected on this build, add login branding.
