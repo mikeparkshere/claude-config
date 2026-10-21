@@ -110,8 +110,9 @@ tight burst exhausts a 5-worker pool while many times that number spread over ho
 volume-vs-errors correlation will look like noise and can wrongly exonerate the pool.
 Confirm with FPM's own `server reached pm.max_children setting` log line (root-only). Changing the
 values *afterwards*: `PATCH /servers/{id}/webapps/{w}/settings/fpmnginx` is the documented writable editor
-(verified for `openBasedir`, MMHN 2026-07-21; **untested** for the `processManager*` fields), so for those the
-panel stays the safe route — webapp → Settings; the form mirrors these field names one-to-one.
+(verified for `openBasedir`, MMHN 2026-07-21, and for `processManager*` / `maxExecutionTime` / `maxInputVars`,
+vultr app-nfhl 2026-10-21). Send the **whole** `/settings` body (drop `databases`) with your changes merged in,
+then read `/settings` back. The panel form mirrors these field names one-to-one if you'd rather click.
 ✅ **But set them at creation through the API** (verified 2026-10-01, MMHN): `POST /servers/{id}/webapps/custom`
 accepts the same `processManager*` / `memoryLimit` / `maxExecutionTime` / `timezone` fields and applies them, so
 a new webapp never has to ship on the 5-worker default. Read back `/settings` to confirm.
@@ -119,9 +120,10 @@ a new webapp never has to ship on the 5-worker default. Read back `/settings` to
 type `custom`, and RunCloud's WordPress toolkit is keyed on type: `GET …/webapps/{w}/runcache` → 403 *"Web
 Application need to be set to WordPress to use this function"*, so **no RunCache, no page cache**. The webapp
 resource is `GET,HEAD,DELETE` only, so the type can't be changed by API afterwards; the only fixes are a RunCloud
-support ticket or recreating the webapp. Create WordPress sites with `/webapps/wordpress`. Whether that endpoint
-also accepts the `processManager*` fields is **unverified**: try them, read back `/settings`, and if they didn't
-apply, set FPM in the panel before the site takes traffic. Check `"type"` with a GET the day a webapp is created.
+support ticket or recreating the webapp. Create WordPress sites with `/webapps/wordpress`. That endpoint
+**silently ignores** the `processManager*` / `maxExecutionTime` / `maxInputVars` fields, and `databaseName` too
+(it auto-names the DB), verified vultr app-nfhl 2026-10-21. So create, then `PATCH …/settings/fpmnginx` as above
+before the site takes traffic. Check `"type"` with a GET the day a webapp is created.
 ⚠️ **New server: set the CLI PHP too** — RunCloud starts `php` (what WP-CLI runs) on the *lowest* installed
 version regardless of the webapp's FPM version. `PATCH /servers/{id}/php/cli` `{"phpVersion":"php84rc"}`, then
 verify `wp eval 'echo PHP_VERSION;'` (mmhn26 ran WP-CLI on 8.1 until caught, 2026-10-01).
