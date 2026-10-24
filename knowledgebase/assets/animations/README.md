@@ -21,7 +21,7 @@
 
 **Reveal** (on the element): `anim-fade-up` · `anim-fade-in` · `anim-fade-down` · `anim-slide-left` · `anim-slide-right` · `anim-scale-in` · `anim-scale-up` · `anim-blur-in`
 
-**Stagger** (on the parent; direct children with reveal classes fire in sequence, up to 12): `anim-stagger` (80 ms) · `anim-stagger-tight` (50 ms) · `anim-stagger-wide` (120 ms)
+**Stagger** (on the parent; direct children with reveal classes fire in sequence; the 13th on arrive with the 12th): `anim-stagger` (80 ms) · `anim-stagger-tight` (50 ms) · `anim-stagger-wide` (120 ms)
 
 **Modifiers:** `anim-fast` (.3s) · `anim-slow` (.8s) · `anim-delay-1`…`-5` (100–500 ms) · `anim-ease-smooth` · `anim-ease-spring` · `anim-ease-bounce`
 
@@ -63,6 +63,10 @@
 **9. End states are `none` (2026-10-09).** Revealed elements ended at `translateY(0)`, `scale(1)` and `blur(0)`. Those look the same as no transform, but each still makes the element a stacking context and the containing block for absolutely and fixed-positioned descendants. That clips a stretched clickable-parent link to the animated wrapper and traps any popover inside. They now end at `transform: none` / `filter: none`.
 
 **10. Token defaults yield to the project (2026-10-09).** The defaults sat on `:root`, and the file is enqueued after ACSS's inline Global CSS. So a project's `--anim-*` override in Global CSS, the one token home (`01`), lost on source order at equal specificity, silently. The defaults are now declared on `:where(:root)`, specificity 0.
+
+**11. Keyboard focus reveals what it lands on (2026-10-24).** The observers only fire on scroll, so Tab could reach a link inside a reveal still hidden below the fold: a scripted Tab pass on a homepage found 11 focus stops at `opacity: 0` (card links, slider arrows, a CTA button). A delegated `focusin` listener now reveals the focused element's reveal, and its whole stagger group, at once (transition off for one frame). Same pass after: none.
+
+**12. Staggers past twelve children (2026-10-24).** Delays were defined for `:nth-child(1)` to `(12)` only, so a longer list's 13th item on kept `0ms` and arrived first. One `:nth-child(n+13)` rule brings the tail in with the 12th.
 
 Fixes 7–10 were tested on a Local harness against the previous file as a control, with a stub IntersectionObserver (an automation tab in a hidden window never gets IO callbacks; `03`).
 

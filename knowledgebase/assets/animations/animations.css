@@ -123,6 +123,9 @@ html.js-anim .anim-visible { will-change: auto; }
 :is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(10) { --anim-delay: calc(var(--anim-stagger-step) * 9); }
 :is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(11) { --anim-delay: calc(var(--anim-stagger-step) * 10); }
 :is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(12) { --anim-delay: calc(var(--anim-stagger-step) * 11); }
+/* 13th child on: without this they keep the default 0ms delay and arrive first, ahead of the sequence. They
+   come in with the 12th instead, closing it. */
+:is(.anim-stagger, .anim-stagger-tight, .anim-stagger-wide) > :nth-child(n+13) { --anim-delay: calc(var(--anim-stagger-step) * 12); }
 
 /* --------------------------------------------------------------------------
    Modifiers

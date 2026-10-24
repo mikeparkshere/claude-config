@@ -159,6 +159,34 @@
 
 		scan();
 
+		// Keyboard backstop. The observers only fire on scroll, so Tab can reach a link inside a reveal that
+		// is still hidden below the fold (a card, a CTA button). Focus inside one reveals it, and the whole
+		// stagger group it belongs to, so focus never sits on something invisible.
+		// No fade when focus is the trigger: the element is shown at once (transition off for one frame).
+		function revealNow( el ) {
+			if ( el.classList.contains( 'anim-visible' ) ) { return; }
+			el.style.transition = 'none';
+			reveal( el );
+			void el.offsetWidth; // commit the end state before the transition comes back
+			requestAnimationFrame( function () { el.style.transition = ''; } );
+		}
+		if ( ! reduced ) {
+			document.addEventListener( 'focusin', function ( e ) {
+				var t = e.target;
+				if ( ! t || ! t.closest ) { return; }
+				var group = t.closest( STAGGER_SELECTORS );
+				if ( group && ! fired.has( group ) ) {
+					group.querySelectorAll( ANIM_SELECTORS ).forEach( revealNow );
+					fired.add( group );
+					if ( config.once ) { staggerObserver.unobserve( group ); }
+				}
+				for ( var el = t.closest( ANIM_SELECTORS ); el; el = el.parentElement ? el.parentElement.closest( ANIM_SELECTORS ) : null ) {
+					revealNow( el );
+					if ( config.once ) { elementObserver.unobserve( el ); }
+				}
+			} );
+		}
+
 		// AJAX-injected content. The source observed once at DOMContentLoaded,
 		// so anything added later was never watched and stayed hidden for good.
 		if ( config.observeDom && 'MutationObserver' in window ) {
