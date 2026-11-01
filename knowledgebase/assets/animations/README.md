@@ -122,13 +122,14 @@ Site-wide does **not** mean motion on everything. Subtle and consistent reads ex
 | Context | Use | Notes |
 |---|---|---|
 | Section intros / headers | `anim-fade-up` | The workhorse — **one reveal per section** |
-| Card grids | `anim-stagger` on the grid + `anim-fade-up` on cards | The premium move |
+| Card grids | `anim-stagger` on the grid + `anim-fade-up` on cards | The premium move, **below the fold only**. Measure first (see below) |
 | Feature images | `anim-scale-in`, or `anim-blur-in` sparingly | Blur-in reads expensive; use rarely |
 | Default easing | `anim-ease-smooth` | Elegant expo-out |
 
 - **Avoid `anim-ease-bounce` / `anim-ease-spring`** on premium brands — playful, reads cheap.
 - Keep the default travel; don't increase it.
 - **Never** on: header, nav, sticky elements, footer utility rows, form fields, or anything above the fold. Reveal-on-scroll is a below-the-fold technique and animating the LCP element delays it.
+- **Measure the fold before picking reveal targets.** The fold belongs to the rendered page at a given viewport, not to tree position. The IntersectionObserver fires at load for anything already on screen, so an above-fold reveal animates the moment the page opens. On a short, content-light site the header, hero and first card row can all fit in the first screen, and there a staggered card grid delays the LCP and reads cheap, not considered. Classify each section against `innerHeight` at the target viewport before writing any classes (Clemente, 2026-08-23; `03`, the Motion fold-measurement entry).
 - Don't cascade text line-by-line.
 
 **Roll out template-by-template**, not all at once, so a vocabulary mistake surfaces on one page rather than across the site.

@@ -202,7 +202,7 @@ Sometimes a session ends without its closer: it is killed, the box runs out of m
 That question is answerable. Four independent sources, none of which depend on the dead session having cooperated:
 
 - **The prior transcript.** Sessions are journalled to `~/.claude/projects/<project-slug>/<session-id>.jsonl`, newest by mtime. It survives the kill, and it is the only source that records *intent* — what was asked, what was concluded, and what the session was in the middle of when it stopped.
-- **Filesystem mtimes.** Plugin and theme directories, config files, and the docs themselves timestamp what was touched and when. `stat -c '%y %n'` across a directory reconstructs the order of operations even when nothing logged it.
+- **Filesystem mtimes.** Plugin and theme directories, config files, and the docs themselves timestamp what was touched and when. `stat -c '%y %n'` across a directory reconstructs the order of operations even when nothing logged it. ⚠️ **Except after a migration.** A Duplicator restore or rsync restamps every file in the webroot, so on a migrated box an mtime dates the migration, not the change; use DB timestamps (`post_date` / `post_modified`), version headers or `version.php`, content diffs and logs instead (Clemente, 2026-09-08).
 - **The error log.** In-place update windows leave a distinctive signature — missing `vendor/autoload.php`, "class not found", `filemtime()` stat failures — bracketing the exact minutes a directory was being rewritten.
 - **The artifacts themselves.** Read the file the session was supposed to write and check its mtime against the transcript's last entry. A doc written *before* the kill is intact work, not lost work.
 

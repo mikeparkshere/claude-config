@@ -245,6 +245,21 @@ Lookup tier. Each schema below was discovered via the golden rule and is verifie
 - Ordering (same readback): editing the Query panel rewrites `orderby` and `order` as **arrays**, `'orderby' => [ 'menu_order' ], 'order' => [ 'ASC' ]`. Plain strings written by the CLI render and survive a save that doesn't touch the panel, but write the array form so CLI and builder output match.
 - Bricks fills `posts_per_page`, `orderby`, `order` from main-query defaults if omitted.
 
+**`meta_query` on a posts loop** (verified — Clemente, 2026-08-08, rendered; parse path source-read on Bricks 2.4.4, `Query::parse_meta_query_vars()` in `includes/query.php`):
+
+```php
+'query' => [
+    'objectType' => 'post', 'post_type' => [ 'my_cpt' ],
+    'meta_query' => [ [ 'id' => 'mq0001', 'key' => 'featured', 'value' => '1', 'compare' => '=' ] ],
+    // 'meta_query_relation' => 'OR',   // relation is a SIBLING key, not inside the array
+],
+```
+
+- Standard WP `meta_query` rows plus an optional repeater `id`, which Bricks unsets before the query runs.
+- `value` goes through `bricks_render_dynamic_data()`, so a dynamic tag works there.
+- `meta_query_relation` is copied into `meta_query['relation']` and then removed.
+- ACF `true_false` stores `'1'` / `'0'` strings, and a record never saved has **no meta row**, so `= '1'` is right and `!= '1'` wrongly drops never-saved records (`03`).
+
 **Loop riding an archive's main query** (verified — WCDP, 2026-08-20, builder-saved readback from a sibling install, proven rendering):
 
 ```php
@@ -349,7 +364,36 @@ Term loops need their own resolver (`instanceof WP_Term`). The same split makes 
 'loading' => 'eager',      // top-level scalar (elements/image.php controls['loading'])
 ```
 
-Static images default to lazy **even as the LCP hero** — set `loading: 'eager'` on the above-the-fold image.
+Static images default to lazy **even as the LCP hero** — set `loading: 'eager'` on the above-the-fold image. Don't count on WP core's automatic `fetchpriority="high"` to find the hero either: it goes to the first eligible `<img>` in document order, which on a page with an inline-SVG or text hero is a band far below the fold (`04`).
+
+**Image bound to the featured image, with caption** (source-read — Clemente, 2026-08-06, Bricks 2.3.12, `includes/elements/image.php`; rendered):
+
+```php
+'image'   => [ 'useDynamicData' => '{featured_image}', 'size' => 'large' ],
+'caption' => 'attachment',   // 'none' | 'attachment' | 'custom' (+ 'captionCustom')
+'tag'     => 'figure',       // pins the root tag (03: the root flips between <img> and <figure>)
+'loading' => 'eager',        // only if above the fold
+```
+
+- Renders `<figure><img><figcaption>` when the attachment has a caption, `<figure><img>` when it doesn't. No wrapper element, no PHP.
+- The tag must resolve to an **ID**. `get_normalized_image_settings()` sets `image.id` only for a numeric value, and the caption is read from the attachment's `post_excerpt`, so a URL-returning tag renders the image and silently drops the caption. `{featured_image}` goes through `get_post_thumbnail_id()`, so a default-image filter on that hook is inherited.
+- **`_typography` on the image element targets `figcaption`**, not the `<img>` (`image.php` overrides the control's selector).
+- Empty dynamic data renders nothing on the front end (the placeholder is builder-only), so no hide-when-empty gate is needed for the image itself.
+- Bricks captions are absolute overlays, and `tag: figure` changes sizing; see `03` before styling one.
+
+**Responsive `sources[]` bound to dynamic data** (rendered — Clemente harvest, 2026-11-01, Bricks 2.4.4, in-memory render, no DB write):
+
+```php
+'image'   => [ 'id' => <attachment_id>, 'size' => 'full' ],   // base image
+'sources' => [
+    [ 'breakpoint' => 'mobile_portrait', 'image' => [ 'useDynamicData' => '{my_image_tag}', 'size' => 'full' ] ],
+    // 'breakpoint' => '_custom' + 'media' => '(max-width: 600px)' for a hand-written query
+],
+```
+
+- Each source runs through `get_normalized_image_settings()`, so a dynamic tag works per source. With a tag that returns `[ $id ]` in image context, this rendered `<source media="(max-width: 478px)" srcset="…" type="image/svg+xml">`: `media` comes from the breakpoint width, `type` from the attachment's MIME type.
+- The image-context tag rules apply unchanged: return an array in image context (`03`).
+- Order matters (the control's own help text): the browser takes the first matching source, so list sources below the base breakpoint smallest first.
 
 **Image fed from an options page — `bricks/element/settings`, keyed on element id** (builder-verified — MMHN, 2026-07-21). `{acf_*}` tags can't reach an options page, and a custom tag in `image.useDynamicData` fails (a string lands raw in `src`; an array fatals in the dynamic-data parser). Inject the static-image shape at render instead:
 
@@ -393,6 +437,7 @@ Full `srcset`, the attachment's own alt, field stays client-editable. Works for 
 - The Heading's `link` renders the `<a>` **inside** the heading (`includes/elements/heading.php`, ~L247–259), which is the shape the clickable-parent pattern needs (`01`). Same `link` control as Button and Container. Passed real-click and Tab tests with clickable-parent and focus-parent.
 - Rich text is `Element_Text`: `name` = `text`, an `editor` control keyed `text`, an HTML string. Its descendants are what Theme Style contextual spacing targets (`.brxe-text * + p`; `03`).
 - `text` and `text-basic` don't run shortcodes; the `shortcode` element does (below, and `03`).
+- `text-basic`'s `text` also takes **inline** HTML (`<em>`, `<br>`), which renders as markup (Clemente, 2026-05-27, rendered, CLI-written). Keep it inline: block markup belongs in the rich-text `text` element, and a `text-basic` whose own tag is `p` can't legally hold a `<p>`.
 
 ## Text link, Shortcode and WS Form elements (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2)
 
@@ -473,6 +518,20 @@ Nested array shape: **the outer array is a list of condition SETS, and the logic
 
 Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()` — "Loop over condition sets (logic between sets: OR)" wrapping "Loop over conditions inside a set (logic inside a set: AND)". A set short-circuits to false on its first failing rule.
 
+**A condition on a parent hides the whole subtree.** Children never render and need no gate of their own. When auditing coverage, resolve each element's ancestor chain and treat a gated ancestor as covering it: a per-element grep for `_conditions` reports covered children as "ungated," which is true and irrelevant. Prove coverage on the rendered HTML, since the tree can't show it. Gate the highest element that should disappear; gating a link inside a band leaves the band's heading and padding rendering (Clemente, 2026-09-08).
+
+**Page-scoped show/hide with `post_id`** (verified — Clemente, 2026-08-23, rendered; key and operators confirmed in `conditions.php`). Hides or shows one element of a shared template (header, footer, archive) on specific pages, with no PHP and no second template:
+
+```php
+'_conditions' => [
+    [ [ 'id' => 'cnd001', 'key' => 'post_id', 'compare' => '!=', 'value' => '<page_id>' ] ],
+],
+```
+
+- `value` is a **string**. `compare` takes the math operators `==` `!=` `>` `<` `>=` `<=`. `post_id` resolves from the rendering instance.
+- On an archive or a 404 the current `post_id` isn't the page's id, so `!=` evaluates true and the element renders, which is usually what a footer column wants.
+- Ids differ between installs: resolve the page id at build time, as with any id-keyed setting.
+
 **Correction, Clemente 2026-07-25.** This entry previously said the opposite ("outer array is AND groups, inner arrays are OR rules within a group"). Writing an intended OR as three rules in one set silently hid the element: two of the three dynamic tags were empty, the AND failed, and the element vanished with no error. The one-set-one-rule advice for the common hide-when-empty case was correct and unchanged by this — which is why the error survived so long. Verified against `conditions.php` and confirmed empirically on both branches (one network set → renders; all networks empty → hidden).
 
 ## Global Class shape
@@ -492,6 +551,7 @@ Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()`
 - `id`: alphanumeric, never all-numeric; 6 characters is the house convention.
 - `settings` must be `array()` — never `new stdClass()`. A stdClass crashes Bricks' interactions loader site-wide; recovery requires direct MySQL.
 - Custom CSS in `_cssCustom` uses literal class selectors (`.my-class { ... }`), not `%root%`. Bricks substitutes `%root%` to literal at UI save time; the stored value is always literal.
+- **So a CLI write never gets `%root%` resolved.** Written into a global class's `_cssCustom`, it ships verbatim and matches nothing, while the page still returns 200 (Clemente, 2026-08-08). The same holds for an element-level `_cssCustom`: the render path (`Assets::normalize_element_custom_css()`, Bricks 2.4.4) only swaps the stored `#brxe-<id>` for the runtime selector inside loops and does no `%root%` substitution, so write `#brxe-<id>` literally (`#<_cssId>` when the element sets one). Verify on the rendered page; a literal `%root%` in the output is the tell, and the stored setting looks the same either way.
 
 ## Typed `_border` (flat shape — verified)
 
@@ -517,6 +577,30 @@ Width is a per-side object, style is a scalar, color is a single object, radius 
 ```
 
 Color via typed `_typography.color` if the SVG uses `fill="currentColor"`, or via typed `_fill` / `_stroke` for a direct override. The SVG attachment must use `fill="currentColor"` for CSS color inheritance to work — otherwise it renders with a hardcoded fill.
+
+**The `svg` element inlines the markup in every source mode** (`file`, `iconSet`, `dynamicData`, `code`; `includes/elements/svg.php` `render()`, re-read on Bricks 2.4.4). That is what makes it the right element when the SVG must inherit page CSS: `fill="var(--token, #fallback)"` or `currentColor` works in inline markup, and does nothing in an `<img src="….svg">`, which is a separate document the page's custom properties never reach. The element matters, not the source mode.
+
+**Icon-set source** (builder-saved — Clemente, 2026-07-26, Bricks 2.3.12; `svg.php` reads `iconSet.svg.id`, re-read on 2.4.4):
+
+```json
+{ "source": "iconSet",
+  "iconSet": { "library": "custom_set_<setId>",
+               "svg": { "id": "<attachment_id>", "icon_id": "icon_<id>", "url": "<url>" } } }
+```
+
+- Same inner shape as the `icon` setting on `button` / `icon` / `text-link` (Icon settings below), under the key `iconSet`. Render needs only `iconSet.svg.id`, and that attachment must be `image/svg+xml`.
+- Size it with the element's **own** typed `width` / `height` controls, not `_width` / `_height`; on a global class `{ "width": "2rem", "height": "2rem" }` emits. Icon-set SVGs usually carry `viewBox` and no intrinsic size, so an inherited `font-size` (the font-icon habit) sizes nothing and the icon fills its container. Let color follow the parent link through `currentColor` rather than setting a fill.
+- Enumerate `bricks_icon_sets` / `bricks_custom_icons` before authoring any icon; the set the brief needs may already be installed (`03`).
+
+**Dynamic-data source** (source-read — Clemente, 2026-05-19, Bricks 2.3.12, rendered; branch re-read on 2.4.4):
+
+```json
+{ "source": "dynamicData", "dynamicData": "{my_svg_tag}" }
+```
+
+- The tag is rendered in **image** context and may return SVG markup, an attachment ID (`[ $id ]`, which must be an SVG attachment, so `{featured_image}` on a WebP renders nothing), or an SVG URL.
+- Returning markup keeps a brand SVG in the plugin rather than the Media Library: read the file, strip the XML declaration and comments, return the string from a custom tag (three-filter pattern below).
+- There is no `sources`-style responsive swap on the `svg` element. A different SVG per breakpoint means two elements toggled by `_display`, or the image element's `sources[]` (above) at the cost of CSS-variable styling.
 
 ## Custom dynamic tags (three-filter pattern)
 
@@ -576,8 +660,16 @@ Read back from builder-saved pages via the golden rule. These four were the libr
 - `_display` takes a breakpoint suffix too: `"_display:tablet_portrait": "none"` emits `@media (max-width: 991px) { .class { display: none } }` — the typed desktop-only hide, no `_cssCustom` media query (verified — WCDP, 2026-08-18).
 - `_flexGrow`: `"1"` (emits `flex-grow: 1`; defined in `base.php` and `container.php`) — survived a builder save (WCDP, 2026-09-11).
 - `_width` / `_height`: `"100%"`, `"90px"`, `"var(--width-xl)"` · `_widthMax`: `"560px"` (note the `'100%'` special case in `03`). `_widthMax: "none"` emits `max-width: none` — needed for full-bleed negative-margin work, since Bricks caps every element at `max-width: 100%` (`03`; builder-verified — WCDP, 2026-09-11)
+- **Number-unit controls take plain units and CSS function values alike.** `_width`, `_height`, `_widthMax`, `_heightMin` and the rest accept `"72ch"`, `"32rem"`, and also `clamp()`, `min()`, `calc()` and `var()`, which emit verbatim: the emitter appends a unit only to a bare number. The builder field may display **blank** for a function value (and the unit dropdown may not list `ch`); that's the input, not the CSS. Tested on Bricks 2.3.12 and 2.4.4, 2026-11-01 (Clemente harvest, in-memory render). Re-read the setting after anyone saves that element in the builder. Full entry: `03` → *Bricks number fields won't hold `clamp()` / `min()` / `var()` in the builder UI — but a headless write emits them fine*.
 - `_overflow`: `"hidden"` · `_aspectRatio`: a **scalar string** — `"4/3"`, `"1"` (not an object)
 - Absolute positioning: `_position: "relative"|"absolute"`, `_top`/`_right`/`_bottom`/`_left`: `".8rem"`, `_zIndex: "2"`
+- **Sticky** (verified — Clemente, 2026-08-07, rendered: the rail held at its `_top` through a 1400px scroll). `sticky` is a valid `_position` option (`setup.php` `control_options['position']`: `static` | `relative` | `absolute` | `fixed` | `sticky`):
+  ```php
+  '_position' => 'sticky', '_top' => '2rem',
+  '_position:tablet_portrait' => 'static',   // release it where the grid collapses
+  ```
+  The parent needs `align-items: start` (on a `_display: "grid"` element that's `_alignItemsGrid: "start"`, per the grid alignment keys above), or the item stretches to the row height and has no room to travel.
+- `_objectPosition`: a plain **string**, `"center top"`, paired with `_objectFit`. On the image element it emits on the dual-route selector, `.class:not(.tag), .class img { object-position: … }` (Clemente, 2026-08-07, rendered).
 
 **Spacing**
 ```php
@@ -626,7 +718,22 @@ The `:hover` suffix rides the **outer** key exactly like a breakpoint suffix, an
 ```
 On the **image** element, `_cssFilters` is re-routed to `&:not(.tag), img`, so the filter lands on the `<img>` whether or not the image has a wrapper tag; `_mixBlendMode` stays on the element root. Brand duotone with no `_cssCustom`: the wrapper takes `_background` (the brand color) plus `_isolation: isolate`, and the image takes `saturate(0)` plus `multiply`.
 
-**Two-colour border.** Typed `_border` is single-colour. For e.g. a gold top plus a light all-round: set 1px all sides via typed `_border`, then add `_cssCustom: ".class{ border-top:3px solid var(--secondary); }"` (literal selector).
+**Box shadow** (source-read, not builder-saved — Clemente, 2026-08-03, Bricks 2.3.12; emitter re-read on 2.4.4, `includes/assets.php` → `case 'box-shadow'`; control `_boxShadow` in `elements/base.php`, type `box-shadow`):
+```php
+'_boxShadow' => [
+    'values' => [ 'offsetX' => '1rem', 'offsetY' => '1rem', 'blur' => 0, 'spread' => 0 ],
+    'color'  => [ 'raw' => 'var(--token)' ],
+    // 'inset' => true,   // the key's presence alone prepends `inset` (isset test)
+],
+'_boxShadow:mobile_landscape' => [ /* same shape; breakpoint on the OUTER key */ ],
+```
+- Emits `box-shadow: [inset] offsetX offsetY blur spread color`, in that order. A missing value defaults to `0`.
+- A non-zero **number** gets `px` appended (`16` → `16px`); a string passes through (`'1rem'`). A numeric `0` gets no unit and emits `0`.
+- **An absent `color` emits `transparent`**, so a shadow written without one is invisible.
+- Use `color.raw`. An `id` resolves only against Bricks' own color palette; an id it doesn't know (ACSS's `acss_import_*` ids, for one) with no `raw` beside it emits no color at all, and the shadow falls back to `currentColor`.
+- A shadow takes no layout space: a large offset can overflow the page at narrow viewports, where the side gutter is all the room there is. Check `document.documentElement.scrollWidth`.
+
+**Two-color border.** Typed `_border` is single-color. For e.g. a gold top plus a light all-round: set 1px all sides via typed `_border`, then add `_cssCustom: ".class{ border-top:3px solid var(--secondary); }"` (literal selector).
 
 ## Element envelope (verified — VMG, 2026-06-06)
 
@@ -650,8 +757,19 @@ The wrapper every element is written in. The traps in each field have their own 
 ]
 ```
 
+- `_cssClasses` and `_cssGlobalClasses` are independent. A name in `_cssClasses` lands in the HTML `class` attribute but links no Global Class CSS; only an id in `_cssGlobalClasses` does. The reverse trap: cloning or rebuilding an element from its `_cssGlobalClasses` alone silently drops whatever rode in `_cssClasses` (framework utilities, JS hooks), so readbacks must print the full settings (`03`; Clemente, 2026-07-26).
 - Both `_cssClasses` (the raw string) and `_attributes[].value` are **dynamic-data-parsed** — `value: "/?add-to-cart={post_id}"` resolves per loop item, which is how you build per-item links with no PHP. See `03` for the loop-aware-tag delimiter caveat.
 - Non-native tags: `tag: 'custom'` + `customTag: '…'` (see Block HTML tag options above for what's native).
+
+**Component instance** (builder-saved — Clemente, 2026-07-25, read back from an instance placed in the builder). Each placement of a Bricks component in a page or template is a single stub element:
+
+```php
+[ 'id' => 'abc123', 'name' => 'section', 'parent' => 0, 'children' => [], 'settings' => [],
+  'label' => 'Optional builder label', 'cid' => '<component id>' ]
+```
+
+- `name` is the component's root element type, `cid` points at the component, and `children` / `settings` stay empty: the tree lives once in the **`bricks_components` option** (each component's own `elements` array), not in post meta.
+- So any audit keyed on post meta (orphan-class sweeps, dynamic-tag usage scans, `_cssCustom` sweeps) must also walk `bricks_components`, or it reports a component's classes as unused (`03`).
 
 ## Photo-in-wrapper (the standard for any contained image)
 
@@ -712,6 +830,9 @@ update_post_meta( $id, '_bricks_template_type', 'content' );
 // _bricks_template_settings:
 'templateConditions' => [ [ 'main' => 'postType', 'postType' => [ 'my_cpt' ] ] ]
 ```
+Don't write `'single'`: it isn't a registered template type (`setup.php` registers `content`, labeled "Single"). It only appears to work because `Database` buckets every type other than header, footer, section and popup into the `body` list, so the builder's type listing can misbehave on it while the front end renders (source-read — Clemente harvest, 2026-11-01, Bricks 2.4.4).
+
+The template applies **whether or not the CPT is in Bricks' own `postTypes` setting.** `Helpers::is_post_type_supported()` gates only the builder edit affordances and the `database.php` fallback that makes a post's own `_bricks_page_content_2` its content; condition matching runs regardless. So a CPT can be closed to the builder (editors can't open Bricks on a single record) and still render through a Bricks single template (verified — Clemente, 2026-08-07, with `postTypes` = pages only).
 
 **Error (404) template** (verified — WCDP, 2026-08-18, Bricks 2.3.10; from `includes/database.php` — `is_404()` → content type `error`, condition `main === 'error'` scores 8 — and proven by a live 404 render with full header/footer):
 ```php
@@ -779,6 +900,7 @@ Renders `the_content()` with **no element settings** — just a Global Class. St
 - A button with **no `link` setting** renders as `<span class="bricks-button …">` — fully styled, no anchor, inert (verified — WCDP, 2026-08-20). Useful deliberately; also the tell when a button unexpectedly won't click — check for a missing or invalid `link` key.
 - The reverse: once `link` is non-empty the element renders `<a>`, so it is the wrong element for a control that does not navigate — use a layout element with `customTag: 'button'` (Block HTML tag options above).
 - Icon on a button: see Icon settings below.
+- **Outline variant** `[stack:acss]` (Clemente, 2026-05-27, rendered): `'style' => 'btn--neutral', 'outline' => true` rendered `class="… btn--outline bricks-color-btn--neutral"`. Bricks tests `isset( $settings['outline'] )` (`button.php`), so `outline => false` is also ON: write `true` or omit the key. With `outline` set, the style lands as `bricks-color-<style>` instead of `bricks-background-<style>`. ⚠️ **The color half depends on the site's ACSS button setup.** On at least one ACSS config (3.3.6, governance-minimal palette) `btn--neutral` emits **zero** CSS while `btn--outline` does, so this exact pair renders an outline with no neutral color. Grep the generated `automatic-bricks.css` for the class name before relying on any `btn--<color>` (`03`).
 - **`tag` is free text on the Button, not a select** (verified — THT, 2026-10-05, Bricks 2.3.12 `includes/elements/button.php` ~L24: `'type' => 'text'`, placeholder `span`, shown only when `link` is empty). Write the real tag name, `'tag' => 'button'`, and **no `customTag`**. The `tag: 'custom'` + `customTag` pair from Block HTML tag options does not apply here: `'custom'` fails the allowed-tags validation with a builder error telling you to extend `bricks/allowed_html_tags`, which can never fix it (`03`).
 
 ## Icon settings — custom icon sets (verified — WCDP, 2026-08-18)
@@ -805,11 +927,11 @@ Element setting — **identical on `button`, `icon` and `text-link`** (8 usages 
 'iconPosition' => 'right',                     // button + text-link; absent on the icon element
 ```
 
-- ⚠️ **The `svg` element's icon variant is NOT verified.** It is asserted elsewhere to use `iconSet` with `source: "iconSet"`, but no builder-saved example has been read back. Discover it before using it.
+- **The `svg` element's icon variant is verified** (builder-saved — Clemente, 2026-07-26; source-confirmed). It is `source: "iconSet"` with this same inner shape under the key `iconSet`, not `icon`. Shape and sizing traps: SVG element above. (Until 2026-11-01 this bullet said the variant was unverified.)
 - Bake `fill="currentColor"` and `aria-hidden="true"` into the files at import: Bricks inlines the SVG verbatim, and a button's icon renders with no attributes at all, so there is no per-element place to set either. `render_svg()` replaces an existing `aria-hidden` rather than duplicating it.
 - Bricks inlines the file contents, so the filename never appears in rendered HTML — don't count icons by grepping for it. Icons inside a query loop render once per iteration.
 - The same `icon` shape feeds BricksExtras icon controls (`prevIcon` / `nextIcon` on the Pro Slider Control below).
-- **On the standalone `icon` element, `iconSize` and `iconColor` misbehave with a custom-set SVG** (THT, 2026-09-06): `iconSize` emits only `font-size`, which an inlined SVG with no `width` ignores (it grows to fill its flex row), and `iconColor` emits `fill` as well as `color`, painting a stroke-only icon solid. Size it with typed `_width` / `_height` and add `fill: none` in `_cssCustom`. Prefer the `svg` element for a stroke icon where the `icon` element's own behavior (e.g. `isAccordionIcon`) isn't needed; its typed `height`/`width` don't emit `fill`. (Its icon-set variant is still unverified, per the bullet above.) Full entry in `03`.
+- **On the standalone `icon` element, `iconSize` and `iconColor` misbehave with a custom-set SVG** (THT, 2026-09-06): `iconSize` emits only `font-size`, which an inlined SVG with no `width` ignores (it grows to fill its flex row), and `iconColor` emits `fill` as well as `color`, painting a stroke-only icon solid. Size it with typed `_width` / `_height` and add `fill: none` in `_cssCustom`. Prefer the `svg` element for a stroke icon where the `icon` element's own behavior (e.g. `isAccordionIcon`) isn't needed; its typed `height`/`width` don't emit `fill`. (Its icon-set variant is in SVG element above.) Full entry in `03`.
 
 ## BricksExtras ProSlider
 
@@ -908,7 +1030,14 @@ Read back from working login / lost-password / reset-password forms. The action 
 
 - `redirect` + `redirectAdminUrl` are **not** mutually exclusive — the admin branch overwrites the rendered redirect and re-wraps the *raw* string. To use a dynamic redirect, `redirectAdminUrl` must be **unset**, not `false` (the code tests `isset()`). Full mechanism in `03`.
 - The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions`.
-- `?redirect_to=` is honoured **only** when no redirect action is configured.
+- `?redirect_to=` is honored **only** when no redirect action is configured.
+
+**Field `autocomplete`** (source-read — Clemente, 2026-07-26, Bricks 2.3.12; re-read on 2.4.4, `includes/elements/form.php`): a plain text key on the field row, no JS needed for password-manager hints.
+```php
+[ 'type' => 'password', 'autocomplete' => 'current-password' ]   // 'username' | 'new-password' | 'email' | 'off' …
+```
+- The control registers for `text`, `textarea`, `email`, `number`, `password`, `tel` and `url` fields, and the value goes through dynamic data before it lands as the `autocomplete` attribute.
+- A honeypot field (`isHoneypot`) is forced to `autocomplete="off"` whatever you write.
 
 **Email action recipient** (verified — THM, 2026-08-29; re-read THT, 2026-10-05, Bricks 2.3.12 `includes/integrations/form/actions/email.php` L17):
 ```php
@@ -944,6 +1073,28 @@ Password field with the eye toggle (an entry in `settings.fields[]`):
   'passwordHideIcon' => [ 'library' => 'svg', 'svg' => [ … ] ] ]
 ```
 Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `html` field types take `'width' => '50'` for a half-width pair. Importing the SVG attachments from WP-CLI needs `wp --user=1 media import` (`03`).
+
+## WS Form choice field — radio chip row (verified — Clemente, 2026-08-25, WS Form Pro 1.12.6; read back from a working radio field, then built against and rendered)
+
+A choice field's rows live in `meta.data_grid_<type>`. With the single-column default the label **is** the submitted value; to separate them, add a second column and name the columns by index:
+
+```php
+$field->meta->radio_field_value = '0';            // column index that is submitted
+$field->meta->radio_field_label = '1';            // column index that is shown
+$field->meta->radio_style       = 'button-full';  // '' | button | button-full | circle | image | color | switch
+$field->meta->data_grid_radio = [
+    'rows_per_page' => 10, 'group_index' => 0, 'default' => [],
+    'columns' => [ [ 'id' => 0, 'label' => 'Value' ], [ 'id' => 1, 'label' => 'Label' ] ],
+    'groups'  => [ [ 'id' => 0, 'label' => 'Radios', 'page' => 0, 'disabled' => '',
+                     'mask_group' => '', 'label_render' => 'on',
+                     'rows' => [ [ 'id' => 1, 'data' => [ 'opt_a', 'Option A' ] ] ] ] ],
+];
+```
+
+- **The column order is not fixed; the two index keys decide it.** Read them before trusting `data[0]` or `data[1]` as value or label.
+- `radio_style` options come from `$checkbox_radio_style_options` in `includes/class-ws-form-config.php`. `button` / `button-full` is a native chip control: use it before hand-building chips from divs.
+- To keep the choice list client-editable (an ACF options repeater, a CPT), leave the persisted grid empty and rebuild `data_grid_radio` per request in `wsf_pre_render` (the generic hook, checking the form id inside), finding the field with `wsf_field_get_objects_by_class()`. Mechanics and traps: `03`.
+- Writing the field still goes through the WS Form PHP API rules in `03` (capability gate, `db_create()` defaults, `db_publish()`).
 
 ## Nav menu and logo (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
 
@@ -1061,6 +1212,28 @@ Child of a `galleryMode` Pro Slider; renders the `ul.splide__list` itself (BE's 
 
 ⚠️ **Above the fold, `lazyLoadSupport` must be `'none'`** — the `splide` default ships a placeholder data-URI `src` and makes the LCP element a 0×0 SVG. And `maybeSRCSET` defaults to *disabled*, so without it you ship the full-size original. On the parent `xproslider`: `rewind => true` is REQUIRED for fade+autoplay to cycle back, and `arrows` is a **string** `'true'`/`'false'` while `pagination` is an `isset()` checkbox — `true` or omit, never `false` (see the ProSlider table above).
 
+## Bricks native Breadcrumbs (verified — Clemente, 2026-08-07, Bricks 2.3.12; read from `includes/elements/breadcrumbs.php`, rendered; controls re-read on 2.4.4)
+
+The install had no saved example, so this is control-definition plus render, not a builder readback.
+
+```php
+[ 'name' => 'breadcrumbs', 'settings' => [
+    'homeLabel'         => 'Home',
+    'singularStructure' => [                       // repeater: one row per post type
+        [ 'id'                   => 'brs001',
+          'postType'             => [ 'my_cpt' ],  // ARRAY, matched with in_array()
+          'showPostTypeArchive'  => true,
+          'postTypeArchiveLabel' => 'Archive label' ],   // empty = the post type's own label; dynamic data resolves
+    ],
+    // top level, optional: separatorType 'text' | 'icon' | 'none', separatorText, separatorIcon, homeURL, homeIcon
+] ]
+// row-level, optional: hideCurrentPost, showParentPosts, showTaxonomy + taxonomy (slug; first assigned term), showParentTerms
+```
+
+- **Accessibility, no schema.** Renders `nav[aria-label="Breadcrumb"]`, `<a class="item">` crumbs, `<span class="separator" aria-hidden="true">`, and `<span class="item" aria-current="page">` on the last one. There is no `BreadcrumbList`, microdata or JSON-LD anywhere in the element, so it pairs with an SEO plugin's breadcrumb schema with nothing to de-duplicate (unlike BricksExtras below).
+- Markup is **flat** (links and separator spans), not `<ol>` / `<li>`; style it as inline items, not a list.
+- `showPostTypeArchive` links through `get_post_type_archive_link()`, so the CPT needs `has_archive`.
+
 ## BricksExtras Breadcrumbs (verified — WCDP, 2026-09-12, BE 1.7.1 source `x-breadcrumbs.php` + builder save)
 
 ⚠️ BE elements render nothing until switched on in BricksExtras → Elements (`03`). Confirm `isset( \Bricks\Elements::$elements['xbreadcrumbs'] )` before writing the tree.
@@ -1139,8 +1312,8 @@ A single **variable** woff2 can back multiple discrete weight faces, but any wei
 ## Schemas not yet captured
 
 - `_border` image/gradient backgrounds (`_background` beyond a flat color).
-- `_transform` / `_transform:hover` and `_boxShadow` / `_boxShadow:hover` — not found in any builder-saved class or tree on the fleet as of 2026-09. A hover lift + shadow currently lives in `_cssCustom`. (Nearby shape, proves nothing about the generic keys: `subMenuBoxShadow = { values: { offsetX, offsetY, blur }, color: { raw } }`.)
-- The `svg` element's icon-set variant (see Icon settings).
+- `_transform` / `_transform:hover` — not found in any builder-saved class or tree on the fleet as of 2026-09. A hover lift currently lives in `_cssCustom`.
+- `_boxShadow` from a **builder save**. The shape in Typed visual settings is emitter-read only (Clemente, 2026-08-03), matching the nearby builder-saved `subMenuBoxShadow = { values: { offsetX, offsetY, blur }, color: { raw } }`. `_boxShadow:hover` is untested.
 
 An incomplete library is expected. When you need one, discover it via the golden rule and append it here for the harvest.
 

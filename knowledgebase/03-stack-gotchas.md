@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-317 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+344 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -58,6 +58,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks element IDs must be alphanumeric, never all-numeric — 6 chars is the house convention; validate only the IDs a script adds
 - `{query_results_count_filter}` with NO element id renders 0 when it sits outside the loop
 - `_cssId` is the stable hook for PHP filters, not Bricks' internal element id
+- `bricks/element/render_attributes` is keyed by RENDER-KEY — `$attributes['class']` is not where the classes are
 - Re-sign Bricks code elements after any DB-side edit
 - Bricks code elements store CSS in `settings.cssCode`, not `settings.code`
 - `update_post_meta` silently fails on `_bricks_page_*_2` keys from WP-CLI
@@ -78,6 +79,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks `accordion-nested` emits `aria-controls=""` / `aria-labelledby=""` unless the content wrapper and heading carry `_cssId`
 - Bricks `icon` element with a custom-set SVG — `iconSize` doesn't size it and `iconColor` fills it
 - Bricks emits skip-links automatically via the `bricks_body` action
+- Bricks `nav-menu`'s aria-label control labels the hamburger only — NOT the inner `<nav>` landmark
 - Bricks — typed `_border` setting uses a flat width/style/color shape, not per-side nested objects
 - Bricks — typed-setting breakpoint suffixes go on the OUTER key, not as a sibling inside a nested dict
 - A modifier class without its own breakpoint suffixes overrides the base class's media queries at EVERY width
@@ -93,6 +95,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks `_typography.font-family` quotes the value — use `custom_font_<id>`, not a CSS string
 - Bricks image element with `tag=figure` collapses to content size — `:where(.brxe-image).tag` forces `width:auto; height:fit-content`
 - Bricks `_aspectRatio` dual-routes to the inner img — it can't drive the figure's box when the image element IS the figure
+- Bricks image captions are absolutely positioned OVERLAYS on the image, not text beneath it
 - Wrapper-block-as-figure inherits UA `figure { margin: 1em 40px }` — Bricks zeros it only for `figure.brxe-image`
 - Bricks "invalid post type" on Edit with Bricks = stale rewrite rules (not a Bricks setting)
 - Bricks 2.3.x `bricks/dynamic_data/render_tag` passes `$tag` as a parsed-tag ARRAY, not always a string
@@ -121,6 +124,8 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Editing `bricks_global_classes` via WP-CLI while a Bricks builder tab is open gets silently reverted
 - Editing a SHARED global class from a page where it's a secondary consumer silently restyles its primary home
 - Deleting a global class in the Bricks Style Manager leaves DANGLING refs in element `_cssGlobalClasses`
+- Bricks components — a global class used ONLY inside a component looks orphaned to a post-meta scan
+- Pruning orphaned global classes CASCADES — a class's `_cssCustom` can be the only reference keeping its siblings alive
 - Bricks ships a default `blockquote` style (4px left border + Georgia) that hits any `customTag: "blockquote"`
 - `display:flex` breaks an inline comma-separated `{post_terms_*}` list — it eats the space after the comma
 - Bricks auto-adds `aria-current="page"` to a link whose href EXACTLY matches the current URL — drive active states from it
@@ -129,6 +134,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks — flex/gap control KEYS depend on the ELEMENT TYPE: `_direction`/`_columnGap`/`_rowGap` on layout elements, `_flexDirection`/`_gap` on everything else
 - Bricks layout-element base display: `.brxe-block` is a wrapping, full-width, `flex-start` flex column; `.brxe-div` has NO display rule
 - A Bricks element with a link is wrapped in an `<a>` — the WRAPPER is the flex item, not the element
+- `margin-inline: auto` on a full-width flex item emits correctly and computes to `0` — center from the parent
 - Bricks — an empty `text-basic` renders nothing; use `block`/`div` for decorative empties
 - Bricks — the `html` element is the ungated raw-markup injector; reserve it for genuinely non-native markup
 - Bricks — flex/grid + gap that arranges BEM children belongs on the Container, not the single-child Section
@@ -151,6 +157,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A mockup's "reuse these classes" note goes stale after a builder rework — reconcile against live `bricks_global_classes` BEFORE building
 - Grid container: `_alignItems` is ignored, `_alignItemsGrid` is the operative key (unset emits `align-items: initial`)
 - A grid column span or `grid-auto-rows: 1fr` must be reset to `auto` at the single-column breakpoint
+- `_conditions` remove a grid child but not its track — collapse the grid with `:not(:has())`
 - `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
 - Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path
 - Bricks custom login page ignores `?redirect_to=` whenever a redirect action is configured
@@ -158,6 +165,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A Bricks template imported from another site carries that site's numeric IDs — fonts, ACF fields, and form settings all break silently
 - Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
 - Custom Bricks query type over a non-post source: post-context tags silently resolve to nothing
+- Retiring a custom query type silently empties every saved tree that still calls it, including drafts and trash
 - Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 - `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
 - A Bricks CPT template that renders `post_content` = per-page content with zero template risk
@@ -175,6 +183,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Advanced Themer option names changed between versions — `bricks-advanced-themer__brxc_*` (3.3.x) vs `bricks-advanced-themer_brxc_*` (3.5)
 - Bricks nav-menu ships `.sub-menu { line-height: 60px }` and `li { margin-left: 30px }` — both survive a typed `menuGap`
 - Bricks text elements don't run shortcodes — use the Shortcode element (Post Content does)
+- A `tag: p` element bound to wpautop'd dynamic data emits `<p>` inside `<p>` — your class lands on an EMPTY element
 - Re-running a WP-CLI build script silently reverts every builder edit made since its last run — dry-run it against the live DB first
 - Front-end-only CSS: the builder canvas strips `bricks-is-frontend`, and Bricks' component preview keeps it — scope page-shell rules to both facts
 - Bricks image element has no `sizes` control — WordPress derives `sizes` from the chosen image size, so Full ships the original
@@ -207,6 +216,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Frontend Toolkit must skip the builder iframe, not just the builder main frame
 - Frontend Toolkit `staggerObserver` does not pick up AJAX-injected children inside an already-fired stagger parent
 - Frontend Toolkit — never put `.anim-*` on a content wrapper taller than the viewport
+- Frontend Toolkit — measure the fold before choosing reveal targets; on a short site the card-grid stagger animates above-fold content
 
 **ACSS**
 
@@ -219,6 +229,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS — `clamp()` values in an `@supports` block override the rem fallbacks in `:root` `[stack:acss]`
 - ACSS — spacing/text scale stops at `xs`; using `2xs` silently falls back to an invalid var
 - ACSS — `automatic-bricks.css` enqueues AFTER the child theme; override ACSS tokens via `:root`, not selectors `[stack:acss]`
+- A `wp_enqueue_style` dependency on a handle that isn't registered silently drops YOUR stylesheet — and ACSS's Bricks handle is `automaticcss-bricks`, not `…-css` `[stack:acss]`
 - ACSS — button bg-context wrappers override variant classes via specificity `[stack:acss]`
 - ACSS button variants: the Bricks picker, the Button Style dropdown and the compiled CSS are three independent lists — `btn--action` is never in the dropdown, and a picker class can emit zero CSS `[stack:acss]`
 - ACSS `[class*="btn--"]` matches ANY class containing the substring — a BEM modifier like `header__btn--panel` picks up button skin `[stack:acss]`
@@ -252,6 +263,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACF `group` fields are structural — reorganising into tabs must WRAP them, never replace them
 - Writing ACF **group** subfield options directly needs FOUR rows, not two — miss the group-level pair and `get_field()` returns `null`
 - Round-tripping an ACF GROUP through `get_field()` → `update_field()` double-applies subfield formatting
+- ACF `get_field()` caches per request — a read taken before a same-process write reports the OLD value
 - Migrating a UI/JSON field group to PHP — `local` lies, the post types can't be trashed, and children orphan
 - ACF `url` field type rejects relative paths and query strings
 - An ACF repeater round-trip bakes `new_lines` formatting into storage — `get_field()` → `update_field()` is lossy
@@ -260,6 +272,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - An ACF options page sizes its labels at (0,3,2) — `.acf-field .acf-label label` only restyles the nested ones
 - ACF left-placed tabs: `.acf-tab-wrap.-left` and `.acf-fields.-sidebar` are JS-applied — curl never shows them
 - A submenu under an ACF options page must hook `admin_menu` above 99 — earlier, its link is a bare `/wp-admin/<slug>` that 404s
+- ACF options page `position` is cast to int — a fractional menu slot needs a late `$menu` move
+- ACF repeater `layout` decides whether `wrapper.width` is usable, and the widths must total exactly 100
+- ACF `conditional_logic` and Bricks `_conditions` nest the same way (OR of AND-groups) — only the rule keys differ
 - Renaming an ACF options-page group subfield orphans its value unless both option rows move
 - ACF `update_field()` by field KEY on an unregistered group silently writes the KEY as the meta key — verify the registration, not the file
 - Bricks `{acf_<name>}` tags are keyed on the field NAME across every group — a new field named `phone` silently hijacks an options-page `{acf_phone}`
@@ -267,6 +282,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 **WordPress core — CPTs, rewrites, canonical, mail**
 
 - A CPT named `author` collides with WP's built-in `?author=` query var — single URLs 404
+- A taxonomy rewrite nested under a CPT archive slug 404s — the CPT's own attachment rule matches first
 - `redirect_canonical` 301s requests you meant to serve — a term archive to a same-slug CPT single, and a custom rewrite endpoint to a trailing slash
 - Favicon: WP native Site Icon handles raster but not SVG; programmatic set skips the `site_icon-*` sizes
 - `remove_action()` on `admin_head` needs core's REAL priority AND must run after the admin bootstrap
@@ -278,6 +294,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Legacy root-slug redirect silently skipped — the slug resolves to an ATTACHMENT page, not a 404
 - `set_quality()` is ignored when an image editor converts formats (WebP → JPEG)
 - WordPress — the install-time "Hello world!" post stays comment-OPEN on a "no blog" site
+- A default-featured-image fallback on `post_thumbnail_id` leaks into REST `featured_media` — exclude admin and REST
+- Posts live at the site root under `/%postname%/` — no URL-prefix rule can gate "the blog"
+- A staging-only file or a staging-named hostname check is one sync away from gating the wrong environment
 
 **Rank Math + Bricks**
 
@@ -335,10 +354,14 @@ Group labels below are bold rather than headings on purpose — `###` here would
 
 - WS Form's PHP API needs `wp_set_current_user(1)` from WP-CLI — reads included
 - WS Form `WS_Form_Field::db_create()` needs an EMPTY label or the field gets ZERO meta
+- WS Form — the HTML field's content meta key is `html_editor`, not `html`
+- `WS_Form_Field::db_delete()` throws "Invalid form ID" unless `form_id` is set on the field object
+- WS Form renders a PUBLISHED SNAPSHOT — API edits to an existing form don't reach the front end until you republish, and the checksums say it's in sync
 - WS Form — choices live in `data_grid_checkbox`/`data_grid_radio`; the export JSON is the importable artifact
 - WS Form — skin it by overriding root `--wsf-form-*` vars, never by writing rules against `.wsf-field` / `.wsf-label`
 - WS Form — per-field-type CSS loads AFTER the theme; the native checkbox IS the styled box (sibling of the label, no wrap mode)
 - WS Form `css_style: false` drops more than the skin — the section fieldset chrome and `.wsf-hidden-element` lose their CSS
+- WS Form layout — `--wsf-form-grid-gap` drives BOTH axes, and the tile padding IS the gutter, so killing the grid's negative margins indents the form
 - WS Form prints its entire compiled CSS inline on every page — while identical files sit unused in uploads
 - WS Form inlines a ~95KB form-definition JSON blob per rendered form — no setting moves it, only placement does
 - WS Form checkbox `required` is cosmetic — `checkbox_min` is the enforcement, and it renders `data-checkbox-min`
@@ -348,6 +371,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - WS Form tracking meta is written whenever the form toggle is on — an empty value proves nothing
 - A populated GA4 conversion number proves nothing — WS Form does NOT push to the dataLayer
 - WS Form `.empty()`s the form on every client render — and an attribute "already done" guard survives it and lies
+- WS Form — a section `custom_attributes` entry named `id` ships a DUPLICATE `id`; anchor on `data-id`
 - Custom WS Form trackings silently OVERWRITE the plugin's built-ins if you reuse a key name
 - WS Form submission retention hides in a JSON-inside-serialized-PHP blob — and `''` means OFF, not "unset"
 - WS Form Google Sheets: a header cell is NOT a mapping — an unmapped column looks wired and silently writes blank
@@ -357,6 +381,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 
 **Fluent Forms**
 
+- Read WS Form submitted values by field CLASS, not field id
 - Fluent Forms `fluentform_submission_success` never bubbles from the `<form>` — an `e.target` listener reads an empty form id
 - Global autoload-captcha Turnstile silently breaks *payment* forms only — single-use tokens expire before a slow fill completes
 
@@ -381,6 +406,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 
 **Fonts**
 
+- Painted ink can overflow its box with no layout overflow — `scrollWidth` passes, an element screenshot catches it
 - Variable-font prep for Bricks: TTF→WOFF2 (keep axes), subset, and the opsz-instance trap
 - Bricks custom fonts — `bricks_font_faces` meta schema + italic key encoding (also a `02` schema-library harvest candidate)
 
@@ -392,6 +418,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `wp media import` of SVG fails as CLI user 0 — sideload as an admin user
 - `wp eval-file` dies silently (exit 0, zero output) on some script files — run via `wp eval 'include ...'`
 - `wp eval-file` and the `wp eval 'include …'` workaround do NOT run the file in global scope — `global $var` sees nothing
+- A multi-surface Bricks write must validate EVERY surface before writing ANY — there is no transaction
 - WP-CLI in the wrong webapp: a cross-site class-id collision silently edits a sibling install
 - WP-CLI — `--prompt` ECHOES the resolved command line, secret included, to stdout
 - The WP-CLI upgrader skin ECHOES premium package URLs, licence key included — update licensed themes/plugins with `--quiet` + version readback
@@ -456,6 +483,21 @@ add_filter( 'bricks/query/run', function( $results, $query_obj ) {
 }, 10, 2 );
 ```
 **First seen:** V1 baseline, 2026-05-24.
+
+### `bricks/element/render_attributes` is keyed by RENDER-KEY — `$attributes['class']` is not where the classes are
+**Symptom / When:** A filter adds a modifier class or an `aria-label` through `bricks/element/render_attributes`, returns without error, and the element renders exactly as before.
+**Why:** The first argument is a map of render-key → attribute array, not a flat attribute list. The root element's classes are at `$attributes['_root']['class']`; inner parts have their own keys (`nav` on the `nav-menu` element, `link` on a linked image). Writing `$attributes['class'][] = …` creates a stray top-level key Bricks never reads. And `$element` is the element **object** (`$element->settings`, `$element->name`), not an array.
+**Fix:**
+```php
+add_filter( 'bricks/element/render_attributes', function ( $attributes, $key, $element ) {
+    if ( '_root' !== $key ) { return $attributes; }
+    $attributes[ $key ]['class'][] = 'my-modifier';      // works
+    // $attributes['class'][] = 'my-modifier';           // silently does nothing
+    return $attributes;
+}, 10, 3 );
+```
+Scope it to one element by its global-class **ID** in `$element->settings['_cssGlobalClasses']`, not the rendered class name or the internal element id: the class ID survives a Style Manager rename and the element id changes on duplicate.
+**First seen:** Clemente, 2026-08-08 — a root-class modifier silently no-opped; the project's working `nav` aria-label filter had been read as a special case for `nav` rather than as the general rule.
 
 ### Re-sign Bricks code elements after any DB-side edit
 **Symptom:** A code element renders blank with no error.
@@ -699,6 +741,21 @@ This does not apply to `<button>` markup inside a **code** element, which is the
 **What you DO provide:** CSS to style `.skip-link` visually-hidden-until-focused. Bricks does not ship that rule — the anchor renders visible by default. Add a child-theme `.skip-link` rule (hide via `transform: translateY(-150%)`, restore on `:focus`).
 **First seen:** KSCBS, 2026-05-17 — header v2 rebuild initially authored a duplicate skip-link.
 
+### Bricks `nav-menu`'s aria-label control labels the hamburger only — NOT the inner `<nav>` landmark
+**Symptom / When:** The desktop list renders inside a bare `<nav class="bricks-nav-menu-wrapper">` with no accessible name. On a page whose other navs (footer columns, offcanvas) are labeled, the *primary* navigation is the only unnamed "navigation" landmark, which is backwards for screen-reader users. The element's only label control, `mobileMenuToggleAriaLabel`, names the toggle `<button>`.
+**Why:** `nav-menu.php` emits the desktop `<nav>` under its own render key (`set_attribute( 'nav', … )`) with no label. Element `_attributes` apply to the element root, the `<div class="brxe-nav-menu">`, so a custom `aria-label` lands on a non-landmark div.
+**Fix:** Label the `nav` render key through `bricks/element/render_attributes` (see the render-key entry above), scoped by a global-class ID and guarded against an existing label. Behavior, so it lives in the functionality plugin:
+```php
+add_filter( 'bricks/element/render_attributes', function ( $attributes, $key, $element ) {
+    if ( 'nav' !== $key || ( $element->name ?? '' ) !== 'nav-menu' ) return $attributes;
+    if ( ! in_array( 'abc123', (array) ( $element->settings['_cssGlobalClasses'] ?? [] ), true ) ) return $attributes; // header menu class id
+    if ( empty( $attributes['nav']['aria-label'] ) ) $attributes['nav']['aria-label'] = __( 'Main navigation', 'my-plugin' );
+    return $attributes;
+}, 10, 3 );
+```
+Verify with `curl … | grep '<nav class="bricks-nav-menu-wrapper'` and expect the `aria-label`.
+**First seen:** Clemente, 2026-06-21 — header accessibility review; the primary nav was the only unlabeled `<nav>` of five landmarks.
+
 ### Bricks — typed `_border` setting uses a flat width/style/color shape, not per-side nested objects
 **Symptom:** A `_border` setting written with a per-side nested shape (`_border.bottom.{width,style,color}`) persists in `bricks_global_classes` without error, but the rendered page contains no border CSS at all.
 **Why:** Bricks' `_border` schema is flat — width is a per-side object, style is a scalar, color is a single object, radius is a per-side object. Bricks' emitter walks `_border.width` / `.style` / `.color` / `.radius` explicitly; anything else is ignored and not even stripped on next builder load, so a readback looks correct while the output is empty.
@@ -734,7 +791,10 @@ foreach($g as $c){ $b=$c["settings"]["_border"]??null; if(!$b) continue;
 '_gridTemplateColumns:mobile_landscape' => 'var(--grid-1)',
 ```
 This applies to any responsive typed setting a modifier overrides, not just grids.
-**First seen:** WCDP, 2026-08-20 — the Home `card-grid--4` involvement grid rendered four ~90px columns at 390px; caught by screenshot. Hit again 2026-09-13 on a `split--even` modifier (`var(--grid-2)`), which never collapsed until it gained its own `:tablet_portrait` key.
+**A partial ladder is the same bug one step down.** Bricks' default breakpoints are **max-width** queries, so a `:tablet_portrait` value also matches at 390px. A modifier that sets `tablet_portrait` but not `mobile_landscape` out-orders the base class's `mobile_landscape` rule at equal specificity, and mobile gets the tablet layout. Re-assert the value at **every** smaller breakpoint where it must differ.
+**What "source order" means here, precisely.** Within one element, global-class CSS emits in the order the IDs appear in **that element's `_cssGlobalClasses` array**. Reordering the `bricks_global_classes` option itself changes nothing (Clemente tested it). So list utility classes first and section/BEM overrides after, base layer before override. This bites hardest when a utility moves from the child theme (enqueued before the inline block, so every global class beat it) onto a global class: section overrides that used to win silently start losing. Sweep the arrays after any such migration, and diff `getComputedStyle` before and after, because the DB and the emitted CSS both look correct.
+**Verify objectively:** `document.documentElement.scrollWidth` must equal `window.innerWidth` at each breakpoint.
+**First seen:** WCDP, 2026-08-20 — the Home `card-grid--4` involvement grid rendered four ~90px columns at 390px; caught by screenshot. Hit again 2026-09-13 on a `split--even` modifier (`var(--grid-2)`), which never collapsed until it gained its own `:tablet_portrait` key. · **Clemente, 2026-07-25** — moving `.eyebrow` / `.display` / `.lede` from child-theme rules to typed global-class settings silently overrode five deliberate section overrides; reordering the option had no effect, reordering each element's array fixed it. · **Clemente, 2026-07-26** — a `--v2` footer grid modifier set `:tablet_portrait` only and reintroduced two columns at 390px (`scrollWidth` 409 vs 390).
 
 ### Bricks — a `_widthMax` on a Container replaces its viewport-safe cap; a fixed measure overflows on mobile
 **Symptom / When:** A Container narrowed with `_widthMax` (`720px`, `72ch`, `var(--width-l)`) looks right on desktop, but at phone width the page scrolls sideways and the container is wider than the viewport (720px, or ~820px, at a 390px viewport). Children inherit the overflow. Mobile-only, so it survives desktop review.
@@ -808,7 +868,9 @@ curl -sk <url> | grep -oE '\.my-class[^{]*\{[^}]*\}'
 grep -r '<element-id>' wp-content/uploads/bricks/css/
 ```
 Element typed CSS uses `#brxe-<id>` ID selectors, and for images the dual-route `#brxe-<id>:not(.tag), #brxe-<id> img{…}`. Useful corollary: Bricks' own image default is `:where(.brxe-image) img{height:100%;width:100%}` at **zero specificity**, so an ID-scoped typed `_aspectRatio` on a figure-image wins and renders.
-**First seen:** TAB, 2026-05-29 — Single Service hero; a bronze CTA rule was absent from `post-15486.min.css` but present in the page's inline head CSS. **And** TAB, 2026-06-09 — overview image typed settings; `.brxe-psomd0` rules were in `post-15582.min.css`, not inline.
+**Grep tip:** exclude markup from the selector part, `grep -oE '\.my__class[^{<>]{0,80}\{[^}]{0,160}\}'`. Without `<>` in the exclusion the pattern runs through HTML and returns fragments that look like broken CSS. A 0-byte `post-{id}.min.css` after moving settings off elements onto classes is the success condition, not a lost rule.
+**Auditing "every styled element has a class."** Since element-typed CSS is the only ID-scoped CSS in the per-post files, an ID rule there is element-bound styling. Two traps in that audit: (1) **don't grep `#brxe-`** — an element with a custom `_cssId` emits under that id instead, so the elements someone bothered to hand-tune are exactly the ones the grep misses. Grep any id selector (`#[a-zA-Z][a-zA-Z0-9_-]*[^{]*\{`) and eyeball out hex colors and `#brx-content`. (2) Run a **source-side** check too: list each element's underscore-prefixed settings outside the benign set (`_cssGlobalClasses _attributes _hidden _cssId _conditions _cssClasses`). That one also covers **components**, whose trees live in the `bricks_components` option and never reach a per-post file. Non-underscore styling keys (`iconTransform`, `submitButtonTypography`) only show on the CSS side, so the two checks are complements.
+**First seen:** TAB, 2026-05-29 — Single Service hero; a bronze CTA rule was absent from `post-15486.min.css` but present in the page's inline head CSS. **And** TAB, 2026-06-09 — overview image typed settings; `.brxe-psomd0` rules were in `post-15582.min.css`, not inline. · **Clemente, 2026-08-02** — sitewide "styled elements get a class" audit: 13 violations to 0, then 2 more found only after switching off the `#brxe-` grep (two custom-`_cssId` elements carrying typed `_width`/`_height` and no class at all).
 
 ### Bricks never rebuilds `style-manager.min.css` — on an upgraded site it is a fossil that outranks current tokens
 **Symptom / When:** After emptying `bricks_global_variables` or editing the colour palette, tokens fail to resolve or resolve to dead values — `getComputedStyle` returns a `var(--retired-name)` pointer to a variable that exists nowhere in the build. Everything in the DB reads clean. The overriding declarations trace to a file in `wp-content/uploads/bricks/css/` whose mtime predates the change by weeks or months.
@@ -857,7 +919,7 @@ This is generic `get_option()` behaviour rather than a Bricks quirk, and it is t
 **The empty `style-manager.min.css` is a separate, real, fixable fault.** `Assets::enqueue_style_manager_css()` enqueues on `file_exists()` with **no size check**, so a 0-byte file costs a render-blocking request on every page. It holds color variables, utility classes and scale-property global variables — **not** global classes, so no builder save will ever make it hold them. `[stack:acss]` On **ACSS-driven sites it is permanently empty**: `Ajax::generate_style_manager_css_file()` skips colors with no `light` key ("old format"), and ACSS-generated palettes carry `raw` only (measured: 0 of 207 colors had `light`; 0 of 4 global variables had `scale`; the generator returns `true` and writes 0 bytes). **Fix: delete the file.** The deletion sticks — regen's cleanup filter *excludes* that filename from deletion but never creates it. It reappears populated only if a `light`-format palette is added and saved in the builder, which is correct. On `bricks-native` the file is populated, but only as a later-loading duplicate of `color-palettes.min.css` / `global-variables.min.css`. Deleting it drops no tokens; a stale copy is the real hazard (see "Bricks never rebuilds `style-manager.min.css`"). Verified: pkjsupport, 2026-10-04.
 **Option name:** the setting lives in **`bricks_global_settings`**, not `bricks_settings` (which does not exist and returns `false` — a `?? 'default'` against it silently fabricates a plausible answer). Read it the reliable way: `wp eval '\Bricks\Database::get_setting("cssLoading", "UNSET");'`.
 **Pre-2.2 installs:** `style-manager.min.css` is `@since 2.2`, so the empty-file half of this entry cannot occur below that — `generate_color_palette_css_file()` is the deprecated shim that now just calls the Style Manager generator. The global-classes-are-inline architecture was not re-verified below 2.2; if a sub-2.2 install surfaces, confirm against its own source before applying the "nothing to fix" verdict.
-**First seen:** TAB, 2026-06-26 — pre-launch CSS-handoff sweep; CLI switch left global classes inline, reverted to baseline, deferred to cutover. · **Corrected:** MMHN, 2026-07-15 — this entry cited `bricks_settings`; the real option is `bricks_global_settings`. (Noted in passing: a fresh Local install can ship `cssLoading='file'` already set.) · **Substantially rewritten:** VMG, 2026-08-01 — the old entry's prescribed fix (re-save global classes in the builder so `style-manager.min.css` populates) does not work and cannot: that file never holds global classes. Read against 2.3.10 source rather than inferred from symptoms; "no net win" also overstated, since file mode does move the element-default bulk out of the HTML. · **Corrected:** pkjsupport, 2026-10-04 — the Stage 0 `bricks-native` aside ("deleting it would drop them") tested false; see the `style-manager.min.css` entry above.
+**First seen:** TAB, 2026-06-26 — pre-launch CSS-handoff sweep; CLI switch left global classes inline, reverted to baseline, deferred to cutover. · **Corrected:** MMHN, 2026-07-15 — this entry cited `bricks_settings`; the real option is `bricks_global_settings`. (Noted in passing: a fresh Local install can ship `cssLoading='file'` already set.) · **Substantially rewritten:** VMG, 2026-08-01 — the old entry's prescribed fix (re-save global classes in the builder so `style-manager.min.css` populates) does not work and cannot: that file never holds global classes. Read against 2.3.10 source rather than inferred from symptoms; "no net win" also overstated, since file mode does move the element-default bulk out of the HTML. · **Corrected:** pkjsupport, 2026-10-04 — the Stage 0 `bricks-native` aside ("deleting it would drop them") tested false; see the `style-manager.min.css` entry above. · **Clemente, 2026-08-02** — field confirmation on an ACSS site: the 0-byte file was enqueued on every page, deleted, pages verified, and a regen confirmed not to recreate it.
 
 ### Bricks `_typography.font-family` quotes the value — use `custom_font_<id>`, not a CSS string
 **Symptom / When:** You set a Global Class font-family to `"Jost, sans-serif"` (or `"var(--heading-font-family)"`) and the rendered CSS comes out `font-family: "Jost, sans-serif";` — quoted, treated as one literal name. The browser silently falls back to the default sans.
@@ -889,8 +951,16 @@ System stacks work as literals (`"sans-serif"` is a valid CSS keyword). Named fa
 - **(a) Layout-sized image** (absolute-inset-0 hero): image element with `tag:"figure"` — one element. Layout drives the box; no aspect-ratio needed.
 - **(b) Aspect-ratio'd photo, no caption:** outer `<div>`/block for layout + image element for semantics — two elements. The **wrapper** carries `_aspectRatio` (it's a block, so no dual-route); the image carries `_width:100%; _height:100%; _objectFit:cover`.
 - **(c) Captioned photo:** outer block with `tag:"figure"` + plain image + `<figcaption>` — the figcaption MUST be inside its figure.
+**The image element's root tag flips with the caption, and the caption default is a theme style.** With no `tag` set, `image.php` computes `$has_html_tag = $image_caption || $has_overlay || …`: no caption, and the `<img>` is the root and carries your class; a caption, and `<figure>` becomes the root and the same class lands on a wrapper. In a loop or single template the caption is content, so whoever fills in the Media Library caption field decides which element your class styles. Set `tag` explicitly for a deterministic root. Worse for (c): the caption source resolves as `$this->theme_styles['caption'] ?? 'attachment'` **before** the element's own `caption` key, so an inner image with no `caption` key at all still renders Bricks' own `<figure>` + `<figcaption>` whenever the attachment has a caption. You get two figures and the caption printed twice, only on the posts whose attachment has one. Set `'caption' => 'none'` on the inner image; omitting the key is not the same thing. `none` also makes the `<img>` the root again, which is what lets `_attributes` such as `sizes` land on the image.
 **`object-fit` may take the same route, and a class can miss it.** `_objectFit` on the image element emits through the element-id selector pair, not onto an arbitrary global class. A class carrying `{_width: '100%', _height: '100%', _objectFit: 'cover'}` on a bare (caption-less) image was seen to emit width and height but no `object-fit`, stretching a 16:9 source into its wrapper; `object-fit: cover` in the class's `_cssCustom` cropped it. ⚠️ **Re-test before relying on the mechanism:** the no-emit was verified with a grep (`'\.my-img{'`) that misses inline global-class CSS, which Bricks prints as `.my-img {` (see "Bricks — where CSS actually lives"). The stretched image was real; that the class CSS lacked `object-fit` was never proven.
-**First seen:** TAB, 2026-05-02 — photo-block sweep; `partner__photo` consolidated to image-as-figure rendered a collapsed figure. Reverted to wrapper-as-figure, which is correct for aspect-ratio'd photos. · **Extended:** MMHN, 2026-07-18 — a recipe-single feature image: a 1920×1080 source stretched into a 480px panel.
+**First seen:** TAB, 2026-05-02 — photo-block sweep; `partner__photo` consolidated to image-as-figure rendered a collapsed figure. Reverted to wrapper-as-figure, which is correct for aspect-ratio'd photos. · **Extended:** MMHN, 2026-07-18 — a recipe-single feature image: a 1920×1080 source stretched into a 480px panel. · **Clemente, 2026-08-06/07** — a news single's image class styled differently on the three posts whose attachments had captions (root flip); then a story single's wrapper-as-figure printed an attachment caption twice (theme-style default).
+
+### Bricks image captions are absolutely positioned OVERLAYS on the image, not text beneath it
+**Symptom / When:** You enable the image element's caption and style it as a line under the photo: a muted dark color, a `margin-top`. The dark text is invisible and the margin does nothing.
+**Why:** `frontend.min.css` carries one caption rule, and it is an overlay: `:where(.brxe-image) .bricks-image-caption{background:linear-gradient(0deg,rgba(0,0,0,.5),rgba(0,0,0,.25) 70%,transparent);bottom:0;color:#fff;margin:0;padding:10px 15px;pointer-events:none;position:absolute;text-align:center;width:100%;z-index:1}`. The figure gets `position: relative` from the `caption` class Bricks adds to the root. So the backdrop is a dark gradient, not the page; `margin-top` doesn't enter placement under `position:absolute; bottom:0`; and the `:where()` makes the rule zero-specificity, so overriding one property is easy and can read as having overridden the layout model.
+**Fix:** Style the caption as what it is, light text on a dark scrim. A caption *below* the image means overriding `position`, `bottom`, `background` and `text-align` together, so decide whether the overlay is fine first.
+⚠️ **Method trap, not Bricks:** a contrast check that finds the backdrop by walking ancestors for a non-transparent `background-color` skips a gradient entirely (it is `background-image`) and reports the page background. That is how a legible white caption measured 1.05:1. Sample rendered pixels behind the text (screenshot the element with `color: transparent`), or read `backgroundImage` explicitly.
+**First seen:** Clemente, 2026-08-06 — a news single's featured-image caption, set light on purpose, was wrongly flagged as an AA failure on a `background-color`-only measurement; re-measured from pixels at 5.4–9.7:1 across three captioned posts.
 
 ### Wrapper-block-as-figure inherits UA `figure { margin: 1em 40px }` — Bricks zeros it only for `figure.brxe-image`
 **Symptom / When:** A captioned photo built as a block with `tag:"figure"` (case (c) above) renders with a visible gutter — ~16px top/bottom, ~40px left/right — inside its container. The wrapper class sets no `_margin`, the parent has no padding, the image fills the figure. The gutter persists.
@@ -947,7 +1017,9 @@ if ( ! is_string( $content )
 }
 ```
 Boolean gate tags should return `'1'` or `''` so `empty_not`/`empty` compare cleanly. Conditions resolve against `$instance->post_id` — on a content template for a single, that's the queried object.
-**First seen:** TAB, 2026-06-10 — Bio: Single gated sections rendered for every author; the guard only passed `{tab_post_`. **Hit again independently:** TAB, 2026-06-25 — Location Single section gating never fired until `render_content` was added. Same gotcha, two builds, five months apart — hence its place here.
+**Never gate on an image-context tag.** A tag flagged for image context (returning `[ $id ]`) is deliberately skipped by the `render_content` string pass, so inside `_conditions` it survives as a literal, `empty_not` is always true, and the figure renders empty when there is no image. Gate an image on a **separate boolean tag** (`{my_has_photo}` → `'1'`/`''`).
+**A removed tag fails the same way.** Delete a tag's registration and every element still gated on it renders, printing the raw `{token}` as its text and href: an unregistered tag matches no filter, survives verbatim, and is non-empty. Empty value and absent tag are different states, and a hide-when-empty gate only tests the first. Deleting a dynamic tag is a content edit: grep every Bricks surface for it first, and treat a hit inside `_conditions` as a hit, not as protection. The stored tree is identical before and after, so the check that fails is on the rendered page (`curl <url> | grep -c '{my_prefix_'`).
+**First seen:** TAB, 2026-06-10 — Bio: Single gated sections rendered for every author; the guard only passed `{tab_post_`. **Hit again independently:** TAB, 2026-06-25 — Location Single section gating never fired until `render_content` was added. Same gotcha, two builds, five months apart — hence its place here. · **Clemente, 2026-08-07** — a story-single photo figure bound to a custom image tag needed a separate boolean gate tag. · **Clemente, 2026-08-08** — phone and address fields were retired with their tags; a contact-page phone row gated `empty_not` on the removed tag began rendering the literal token as text and `tel:` href.
 
 ### Bricks `{post_excerpt}` auto-generates from content — an `empty_not` gate on it never fires
 **Symptom / When:** An element gated `empty_not` on `{post_excerpt}` renders on every post, including posts with no excerpt written, where it shows a ~55-word auto-summary of the content. Placed above a post-content element, it reads as the content duplicated. The gate tests correctly on posts that DO have excerpts, so demo content with excerpts everywhere hides the failure completely.
@@ -963,11 +1035,12 @@ For card decks that *want* a fallback, use a custom tag that returns `get_the_ex
 ### Bricks number fields won't hold `clamp()` / `min()` / `var()` in the builder UI — but a headless write emits them fine
 **Symptom / When:** You want a fluid value in a Bricks number-unit control (`logoHeight`, `_widthMax`, `_width`, `_height`…). Typed into the builder, it doesn't stick: TAB (April 2026, Bricks version not recorded) saw `logoHeight: clamp(36px, 4vw, 48px)` produce no `height` rule; Clemente saw the opposite face — a headless-written `_widthMax: clamp(…)` rendered correctly while the builder field displayed **empty**.
 **Why:** The CSS emitter is not the problem. In `includes/assets.php` (ControlNumber branch) Bricks appends a unit only when the value is numeric; any other string is emitted verbatim. Tested 2026-11-01 on Bricks **2.3.12 and 2.4.4** (in-memory render): `_widthMax` `clamp()`, `min(72ch, 100%)` and `var(--width-l)` all emit as written, and `logoHeight: clamp(36px, 4vw, 48px)` emits `#brxe-… .bricks-site-logo {height: clamp(36px, 4vw, 48px)}`. What rejects function values is the builder's number input, which expects `<number><unit>`. (The `<img height>` *attribute* is set only for numeric/`px` values, `elements/logo.php` — irrelevant to the CSS.)
+Plain `<number><unit>` values are unaffected: `72ch`, `60ch` and `32rem` save, **display** in the builder and emit through the typed control, so a readable-measure `_widthMax: '72ch'` belongs in the typed setting, not `_cssCustom`. Only function values blank the field.
 **Fix:** Write fluid values headlessly into the setting; they emit. Verify by reading the emitted CSS or the rendered size, never by looking at the builder field — a blank field is expected. Because the field shows empty, a later builder edit of that element is the fragile moment: re-read the setting after anyone saves it in the builder. Where a client edits the element in the builder, the alternative still holds — leave the setting empty and put the rule in the child theme:
 ```css
 .header__logo .bricks-site-logo { height: clamp(36px, 4vw, 48px); width: auto; }
 ```
-**First seen:** TAB, 2026-04-25 — header logo responsive sizing. · **Clemente**, 2026-05-19 — a footer logo sized with `_widthMax: clamp(15rem, 36vw, 30rem)` on a global class: saved, emitted and worked on the page, but the builder's Max width field showed blank, which read as "did it save?" · **Corrected 2026-11-01** (Clemente harvest; tested on Bricks 2.3.12 and 2.4.4): this entry previously said number-unit controls "silently drop" `clamp()`, `min()`, `max()`, `calc()` and `var()` and "emit nothing." The emitter passes all of them; `03`'s own `_widthMax` entry depends on `min()` working there.
+**First seen:** TAB, 2026-04-25 — header logo responsive sizing. · **Clemente**, 2026-05-19 — a footer logo sized with `_widthMax: clamp(15rem, 36vw, 30rem)` on a global class: saved, emitted and worked on the page, but the builder's Max width field showed blank, which read as "did it save?" · **Clemente, 2026-06-16** — blog readable measures (`60ch`, `72ch`) moved from `_cssCustom` to typed `_widthMax`, verified emitting. · **Corrected 2026-11-01** (Clemente harvest; tested on Bricks 2.3.12 and 2.4.4): this entry previously said number-unit controls "silently drop" `clamp()`, `min()`, `max()`, `calc()` and `var()` and "emit nothing." The emitter passes all of them; `03`'s own `_widthMax` entry depends on `min()` working there.
 ### Bricks `logo` element: `logoText` is escaped into `alt` WITHOUT dynamic-data resolution
 **Symptom / When:** A logo element with `logoText => '{acf_my_org_name}'` renders `alt="{acf_my_org_name}"` — the literal tag, read aloud by screen readers and indexed as-is.
 **Why:** `Element_Logo::render()` does `$image_atts['alt'] = esc_attr( $settings['logoText'] )` on the image branch, with no `render_dynamic_data()` call. The tag is only resolved on the *text-logo* branch further down (`elseif ( ! empty( $settings['logoText'] ) )`), which never runs when an image resolved. So the same setting is dynamic in one branch and literal in the other.
@@ -1037,9 +1110,9 @@ add_action( 'pre_get_posts', 'prefix_event_archive_query', 20 ); // after Bricks
 ```
 Setting an explicit `orderby` on the loop element also works, but it splits query policy across two homes. Keep it in PHP. The same merge applies to `posts_per_page`, which is how the loop's own setting reaches the main query.
 **The flip side — a loop NOT merged paginates against the wrong page size.** Without `is_archive_main_query: true`, the loop is a secondary query, and its `/page/N/` links are resolved by the **main** query, sized from Settings → Reading. WordPress 404s any `paged` beyond the main query's `max_num_pages` before Bricks renders anything. The links work for every loop page only when **loop `posts_per_page` ≥ main `posts_per_page`**. Larger is always safe, and smaller breaks once there are enough posts. The fix is the merge flag (native), or a loop page size at or above Reading's, or a `pre_get_posts` that sizes the main query for that archive. ⚠️ A "test pagination on a small dataset" tweak (loop 3 against Reading 10) manufactures exactly this 404 in code that is fine, and a production config with loop 24 / Reading 10 hides it until someone lowers the loop. Mirror the production *relationship* between the two values when testing.
-**Verify:** dump the live request, not a simulation. A temporary mu-plugin printing `$wp_query->get('orderby')` and `$wp_query->request` on the real archive URL shows the clobber. The simulated-query check will pass and mislead.
+**Verify:** dump the live request, not a simulation. A temporary mu-plugin printing `$wp_query->get('orderby')` and `$wp_query->request` on the real archive URL shows the clobber. The simulated-query check will pass and mislead. Or read the **rendered order**, never the query args: two sources set the same key. The partial failure is itself a tell: a `post__not_in` from the same hook taking effect while its `orderby` doesn't proves the hook ran and was overwritten.
 **The loop is the other valid home for the policy, and on a Woo archive leaving it silent defeats WooCommerce.** The prepared vars Bricks merges default an unset loop `posts_per_page` to Settings → Reading (10) and an unset `orderby` to date DESC. On a product archive that makes `woocommerce_default_catalog_orderby`, the catalog-ordering dropdown and any `menu_order` curation inert; the tell is a shop sorted newest-first, i.e. reverse import order. Either route works: declare it on the loop (`'orderby' => 'menu_order', 'order' => 'ASC', 'posts_per_page' => 24`), or keep it in a priority-20 `pre_get_posts` as above. Only a priority-10 `pre_get_posts` loses.
-**First seen:** WCDP, 2026-08-20 — the Events archive (upcoming only, ordered ascending by a start-date meta clause) rendered in a per-request-varying order. Same-second seed `post_date`s made `ORDER BY post_date DESC` non-deterministic. Priority 10 → 20 fixed it; verified stable across three loads with `ORDER BY CAST(meta_value AS SIGNED) ASC` in the live SQL. · **Extended:** THT, 2026-09-16 — every page-2 link on a CPT archive 404'd under a loop-3 / Reading-10 test config. Re-tested at Reading 2 / loop 3, where all pages resolved. · **Extended:** MMHN, 2026-07-18 / 2026-07-19 — a CPT archive paged at 10 despite a default-priority `pre_get_posts` setting 24; then a product archive ignored a full `menu_order` curation until the loop got `orderby: menu_order`.
+**First seen:** WCDP, 2026-08-20 — the Events archive (upcoming only, ordered ascending by a start-date meta clause) rendered in a per-request-varying order. Same-second seed `post_date`s made `ORDER BY post_date DESC` non-deterministic. Priority 10 → 20 fixed it; verified stable across three loads with `ORDER BY CAST(meta_value AS SIGNED) ASC` in the live SQL. · **Extended:** THT, 2026-09-16 — every page-2 link on a CPT archive 404'd under a loop-3 / Reading-10 test config. Re-tested at Reading 2 / loop 3, where all pages resolved. · **Extended:** MMHN, 2026-07-18 / 2026-07-19 — a CPT archive paged at 10 despite a default-priority `pre_get_posts` setting 24; then a product archive ignored a full `menu_order` curation until the loop got `orderby: menu_order`. · **Clemente, 2026-08-08** — a CPT archive excluded its featured post correctly (`post__not_in`) and still sorted by date; fixed by declaring ordering on the loop too.
 
 ### Bricks scores competing header/footer/template conditions — a specific post-ID condition (8) beats `main: any`
 **Symptom / When:** A second header template conditioned to one page (`main: ids`) doesn't appear to take over from the site-wide default (`main: any`) — the page renders an empty `<header id="brx-header">` shell, or the wrong header.
@@ -1056,7 +1129,7 @@ update_post_meta( $tid, '_bricks_template_settings', [
 ] );
 ```
 **Template variants: swap the condition, don't edit the live one.** For a temporary variant (a launch footer without a feature the client hasn't decided on), build it as its own `bricks_template`, generated by script from the original's current tree, then move `templateConditions` onto it and clear the original's. Restore is moving them back. Regenerate Bricks CSS so the new `post-<id>.min.css` exists, purge the page cache, and lock-check both templates before writing. Never leave two templates of one type both on `main: any`.
-**First seen:** TAB, 2026-05-30 — a per-page Simple header rendered as an empty shell; resolved after the page-settings write + regen. · **Extended:** WCDP, 2026-08-10 — applying an inherited header/footer site-wide with a descriptive guess rendered them nowhere until `main: any`. · **Extended:** MMHN, 2026-10-05 — a launch footer without the newsletter form, with the original kept restorable by one condition swap.
+**First seen:** TAB, 2026-05-30 — a per-page Simple header rendered as an empty shell; resolved after the page-settings write + regen. · **Extended:** WCDP, 2026-08-10 — applying an inherited header/footer site-wide with a descriptive guess rendered them nowhere until `main: any`. · **Extended:** MMHN, 2026-10-05 — a launch footer without the newsletter form, with the original kept restorable by one condition swap. · **Clemente, 2026-05-18** — the earliest recorded hit: a header written with `main: 'entireWebsite'` (the UI label) rendered on no page until `'any'`.
 
 ### Bricks per-page footer/header disable key is `footerDisabled` / `headerDisabled`
 **Symptom / When:** Writing `_bricks_page_settings` with `templateFooterDisabled` (or `disableFooter`) to suppress the footer on one page has no effect.
@@ -1066,7 +1139,14 @@ update_post_meta( $tid, '_bricks_template_settings', [
 update_post_meta( $page_id, '_bricks_page_settings', [ 'footerDisabled' => true ] );
 ```
 Then regen CSS. Confirm by render — the `<footer>` markup should be absent.
-**First seen:** TAB, 2026-05-30 — footer kept rendering under a guessed `templateFooterDisabled` key.
+**Code-side alternative, for a set of pages:** the `bricks/active_templates` filter, which is the same mechanism Bricks' own maintenance mode uses (it zeroes `error` there). Source-read, used on Clemente:
+```php
+add_filter( 'bricks/active_templates', function ( $t, $post_id, $content_type ) {
+    if ( in_array( (int) $post_id, $my_page_ids, true ) ) { $t['header'] = 0; $t['footer'] = 0; }
+    return $t;
+}, 10, 3 );
+```
+**First seen:** TAB, 2026-05-30 — footer kept rendering under a guessed `templateFooterDisabled` key. · **Clemente, 2026-08-03** — header and footer dropped on the auth pages via `bricks/active_templates`.
 
 ### Bricks has no `defaultHeadingTag` setting — root font-size and the default heading tag live in the THEME STYLE, under keys you will not guess
 **Symptom / When:** You go to satisfy `01`'s Bricks Theme Style requirements ("HTML font-size = `var(--root-font-size)`", "Default heading tag = H2") from WP-CLI and cannot find where either lives. Searching `bricks_global_settings` for `defaultHeadingTag` returns nothing.
@@ -1102,7 +1182,8 @@ $id = $byname['service-hero'];   // 'svhsec'
 ```
 **The trap that hides it:** when a class's name and id happen to be identical, referencing by name works — masking the bug until you hit one where name ≠ id.
 **The flip side: a rename is a `name` edit with no tree write.** Since elements reference IDs, change `name` in `bricks_global_classes` (keyed on the ID, asserting the expected old name so a drifted class aborts) and every reference follows. Two things don't follow: literal selectors inside the class's own `_cssCustom` (`.old-name{…}` detaches) and child-theme or plugin code that names the class. Grep both first. Verify the new name in markup and emitted CSS, and zero site-wide hits for the old one.
-**First seen:** TAB, 2026-05-31 — Single Project built referencing classes by name; all 7 sections rendered with 0 class hits until a name→id repair pass. A sibling template was unaffected because it referenced IDs directly. · **Extended:** MMHN, 2026-07-21 — three BEM renames, zero tree writes.
+**The other trap: the wrong key entirely.** `_cssClasses` is a separate setting, a raw space-separated class string put straight into `class="…"`. It never links to a global class: the class *name* renders in the HTML, but `Assets::generate_global_classes()` emits CSS only for classes recorded from `_cssGlobalClasses`, so the element ships unstyled. The reverse bites when cloning: ACSS utilities applied in the builder's class field often land in `_cssClasses`, so a clone that copies `_cssGlobalClasses` alone drops them (a dark footer rendered light-on-light). Readbacks for a clone must print the element's **full** settings, never a filtered view.
+**First seen:** TAB, 2026-05-31 — Single Project built referencing classes by name; all 7 sections rendered with 0 class hits until a name→id repair pass. A sibling template was unaffected because it referenced IDs directly. · **Extended:** MMHN, 2026-07-21 — three BEM renames, zero tree writes. · **Clemente, 2026-05-18** — a first-pass header used `_cssClasses` for every BEM name; names rendered, no class CSS emitted. · **Clemente, 2026-07-26** — a footer clone read only `_cssGlobalClasses` and lost `bg--ultra-dark` and the ACSS `container`; caught only by screenshot.
 
 ### Bricks image element with a dynamic source needs the tag to return an ARRAY `[$id]` in image context
 **Symptom / When:** An image element whose `image.useDynamicData` points at a *custom* dynamic tag renders nothing — or renders attachment ID 1 / a wrong image. The tag resolves fine in text contexts.
@@ -1129,8 +1210,9 @@ return $context === 'image' ? [ (int) $id ] : (string) $id;
 ### Bricks `_conditions` on an ACF `true_false` read the RAW value — `empty` / `empty_not` work
 **Symptom / When:** You gate two conditional variants (an `<a>` vs a `<button>` per loop item) on an ACF boolean. The text render `{acf_<bool>}` shows **"True" / "False"** — both non-empty — which suggests `empty`/`empty_not` can't distinguish them, tempting a custom `1`/`""` tag or a fragile `== True` compare.
 **Why:** The condition engine resolves `dynamic_data: {acf_<bool>}` to the field's **raw** value — `"1"` for true, **`""` for false** — NOT the formatted string `render_content` emits for text.
-**Fix:** Gate directly — enabled variant `compare:'empty_not'`, disabled variant `compare:'empty'`. No custom tag needed. **The text render is a red herring; verify on a real toggled item.**
-**First seen:** TAB, 2026-06-08 — per-item card routing; nearly added a custom tag before confirming empty/empty_not already switch correctly.
+**Fix:** Gate directly — enabled variant `compare:'empty_not'`, disabled variant `compare:'empty'`. No custom tag needed. **The text render is a red herring; verify on a real toggled item.** `compare: 'empty'` needs no `value`; `conditions.php` casts to string and tests `=== ''`.
+**The same inverse pair does two more jobs.** (1) **One loop, two branches:** two sibling elements in a loop item, gated inverse on one per-row tag, render exactly one per iteration (a logo for the rows that need it, a text link for the rest). The tag must be on `render_content` and read `\Bricks\Query::get_loop_object()` so it re-evaluates per row. Build the gate on the question you are actually asking: "does this row *require* a logo?" was a separate flag on one row, while "does it *have* one?" was true for six of nine and would have shipped six mismatched marks. (2) **Ship-reduced-now, restore-later:** keep the full build gated `empty_not` and a stand-in gated `empty` on one switch tag. Both stay in the tree, so nothing is rebuilt or drifts. Gate the *contents* of a shared wrapper rather than the wrapper, so the heading renders once; keep copy that assumes the full build on the gated side with a neutral twin on the other; and verify both states anonymously (see the maintenance-mode `should_apply` bypass).
+**First seen:** TAB, 2026-06-08 — per-item card routing; nearly added a custom tag before confirming empty/empty_not already switch correctly. · **Clemente, 2026-08-03** — a partner loop rendering a logo for one row and text links for the rest. · **Clemente, 2026-09-08** — a donate capture form swapped for a plain CTA at launch, restorable by one switch.
 
 ### ACF `true_false` rendered into a Bricks custom `_attributes` value outputs `"True"` / `"False"`, not `"1"` / `"0"`
 **Symptom / When:** A loop card sets `data-x = {acf_<bool>}` to drive an attribute-selector style (`[data-x="1"]{…}`). The style never applies, even where the field is on.
@@ -1159,22 +1241,64 @@ curl -s <url> | grep -oE 'data-x="[^"]*"'
 **Fix:** Treat `bricks_global_classes` as **single-writer**. Close every builder tab for the site before editing via CLI; after writing, re-read after **~90s** (one heartbeat window) to confirm it stuck — don't trust the immediate read. If coordination isn't possible, make the change in the builder UI instead. Per-post `_bricks_page_content_2` isn't affected the same way *unless that page is open in the builder*.
 **Detect an open tab before writing, not after.** The builder renews the post's `_edit_lock` (`<unix time>:<user id>`) on heartbeat, so a lock younger than WordPress's 150-second window means someone has that template open now. Gate the write on the check, as a separate command: `wp eval '…if ( time() - $t < 150 ) exit( 1 );…' && wp eval-file build.php`. Checking in the same command as the writes only tells you afterward. If a lock was live during a write, have the editor reload that tab **without saving**, then re-read.
 **PHP-side trap in the same area:** mutating the classes array through nested references (`foreach($gc as &$c){ $s =& $c['settings']; … }`) can leave the saved value unchanged. Index by position instead: `$gc[$i]['settings'][...] = …`.
+**Bricks keeps a forensic log: `bricks_global_classes_changes`.** It holds the last ~25 writes, each with `timestamp`, `user_id`, `old_count`, `new_count`, `action`, `post_id` and `referer`. A CLI write shows `action=''`, `referer=false`; a builder save shows `action='bricks_save_post'` and the exact `?bricks=run` URL that made it. A CLI row whose `new_count` becomes the next row's `old_count` and then drops back is the revert, timestamped:
+```bash
+wp option get bricks_global_classes_changes --format=json | python3 -c "
+import json,sys,datetime
+for e in json.load(sys.stdin)[-6:]:
+    t=datetime.datetime.utcfromtimestamp(e['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
+    print(t, e['old_count'], '->', e['new_count'], repr(e['action']), e['post_id'], e['referer'])"
+```
+The sibling options `bricks_global_classes_locked`, `_trash`, `_timestamp` and `_user` belong to the same sync mechanism. Two practical rules follow: do the class registration and its consumption in **one** script run (two runs are two windows), and ⚠️ **a pre-write backup can be poisoned by the same concurrent save.** The save that reverts your classes may also carry a real edit; restoring the backup would undo that edit while "restoring" the classes. Diff a backup against current state before restoring it.
 **Closing the tab does not clear `_edit_lock`.** It only stops the heartbeat refreshing it, and WordPress lets the lock expire. So "I closed it" plus a 60-second-old lock is ambiguous; what proves the builder is shut is the timestamp **aging past 150s without advancing**. Poll it. The revert's blast radius is site-wide too: renames, new classes and typed settings on any class come back, not just the open page's tree.
 ⚠️ **OPEN CONFLICT (MMHN 2026-10-08, untested).** This entry says the builder renews `_edit_lock` on heartbeat, so a lock under 150s means an open builder (pkjsupport saw a 12s lock on an open template). MMHN saw a save leave no fresh lock: right after two templates were builder-saved, one carried a 77-day-old `_edit_lock` and the other none, and the only record of the saves was an option-write hook on `bricks_global_classes`. If MMHN is right, a lock-age gate can wave a write through while the builder is open. **Settle it:** open a template in the builder, poll its `_edit_lock` every 30s for 3 minutes, then save and re-read. Until then, treat a stale lock as weak evidence and ask before writing to a builder-maintained tree.
-**First seen:** TAB, 2026-06-22 — typed-setting edits on four shared classes verified live in raw DB + render, then reverted (3 of 4) within ~2 min while a builder tab was open. Held permanently once the builder was closed. · **Extended:** pkjsupport, 2026-10-07 — a template was open in the builder (lock 12s old) while the CLI removed fields from it; caught only because a lock query happened to run in the same command. The gate above came out of it. · **Extended:** MMHN, 2026-07-21 — three class renames plus a 12-element tree collapse, both by CLI, both reverted about seven minutes later by a save from a session open the whole time; re-applied against a confirmed-stale lock, and it held.
+**First seen:** TAB, 2026-06-22 — typed-setting edits on four shared classes verified live in raw DB + render, then reverted (3 of 4) within ~2 min while a builder tab was open. Held permanently once the builder was closed. · **Extended:** pkjsupport, 2026-10-07 — a template was open in the builder (lock 12s old) while the CLI removed fields from it; caught only because a lock query happened to run in the same command. The gate above came out of it. · **Extended:** MMHN, 2026-07-21 — three class renames plus a 12-element tree collapse, both by CLI, both reverted about seven minutes later by a save from a session open the whole time; re-applied against a confirmed-stale lock, and it held. · **Clemente, 2026-08-23** — 21 classes written and verified, then reverted 30 seconds later by a builder tab open on another page; the change log named the save, and the same save carried a real spacing edit that the pre-write backup would have undone.
 
 ### Editing a SHARED global class from a page where it's a secondary consumer silently restyles its primary home
 **Symptom / When:** A finished, signed-off template quietly loses part of its layout (a centered column goes flush left, a width changes) with no edit to that template, no change to its element tree and nothing in its build history to explain it. It surfaces days later on a page nobody touched.
 **Why:** Global classes are one site-wide store, and **a builder save writes the whole option**. When a shared component class is adjusted while looking at a page that merely reuses it, the change lands on every surface, including the one the class was designed for. Nothing in the builder marks a class as load-bearing elsewhere. This is **not** the stale-session revert above: the session is current and the save is legitimate. The blast radius comes from shared ownership.
 **Fix:** (1) **Don't tune a shared class from a borrowing page.** Give the borrowing page its own BEM class alongside the shared one and put the deviation there; `_widthMax: 'none'` is the clean opt-out from a shared cap. (2) **Snapshot `bricks_global_classes` before handing the builder over and diff after.** The option has no revision history, so without a snapshot there's no way to prove what changed or restore it. A hook on `pre_update_option_bricks_global_classes` that writes the previous value outside the webroot catches builder saves and CLI writes alike.
-**Finding a class's consumers before touching it:** walk every `_bricks_page_*_2` row and match the class **ID** inside `settings._cssGlobalClasses`; a rename doesn't touch the tree.
-**First seen:** MMHN, 2026-07-21 — a news single's prose column went flush left under a centered header. A builder save on the About page, which reuses the shared prose class on three blocks, had dropped its auto margins and widened its max-width, a reasonable local fix with an invisible remote cost. Recovered only because same-morning JSON snapshots of the option existed; fixed by restoring the shared class and giving About's blocks their own `_widthMax: 'none'`.
+**Finding a class's consumers before touching it:** walk every `_bricks_page_*_2` row and match the class **ID** inside `settings._cssGlobalClasses`; a rename doesn't touch the tree. **Union that with `bricks_components`** (see the components entry below), or a class used only inside a component reads as unused. A cloned template is the classic case: cloning copies the tree, not the classes, so a "v2" being tuned in parallel shares every class with the live one. Where a shared class must differ, add a `--v2` modifier listed **after** the base on the element rather than editing the shared class. The usage map doubles as the orphan check:
+```bash
+wp eval '
+global $wpdb; $usage = [];
+foreach ( $wpdb->get_results( "SELECT pm.post_id, pm.meta_value FROM $wpdb->postmeta pm JOIN $wpdb->posts p ON p.ID=pm.post_id WHERE pm.meta_key LIKE \"_bricks_page_%_2\" AND p.post_type!=\"revision\"" ) as $r ) {
+  $t = maybe_unserialize( $r->meta_value ); if ( ! is_array( $t ) ) continue;
+  foreach ( $t as $e ) foreach ( ( $e["settings"]["_cssGlobalClasses"] ?? [] ) as $c ) $usage[ $c ][] = $r->post_id;
+}
+$j = wp_json_encode( get_option( "bricks_components", [] ) );
+foreach ( get_option( "bricks_global_classes", [] ) as $c ) if ( strpos( $j, "\"" . $c["id"] . "\"" ) !== false ) $usage[ $c["id"] ][] = "component";
+foreach ( $usage as $id => $posts ) printf( "%-8s %s\n", $id, implode( ",", array_unique( $posts ) ) );'
+```
+**First seen:** MMHN, 2026-07-21 — a news single's prose column went flush left under a centered header. A builder save on the About page, which reuses the shared prose class on three blocks, had dropped its auto margins and widened its max-width, a reasonable local fix with an invisible remote cost. Recovered only because same-morning JSON snapshots of the option existed; fixed by restoring the shared class and giving About's blocks their own `_widthMax: 'none'`. · **Clemente, 2026-07-26** — a parallel footer v2 shared 14 classes with the live footer; mapped before any were tuned.
 
 ### Deleting a global class in the Bricks Style Manager leaves DANGLING refs in element `_cssGlobalClasses`
 **Symptom / When:** After pruning classes, elements still list the deleted id (e.g. `["aheyb1","mhawiz"]` where `aheyb1` no longer exists). Renders nothing, but clutters the tree and shows up as phantom "co-classes" in usage audits.
 **Why:** The Style Manager removes the class from the option but does NOT scrub references from every element across every post. The id just becomes a no-op.
 **Fix:** When auditing/consolidating, scrub dead refs — build the set of valid class ids, then for each live (non-revision) `_bricks_page_*_2`, drop any `_cssGlobalClasses` entry not in the set. Iterate posts and `update_metadata_by_mid()` per dirty row, under `--skip-themes` + `wp_set_current_user(1)`. A *deleted* id is absent from the option entirely — distinguish from intentional empty-settings hooks, which are still present.
 **First seen:** TAB, 2026-06-25 — class-consolidation sweep; elements carried dead ids after Style Manager deletes.
+
+### Bricks components — a global class used ONLY inside a component looks orphaned to a post-meta scan
+**Symptom / When:** You componentize a section (Bricks 2.x components), then run an orphan-class sweep over `_bricks_page_content_2` / `_header_2` / `_footer_2`. The component's classes appear in zero elements, the sweep prunes them, and every instance of the component loses its styling, everywhere it is placed.
+**Why:** A component's element tree is not in post meta. It is stored once in the **`bricks_components` option**, and each placement is a single stub element (`{id, name, parent, children:[], settings:[], label, cid:'<component id>'}`). The class references live inside the component definition's own `elements` array, which a post-meta scan never opens.
+**Fix:** Every orphan sweep unions post-meta references with component references:
+```php
+$used = [];
+foreach ( get_option( 'bricks_components', [] ) as $comp ) {
+    foreach ( ( $comp['elements'] ?? [] ) as $el ) {
+        foreach ( ( $el['settings']['_cssGlobalClasses'] ?? [] ) as $g ) { $used[ $g ] = true; }
+    }
+}
+// …then add the post-meta walk on top of $used before deciding what to prune.
+```
+The same blind spot applies to any audit keyed on post meta: silent-strip audits, dynamic-tag usage scans, `_cssCustom` sweeps, element-bound-styling audits. Components are a second home for element data and must be walked explicitly.
+**First seen:** Clemente, 2026-07-25 — a newsletter CTA saved as a component; six of its classes dropped out of post meta entirely. Caught before the sweep ran, minutes after the same session had pruned three genuinely orphaned classes with a post-meta-only scan.
+
+### Pruning orphaned global classes CASCADES — a class's `_cssCustom` can be the only reference keeping its siblings alive
+**Symptom / When:** You run an orphan sweep, prune what it reports, and the site is fine. Re-run it and it reports *more* orphans that it had correctly declined to list a moment earlier. The sweep looks unstable.
+**Why:** A safe sweep counts a class as in use if its **name** appears anywhere, including inside another class's `_cssCustom` (a parent routinely carries descendant rules like `.block__list li + li::before`). Those references are held *by another class*: delete the parent and its custom CSS goes with it, so the children's last reference disappears in the same write. The second pass is seeing a genuinely different graph.
+**Fix:** **Sweep, prune, sweep again, until every prune bucket reports zero.** Treat a single pass as provisional; the danger is a one-pass number that looks authoritative and gets written into a doc. ⚠️ Don't "fix" the cascade by making the sweep ignore `_cssCustom` references; that check is what stops it deleting live descendant styling. The same reasoning covers references held in Bricks options, the child theme and ACSS output, any of which unrelated work can remove.
+**First seen:** Clemente, 2026-08-26 — removing a page-header meta block orphaned seven classes; pruning those freed two more held only by the deleted parent's `_cssCustom`. Passes: 40 → 7 → 2 → 0.
 
 ### Bricks ships a default `blockquote` style (4px left border + Georgia) that hits any `customTag: "blockquote"`
 **Symptom / When:** A testimonial built as a text element with `tag:"custom"`, `customTag:"blockquote"` renders with an unwanted 4px solid left border (and a Georgia serif face at 1.3em if not otherwise overridden), though its own class sets none of that.
@@ -1184,7 +1308,10 @@ curl -s <url> | grep -oE 'data-x="[^"]*"'
 '_border' => [ 'width' => ['top'=>'0','right'=>'0','bottom'=>'0','left'=>'0'], 'style' => 'solid' ]
 ```
 A single class (0,1,0) beats bare `blockquote` (0,0,1), and an unlayered inline Global Class beats `@layer bricks` — so no doubled-class trick needed here (unlike the equal-specificity `@layer` cases above). Zero the 30px `padding-left` too if you don't want the indent.
-**First seen:** TAB, 2026-05-30 — testimonial blockquotes rendered with a stray left border.
+**The border color comes from `*{border-color}`**, the same root as the ghost-borders-on-inputs entry, not from this rule. And because any class beats the rule, a partial override hides it: whatever your class sets looks right, and only what it doesn't set survives from Bricks. For a left rule of your own, the flat `_border` shape with `left` only: `'width' => ['top'=>'0','right'=>'0','bottom'=>'0','left'=>'1']`.
+**Deleting the typed `_border` later does not remove a border, it unmasks this default.** The rule comes back in a slightly different gray, which reads as "the change didn't save." Zero it explicitly instead of unsetting it. This generalizes to any element Bricks styles by tag (`blockquote`, `figure`, lists): a typed setting you delete is a rule you re-enable.
+⚠️ **Verification trap:** ACSS `var(--space-m)` computes to 30px at 1440, byte-identical to the Bricks padding it replaces, so a computed `paddingLeft: 30px` proves nothing. Grep the rendered rule for the token instead.
+**First seen:** TAB, 2026-05-30 — testimonial blockquotes rendered with a stray left border. · **Clemente, 2026-08-07/08** — a story pull-quote rail; removing its typed left border later brought the Bricks 4px rule back.
 
 ### `display:flex` breaks an inline comma-separated `{post_terms_*}` list — it eats the space after the comma
 **Symptom / When:** A term list rendered via `{post_terms_<tax>}` (which outputs `<a>…</a>, <a>…</a>` with real `, ` separators) is put in a `display:flex; gap:…` container to look like chips. The commas render with **no space after them** and the stray `, ` text-nodes float as their own flex items.
@@ -1265,9 +1392,10 @@ Each facet follows from one line:
 - **`flex-wrap: wrap`.** Flex containers default to `nowrap`, so the instinct is that a row cannot wrap. Bricks opted `block` in, so `_direction: row` produces a **wrapping** row, and the second child moves down as soon as the first needs the full width. It only shows at narrow viewports.
 - **`align-items: flex-start`.** In a flex column, `align-items` controls the cross axis, which is width. `flex-start` makes every child shrink to its content instead of stretching. It is invisible on plain text (a paragraph clamps and wraps anyway) and visible the moment a child needs full width for its own reasons: a `space-between` row, a background, a `border-bottom` separator. A card *grid* never shows it, because `display: grid` stretches items by default.
 - **`display: flex`.** CSS multi-column layout does not apply to flex containers, so `column-count` is ignored with no warning.
-- **`width: 100%`.** A `block` used as a compact item in a row takes the full row width instead of hugging its content.
+- **`width: 100%`.** A `block` used as a compact item in a row takes the full row width instead of hugging its content. Every `<li>` built as a block in a `ul` + `_display:flex` row therefore takes its own line, though the emitted `flex-direction: row; flex-wrap: wrap` is exactly right. And **centering is a no-op**: with every block child already filling the cross axis, `align-items: center` / `justify-items: center` on the parent has no slack to distribute, while `text-align: center` still centers the text, so text looks centered and logos, SVGs and nested blocks stay left.
+- **`flex-direction: column` makes `_alignItems: center` HORIZONTAL.** The direction control sits empty at its default, so `_alignItems: center` reads as vertical centering. On desktop a shrink-wrapped box hides it; at the collapse breakpoint the box goes full width and the button jumps to the middle. Worst on a class built for reuse, since every later section inherits it.
 - **`.brxe-section` centers, whatever its tag.** The same base layer ships `.brxe-section{align-items:center;display:flex;flex-direction:column;…}`, built to center a Container. Used as a card (`tag: aside`), its shrink-wrapped children (an eyebrow span, a heading) center while full-width children keep left-aligned text, so the stack looks mismatched with no `text-align` anywhere. This is distinct from ACSS's `:where(section)` rule, which needs a real `<section>` tag.
-- **The gap axis you didn't set.** `[stack:acss]` ACSS's auto-gap module (`_auto-gap.scss`, gated on its content-gap and Bricks options) emits `:where(.brxe-block)` and `:where(.brxe-div)` with `gap: var(--content-gap)`. At zero specificity it loses to any class rule, but only on the longhands that rule declares. A class setting only `_columnGap` leaves `row-gap` at the section-scale `--content-gap`, which surfaces only when the row wraps, often weeks after the class was built. The winning rule never names your class, so find it by iterating `document.styleSheets` with `el.matches(rule.selectorText)`, not by grepping the class name.
+- **The gap axis you didn't set.** `[stack:acss]` ACSS's auto-gap module (`_auto-gap.scss`, gated on its content-gap and Bricks options) emits `:where(.brxe-block)` and `:where(.brxe-div)` with `gap: var(--content-gap)`. At zero specificity it loses to any class rule, but only on the longhands that rule declares. A class setting only `_columnGap` leaves `row-gap` at the section-scale `--content-gap`, which surfaces only when the row wraps, often weeks after the class was built. Its other face: a two-panel color band (50/50 CTA, split hero) built with only `_gridTemplateColumns` shows a 30px strip of page background between the panels, wide enough to pass for a deliberate gutter. The winning rule never names your class, so find it by iterating `document.styleSheets` with `el.matches(rule.selectorText)`, not by grepping the class name.
 **Fix:** Set the typed control explicitly. Never assume the element's CSS default.
 
 | Facet | Typed fix (on the class) |
@@ -1276,7 +1404,10 @@ Each facet follows from one line:
 | row wraps on mobile | `'_flexWrap' => 'nowrap'` on the row, plus `'_widthMin' => '1.25rem'` on the trailing icon's class (with wrapping off the icon becomes shrinkable, and `_width` alone is a flex-basis, not a floor) |
 | rows shrink to content | `'_alignItems' => 'stretch'` on the **list/parent** class, not the row |
 | `column-count` ignored | `'_display' => 'block'` alongside the `column-count` custom CSS. Don't switch the element to `div` instead: that kills every flex/grid setting on the class, the mirror-image trap |
-| compact item goes full width | `'_width' => 'auto'` (or a fixed width) |
+| compact item goes full width | `'_width' => 'auto'` (or a fixed width), plus `'_widthMax' => '100%'` so a long item wraps instead of overflowing |
+| block child won't center | `margin-inline: auto` on that child; for a non-block flex item (a `text-link` `<a>`, pinned by the parent's `flex-start`), `'_alignItems' => 'center'` on its **parent**. An anchor in an `<li>` needs it on the `<li>`; `text-align` can't reach a flex item. A descendant rule (`.list li{align-items:center}`, (0,1,1)) beats `.brxe-block` where the `<li>` has no class. A grid item centers under `justify-items` only once a `max-width` stops it filling the track |
+| `_alignItems: center` meant vertically | `'_direction' => 'row'` set explicitly alongside it |
+| adjacent full-bleed panels show a strip | `'_columnGap' => '0'` **and** `'_rowGap' => '0'` on the grid class (the ACSS auto-gap, below) |
 | `section` used as a card centers its children | `'_alignItems' => 'stretch'` (or `flex-start`), or build it as a `block` with `tag: custom` + `customTag: aside` |
 | wrapped lines get a big gap | set `'_rowGap'` explicitly whenever `_columnGap` is set on a row that can wrap |
 
@@ -1297,7 +1428,7 @@ foreach ( get_option( "bricks_global_classes", [] ) as $c ) {
 ```
 **Verify:** measure, don't look. For the row facets, compare `el.getBoundingClientRect().width` on a row against its parent (they must match), and take a narrow-viewport screenshot. The DB is right, the emitted CSS is right and the desktop render looks right in every one of these cases. A tall single column from the `column-count` facet can also push later sections past a scroll-reveal trigger, so "content below never fades in" can be a layout bug rather than an animation one.
 Related: `.brxe-block` / `.brxe-container` flex-column default (the `.gap--N` entry in ACSS), and ACSS's `section > div` column rule.
-**First seen:** WCDP, 2026-08-18 — a numbered steps card whose counter badge stacked above its text (`div`); the same dead settings sat in three other classes on the page, one shipped a fortnight earlier and reviewed twice. Same day, a 390px screenshot showed the external-link arrow wrapping below the title on tool cards and six directory cards, on every mobile visit since they were built (`flex-wrap`); and a key-dates `dl` whose rows ended at different x positions (`align-items`). · WCDP, 2026-08-20 — an event-card date badge and a share-link list both stretched to full width (`width: 100%`). · WCDP, 2026-08-22 — a history honor roll's `column-count: 2` rendered as one tall column (`display: flex`). Same day, new county-office rows exposed the `align-items` facet on **every** row device already shipped: 933, 837, 1200 and 1200px wide inside a 1320px container, all narrow since the day they were built, all fixed with one class edit each. Base rules re-verified against Bricks 2.4.2, 2026-09-30. · **Extended:** THM, 2026-08-30 — a wrapping credit line had a ~30px row gap against a 13.5px column gap (gap axis). THT, 2026-09-06 — an `aside` CTA card's eyebrow and heading centered over left-aligned text (`.brxe-section`).
+**First seen:** WCDP, 2026-08-18 — a numbered steps card whose counter badge stacked above its text (`div`); the same dead settings sat in three other classes on the page, one shipped a fortnight earlier and reviewed twice. Same day, a 390px screenshot showed the external-link arrow wrapping below the title on tool cards and six directory cards, on every mobile visit since they were built (`flex-wrap`); and a key-dates `dl` whose rows ended at different x positions (`align-items`). · WCDP, 2026-08-20 — an event-card date badge and a share-link list both stretched to full width (`width: 100%`). · WCDP, 2026-08-22 — a history honor roll's `column-count: 2` rendered as one tall column (`display: flex`). Same day, new county-office rows exposed the `align-items` facet on **every** row device already shipped: 933, 837, 1200 and 1200px wide inside a 1320px container, all narrow since the day they were built, all fixed with one class edit each. Base rules re-verified against Bricks 2.4.2, 2026-09-30. · **Extended:** THM, 2026-08-30 — a wrapping credit line had a ~30px row gap against a 13.5px column gap (gap axis). THT, 2026-09-06 — an `aside` CTA card's eyebrow and heading centered over left-aligned text (`.brxe-section`). · **Clemente, 2026-06-21** — footer mobile centering: `justify-items`/`align-items` left links and logo pinned left. · **Clemente, 2026-07-26** — a footer inline list stacked one `<li>` per row. · **Clemente, 2026-08-03** — a split CTA showed a 30px gap between its panels (measured headlessly from bounding rects), and a section-head action slot centered at 390 under `_alignItems: center`.
 
 ### A Bricks element with a link is wrapped in an `<a>` — the WRAPPER is the flex item, not the element
 **Symptom / When:** A typed `_margin` (or any box value meant to move siblings) on an element in a flex row changes nothing, though the CSS emits and `getComputedStyle` on the element reports the value.
@@ -1309,7 +1440,18 @@ Related: `.brxe-block` / `.brxe-container` flex-column default (the `.gap--N` en
 }
 ```
 Diagnostic tell: dump the flex container's children and compare against the element list. A bare `a` or `div` you didn't author is a Bricks wrapper. Second tell, for measuring scripts: on an SVG element `e.className` is an `SVGAnimatedString`, not a string, so `className.match(...)` silently fails. Read `getAttribute('class')` instead.
-**First seen:** MMHN, 2026-07-20 — tightening a header icon cluster (search, account, cart, burger). Cart and burger responded to a typed negative margin at once; the account icon, which links to `/my-account/`, didn't.
+**Exception: the `image` element.** A linked image does not get a bare wrapper. `image.php` merges the `_root` attributes into the link, so the `<a>` **is** the element root and carries the classes (`<a class="brxe-image your-class tag">`); there is no descendant `<a>` to target, and a rule written for one matches nothing. Source-read on Bricks 2.4.4. A responsive `sources` swap adds a second trap: it wraps the `<img>` in `<picture><source media>…<img></picture>`, and `<picture>` and `.brxe-image` are inline-level, so the baseline strut makes the flex item taller than the image and it centers the strut box, not the glyph. Styling `img` alone never reaches the `<picture>`. Flex the root, kill the strut, size through the picture:
+```css
+.logo.logo { display: flex; align-items: center; line-height: 0; }   /* doubled class beats .brxe-image */
+.logo picture, .logo img, .logo svg { display: block; width: 100%; height: auto; }   /* MUST include picture */
+```
+**First seen:** MMHN, 2026-07-20 — tightening a header icon cluster (search, account, cart, burger). Cart and burger responded to a typed negative margin at once; the account icon, which links to `/my-account/`, didn't. · **Clemente, 2026-06-16** — a linked header logo with a responsive source swap rode off-center at ≤425px; two CSS passes targeted `img` and a nonexistent descendant `a`, and adding `picture` fixed it.
+
+### `margin-inline: auto` on a full-width flex item emits correctly and computes to `0` — center from the parent
+**Symptom / When:** A block given `_margin` left/right `auto` emits `margin-inline: auto` into the delivered CSS and still renders flush left. `getComputedStyle` reports `0px` margins.
+**Why:** Auto margins only absorb free space on the line. A flex item whose size already fills its parent's cross axis (Bricks blocks ship `width: 100%`, and a stretched item fills the line) leaves none, so the auto margins resolve to `0`. The rule is present and valid; it has nothing to do. Clemente's case was a block inside a parent switched to `display: flex`; the exact sizing source on that element (its `width: 100%` versus stretch) wasn't isolated.
+**Fix:** Center with `_alignItems: 'center'` on the **parent** layout element, not with auto margins on the child. If the child then needs the full width so its own `justify-content` can center its contents, give it `_width: '100%'`. An emitted rule is not a working rule: verify on computed style or the bounding rect, not the delivered CSS.
+**First seen:** Clemente, 2026-08-23 — a home-page pull quote asked to center, which stayed flush left behind a correct-looking `margin-inline: auto`. (The same entry's other half, a section gutter lost by zeroing all four `_padding` sides, is the ACSS `:where(section…)` gutter covered under ACSS.)
 
 ### Bricks — an empty `text-basic` renders nothing; use `block`/`div` for decorative empties
 **Symptom / When:** A `text-basic` with `text:''` (a CSS-only dot, accent bar, counter holder) produces no DOM output at all.
@@ -1496,7 +1638,8 @@ Also read what the sibling built page actually references (`_bricks_page_content
 **Symptom / When:** Grid items won't stretch to equal height (or an `_alignItems` value on a grid class does nothing). Rendered CSS shows `align-items: initial` — a value never present in any setting.
 **Why:** Bricks splits the control per display mode: `_alignItems` is the flex control and doesn't emit when `_display: grid`; the grid control is `_alignItemsGrid`, and when it's unset Bricks emits `align-items: initial` for grid containers (`initial` → `normal` → stretch, so the default behaves correctly — but the emitted `initial` misleads an audit into thinking a value is set).
 **Fix:** On grid classes, set/unset `_alignItemsGrid` (unset = stretch). Audit tip: a class carrying both keys (e.g. `_alignItems: start` + `_alignItemsGrid: center` on `home-diff__container`) is really centered — the flex key is dead weight under grid.
-**First seen:** Highland, 2026-07-03 — `.home-services__secondary` items wouldn't equal-height; class had `_alignItemsGrid: center`; removal restored stretch.
+**`initial` also appears when the value IS set.** With `_display: grid`, Bricks emits its `align-items: initial` default first and appends your typed `_alignItemsGrid` later **in the same rule**; last declaration wins, so the typed value is live. Print the whole rule before calling it dropped (`python3 -c "import re,sys; print(*re.findall(r'\.my-class *\{[^}]*\}', open(sys.argv[1]).read()), sep='\n')" page.html`). A truncated `grep -o … | head -c 190` cuts the rule before the winning declaration and manufactures a defect.
+**First seen:** Highland, 2026-07-03 — `.home-services__secondary` items wouldn't equal-height; class had `_alignItemsGrid: center`; removal restored stretch. · **Clemente, 2026-08-25** — `_alignItemsGrid: baseline` nearly reported as a Bricks defect from a grep truncated at 190 characters.
 
 ### A grid column span or `grid-auto-rows: 1fr` must be reset to `auto` at the single-column breakpoint
 **Symptom / When:** A card spanning two tracks (`_gridItemColumnSpan: 'span 2'`) or a grid with equal-height rows (`_gridAutoRows: '1fr'`) looks right on desktop. At mobile width, either the grid overflows its container and drags the page wider, or every stacked card stretches to the height of the tallest. There's no error.
@@ -1514,6 +1657,16 @@ curl -sk "https://<site>/<page>/?cb=$RANDOM" | grep -oE '@media[^{]*\{\.my-class
 ```
 `_gridAutoRows` only emits when the class really sets `_display: grid`. Its `required` gate in the panel is UI-only.
 **First seen:** WCDP, 2026-08-18 — a dark CTA card promoted into a 3-column card grid to fill two empty slots, verified at 3-col (spans 2 of 3), 2-col (full-width band) and 1-col (`auto`). Extended 2026-08-19: equal-height link rows via `_gridAutoRows: 1fr` measured 122px × 6 at 1440 and 117px × 6 at 991, and sized to their content at 390, with the override confirmed inside the media query.
+
+### `_conditions` remove a grid child but not its track — collapse the grid with `:not(:has())`
+**Symptom / When:** A two-column hero (text + photo) where the photo element is gated on `_conditions`. On records with no photo the element is gone, and the text still sits in half the width beside an empty column.
+**Why:** A condition removes the *element*. The parent's `grid-template-columns` is a class setting and still reserves the track. No typed control expresses "depends on whether a sibling rendered."
+**Fix:** One `_cssCustom` rule on the grid's own class:
+```css
+.my-hero__grid:not(:has(> .my-hero__media)) { grid-template-columns: 1fr; }
+```
+`:not(:has())` takes the specificity of its argument, so this is (0,2,0) and beats the typed `_gridTemplateColumns` rule at (0,1,0). It's the alternative to inventing a default image for the empty case. Verify on a record with and one without the gated child.
+**First seen:** Clemente, 2026-08-07 — a story single split hero, for stories without a photo.
 
 
 ### `Assets_Files::regenerate_css_files()` prints "Error: Control type number is not defined!" and still succeeds
@@ -1641,7 +1794,7 @@ foreach(array_unique($m[1]) as $id){ $p=get_post($id); printf("custom_font_%-5s 
 wp eval 'foreach(get_posts(["post_type"=>"bricks_fonts","numberposts"=>-1]) as $f) printf("%d %s\n",$f->ID,$f->post_title);'
 ```
 Then confirm on the rendered page — `curl … | grep -oE 'font-family:[^;}]*' | sort -u` should list only real families. Also grep the rendered HTML for `{acf_` to catch unresolved tags, and read the form settings for the origin site's email config.
-**First seen:** Highland, 2026-08-04 — three auth pages imported as wireframe bones emitted `font-family:"highland-home-kit-before_001"` (font id 154 was a *kitchen photo* locally) and `alt="{acf_business_info_company_name}"`, plus `fromName: acss.brixies.co` on every form.
+**First seen:** Highland, 2026-08-04 — three auth pages imported as wireframe bones emitted `font-family:"highland-home-kit-before_001"` (font id 154 was a *kitchen photo* locally) and `alt="{acf_business_info_company_name}"`, plus `fromName: acss.brixies.co` on every form. · **Clemente, 2026-07-26** — the same imported auth-page template: every submit button emitted `font-family: "Lost Password"` because the same imported font id resolved to a revision of the Lost Password page.
 
 
 ### Dynamic tags do NOT re-resolve inside the value a custom dynamic tag returns
@@ -1674,10 +1827,29 @@ Register on `render_tag` **and** `render_content` (conditions resolve via the la
 **Curating terms from an options page (ACF taxonomy field) adds three wrinkles.** Set `'save_terms' => 0` and `'load_terms' => 0`, or ACF tries to assign the selected terms to a post that doesn't exist. Keep the order by hand: there's no `post__in` for terms and `get_terms()` re-sorts, so loop the stored ID array and `get_term()` each in sequence (a `multi_select` field does preserve drag order in the admin). And the loop object is a `WP_Term`, so a resolver testing `instanceof WP_Post` falls back to the page. Give term loops their own resolver, and register project tags that read the term directly rather than assuming native term tags resolve.
 **First seen:** Highland, 2026-08-04 — `highland_faqs` query type over a Site Options repeater so the client owns the FAQ; rows are arrays, so `{acf_*}` was never going to resolve. · **Clause corrected:** WCDP, 2026-08-22 to 2026-09-13 — five options-page repeaters (officers, county offices, voting links, award rolls, meeting places) loop natively via `objectType: acf_<repeater>` with per-row subfield tags; every one passed a builder save with its `hasLoop` query intact. · **Extended:** MMHN, 2026-07-21 — client-curated homepage category chips from a Site Options `product_cat` field, replacing hardcoded label and URL pairs.
 
+### Retiring a custom query type silently empties every saved tree that still calls it, including drafts and trash
+**Symptom / When:** You consolidate custom query types and delete the ones nothing live uses. Weeks later a draft is restored or a trashed page recovered, and its loop renders nothing: no error, no empty state, a structurally present section with zero items.
+**Why:** A loop stores `settings.query.objectType` as a plain string, and nothing validates that it still resolves. When `bricks/query/run` no longer answers for it, the filter falls through with the untouched `$results`, so the loop iterates nothing. The tree is intact and looks right in the builder and in a readback.
+**Fix:** Before removing a query type, scan **every** non-revision tree for the string, not just published ones:
+```bash
+wp eval '
+global $wpdb;
+foreach ( [ "my_query_type_a", "my_query_type_b" ] as $t ) {
+  $r = $wpdb->get_col( $wpdb->prepare(
+    "SELECT p.ID FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON p.ID=pm.post_id
+     WHERE pm.meta_key IN (\"_bricks_page_content_2\",\"_bricks_page_header_2\",\"_bricks_page_footer_2\")
+       AND p.post_type<>\"revision\" AND pm.meta_value LIKE %s", "%" . $t . "%" ) );
+  printf( "%-30s %s\n", $t, $r ? implode( ",", $r ) : "clear" );
+}'
+```
+Rebuild those trees in the same pass or, for deliberately kept historical copies, record the debt where someone restoring the page will read it. A query type's blast radius is every tree that *ever* used it, and drafts and trash are exactly what the natural sweep leaves out. Add the `bricks_components` option to the scan if components exist.
+**First seen:** Clemente, 2026-08-26 — dropping a partner taxonomy retired six query types; live surfaces were rebuilt in the same pass, but a draft snapshot and a trashed page still call them and would restore with empty sections.
+
 ### Bricks maintenance mode serves a plain unbranded page unless a `content`-type template is wired to `maintenanceTemplate`
 **Symptom / When:** Bricks → Settings → Maintenance is switched on, anonymous visitors correctly get a 503, but the page they get is Bricks' unstyled default rather than anything of yours.
 **Why:** Two separate keys in the `bricks_global_settings` option, and only one of them is the toggle. `maintenanceMode` (`"maintenance"` = 503, `"comingSoon"` = 200, key **absent** = off) turns it on. The Coming Soon value is **camelCase `comingSoon`**: it is the `<option value="comingSoon">` in `includes/admin/admin-screen-settings.php`. The snake_case `coming_soon` appears only in a docblock in `includes/maintenance.php`, so copying it from there writes a value Bricks never matches. `maintenanceTemplate` holds a `bricks_template` post ID whose `_bricks_template_type` is `content`. With no template ID set, or an unpublished one, `Maintenance::get_default_maintenance_page_html()` serves the plain fallback. The custom template renders standalone. Header and footer are OFF by default (`maintenanceRenderHeader` / `maintenanceRenderFooter`, compared as the string `'1'`, opt back in), and search/archive/error templates are zeroed. The page set as Bricks' own `login_page` setting is exempt from the gate (`apply_maintenance_mode()` checks it first), so a custom login form stays reachable.
 **The second-order trap:** logged-in users bypass maintenance entirely, so during a maintenance window you only ever see the site *logged in*. Any logged-in-only rendering bug masquerades as a site-wide one for the whole window. Administrators always bypass. With `bypassMaintenanceUserRoles` **unset**, `Capabilities` grants the bypass to **any** logged-in user; setting it to specific roles narrows that.
+**Pick the mode by how long it will be up.** An indefinite holding page wants `comingSoon` (200); a 503 held for days reads as an outage to uptime monitors and tells crawlers to keep retrying. A short, genuine outage wants `maintenance`. Indexing is not the deciding factor; that is `blog_public`, independent of both. "Put the site in maintenance mode" taken literally would have shipped a 503 on an indefinite page.
 **The status-code trap:** the two modes are the same gate with different statuses. A `curl -w '%{http_code}'` deploy check that reads a `comingSoon` site's 200 as "the gate arrived off" is wrong. Verify the gate by the rendered `<title>` / template markup, or read `maintenanceMode` directly, never by status alone. Curl the homepage, one other arbitrary page (site-wide, not homepage-only) and the login page (still exempt).
 **Fix:** Build a `content`-type template, set both keys, and purge. Note `maintenanceMode` is switched off by **unsetting** the key, not by writing a falsy value.
 ```bash
@@ -1691,8 +1863,16 @@ Purge the page cache after either toggle. The template dropdown in the admin fil
 - **Pre-stage without going live:** build the template with **no** `templateConditions` (it renders nowhere until selected), set `maintenanceTemplate` ahead of time, and leave `maintenanceMode` unset until cutover. Verify by switching `maintenanceMode` on for a minute and curling logged-out.
 
 Robots.txt and `template_redirect` redirects still run in maintenance mode. **So do payment webhooks and cron**, which is what makes the mode safe on a live-billing site: maintenance applies on `wp` priority 9, and anything that finishes before `wp` is untouched. WooCommerce `?wc-api=` (Stripe webhooks) exits on `parse_request` priority 0 (`src/Internal/Utilities/LegacyRestApiStub.php`), and `wp-cron.php` never calls `wp()`, so renewals and webhooks keep working (read from Bricks 2.4.3 + WC 11.2.1).
+**While the mode is on, the 404 template and anything keyed on a real status are unverifiable.** `Maintenance::apply_maintenance_mode()` short-circuits the request before the 404 handler and sets `$active_templates['error'] = 0`, so a nonexistent URL returns the holding page, and `is_404()`-gated redirect maps go dormant. Verifying as an admin proves nothing (admins bypass). Bricks 2.0+ fires **`bricks/maintenance/should_apply`** after its own checks (`maintenance.php`, read on 2.4.4), so a temporary mu-plugin can veto the mode for one request carrying a secret token, which gives a genuinely anonymous check with no site-state change:
+```php
+// wp-content/mu-plugins/zz-temp-maintenance-bypass.php — DELETE AFTER TESTING
+add_filter( 'bricks/maintenance/should_apply', function ( $apply ) {
+    return ( isset( $_GET['mytest'] ) && hash_equals( 'RANDOM_TOKEN', (string) $_GET['mytest'] ) ) ? false : $apply;
+} );
+```
+`curl -sk -o /dev/null -w '%{http_code} %{redirect_url}' "https://<site>/no-such-page/?mytest=RANDOM_TOKEN&cb=$RANDOM"`. A second flag on the same token can flip a project switch for that request only, which verifies both states of a gate in one anonymous pass. Then delete the file and **prove the bypass is gone**: the token URL must return the holding page again.
 **Two more keys, and a bare preview.** `maintenanceRenderPopups` (checkbox, absent = off) and `maintenanceExcludedPosts` sit beside the header and footer keys. Setting the template's own `_bricks_page_settings` to `{"headerDisabled":true,"footerDisabled":true}` (presence = on) keeps its builder preview bare as well as the live page.
-**First seen:** MBC, 2026-08-07 · **Extended:** VMG, 2026-10-18 — the webhook/cron exemption, read from source while building a maintenance template for update passes on a live-billing site. MBC: built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation. · **Extended:** WCDP, 2026-09-30 — go-live maintenance page pre-staged with the mode off. · **Corrected:** THM, 2026-08-29 / THT, 2026-09-14, reconciled at their harvest 2026-10-05. THM read `comingSoon` from the admin `<select>` while gating a site before its paywall existed, and THT saw two sibling sites answer 503 (`maintenance`) and 200 (`comingSoon`) in one deploy check. This entry had said `coming_soon`. · **Extended:** MMHN, 2026-10-08 — a branded maintenance template, builder-verified on Bricks 2.4.2.
+**First seen:** MBC, 2026-08-07 · **Extended:** VMG, 2026-10-18 — the webhook/cron exemption, read from source while building a maintenance template for update passes on a live-billing site. MBC: built during a core/WooCommerce major update window; the wiring was found by reading `bricks/includes/maintenance.php` and `admin/admin-screen-settings.php` rather than from any documentation. · **Extended:** WCDP, 2026-09-30 — go-live maintenance page pre-staged with the mode off. · **Corrected:** THM, 2026-08-29 / THT, 2026-09-14, reconciled at their harvest 2026-10-05. THM read `comingSoon` from the admin `<select>` while gating a site before its paywall existed, and THT saw two sibling sites answer 503 (`maintenance`) and 200 (`comingSoon`) in one deploy check. This entry had said `coming_soon`. · **Extended:** MMHN, 2026-10-08 — a branded maintenance template, builder-verified on Bricks 2.4.2. · **Clemente, 2026-09-08** — a staging holding page built but never switched on (asked for "maintenance mode," correctly set to `comingSoon`); then a 404 template built that morning returned 200 and the holding page anonymously, verified through the `should_apply` token bypass.
 
 
 ### `_cssId` on an element inside a query loop duplicates per iteration — any `aria-labelledby` pointing at it collapses to the first item
@@ -1847,6 +2027,12 @@ Removing margins without the contextual values collapses multi-paragraph rich te
 **Fix:** The Shortcode element, `'shortcode' => '<p>© [year_sc] [name_sc]</p>'`. Surrounding HTML and text pass through, and dynamic tags render first. Output wraps in `div.brxe-shortcode`. Shape: `02`.
 **First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — footer copyright year.
 
+### A `tag: p` element bound to wpautop'd dynamic data emits `<p>` inside `<p>` — your class lands on an EMPTY element
+**Symptom / When:** A text element with a class (a lede, a standfirst) is bound to rich dynamic data: `{archive_description}`, `{post_content}`, an ACF wysiwyg. The text shows, but none of the class's typography applies. Settings, emitted CSS and text are all present and correct.
+**Why:** Those values arrive already wrapped by `wpautop`, so the element emits `<p class="lede"><p>Text…</p></p>`. Nested `<p>` is invalid, and the HTML parser closes the outer one as soon as it meets the inner: the live DOM is an empty `<p class="lede"></p>`, an unstyled sibling `<p>`, and a stray `</p>`. Nothing in the source, DB or CSS shows it; only the parsed DOM does.
+**Fix:** Set the element's `tag` to **`div`** whenever it is bound to rich content. Then check `line-height` specifically: family, size and color inherit across the new wrapper, but a framework `p` rule can override the inherited line-height, so fix it generically with `.lede > p { line-height: inherit; }`.
+**First seen:** Clemente, 2026-08-23 — a term archive's lede (`tag: p` on `{archive_description}`) had rendered unstyled since the template was built two months earlier; found because a grep for the rendered lede came back empty while a second grep found the text. A page using `tag: div` for `{post_content}` carried the line-height half undetected.
+
 ### Re-running a WP-CLI build script silently reverts every builder edit made since its last run — dry-run it against the live DB first
 **Symptom / When:** A project builds its pages from idempotent scripts (rebuild = re-run), and the client or designer also edits in the builder. A script re-run for an unrelated change quietly puts back old copy, old column counts and old class values, and drops elements added in the builder. Nothing errors, and the readback stays clean, because the reverted state is valid too.
 **Why:** The script writes its whole tree and its whole class set. The builder's edits exist only in the database. "Idempotent" means the script reproduces *its own* output, not the site's current state.
@@ -1870,7 +2056,8 @@ Prove the harness with a known difference first, and check the class option's ha
 **Why:** WordPress builds `sizes` from the width of the size the element requests. Bricks passes its `image.size` setting through and exposes no separate `sizes` control.
 **Fix:** Set the typed `image.size` to the registered size closest to the rendered width (and its `url` to that size's URL). `medium_large` (768w) gave `sizes="(max-width: 768px) 100vw, 768px"`, which means 768w on a 1x desktop and 1536w on 2x from the same `srcset`. Keep `loading: 'eager'` on an above-the-fold image (`02`); Bricks / WordPress already add `fetchpriority="high"`.
 **Full-width `sizes` over-fetches in any column or card.** WordPress's `(max-width: Npx) 100vw, Npx` says the image spans the viewport, so a phone at 2× asks for ≥780w for a ~350px slot and skips the 768w candidate, and ShortPixel's `<picture>` copies the same `sizes` onto every `<source>`. When picking a smaller registered size isn't enough, filter `wp_get_attachment_image_attributes` at priority 20 (after core computes `sizes`) and set `sizes` by BEM image class: Bricks merges the element's classes into the attributes it passes to `wp_get_attachment_image()`, and the class is what carries the layout. Derive each value from measured slot widths across viewports, rounded up and split at Bricks' breakpoints, then check candidate boundaries at 1366 1× and 2× (rounding up can tip a slot past the next file). A per-element custom `sizes` attribute also works but must be repeated on every instance of a shared card. **Audit false positive:** when one attachment appears twice on a page, Chrome reuses the cached larger file, so a card "picks" 1536w without downloading anything.
-**First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — home hero photo. · **Extended:** MMHN, 2026-10-01 — an About hero pulled 1536w AVIF for a 348px phone slot; the class map took throttled LCP from 4.71 to 2.27 s.
+**A per-element `sizes` via `_attributes` can't reach a `tag: figure` image.** `_attributes` land on the element root, which for a figure-tagged (or captioned) image is the `<figure>`, where `sizes` is inert; the inner `<img>` keeps WordPress's default. While the caption is needed, the class filter above is the fix (it reaches the `<img>`). Setting `'caption' => 'none'` makes the `<img>` the root again (see the image/figure decision tree).
+**First seen:** pkjsupport, 2026-10-07 (Bricks 2.4.2) — home hero photo. · **Clemente, 2026-08-07** — a story single's figure-tagged photo served 1280×1920 originals into a 792px measure; the `_attributes` `sizes` copied from another image landed on the `<figure>`. · **Extended:** MMHN, 2026-10-01 — an About hero pulled 1536w AVIF for a 348px phone slot; the class map took throttled LCP from 4.71 to 2.27 s.
 
 ### Bricks native `breadcrumbs` climbs the post CATEGORY on blog singles — "Home / Uncategorized / Title"
 **Symptom / When:** You swap a hand-rolled breadcrumb for the native `breadcrumbs` element. It's right on CPT singles and taxonomy archives, but on built-in `post` singles it renders the post's **category** as the parent, typically `Home / Uncategorized / {title}` on a site that doesn't use categories. It also renders trails on top-level archives where you may want none.
@@ -1926,7 +2113,8 @@ block  _hidden._cssClasses = x-accordion_item
 ```
 ⚠️ The identity classes live in **`_hidden._cssClasses`**, not `_cssGlobalClasses`. The plugin's JS finds its parts by those names, and the element breaks silently without them. Your own styling classes ride alongside in `_cssGlobalClasses`. Putting a query loop on the `x-accordion_item` block iterates the whole item.
 **Styling:** BE declares its visual defaults with `:where()` (zero specificity), so one project class overrides them. State rules like `.x-accordion_header[aria-expanded=true] .brxe-icon` are (0,2,1); beat those with the doubled-class trick rather than source order.
-**First seen:** MMHN, 2026-07-21 — a FAQ accordion on a guide single, built entirely by WP-CLI and verified working (click, Enter, close-sibling) with no builder round-trip.
+**Swapping a seeded child drops the contract silently.** Replace the seeded `icon` with an icon-set `svg` (or any other type) and the Class panel's visible classes carry over while `_hidden._cssClasses` stays behind. Nothing errors and the accordion still toggles, but: `iconTransform` / `iconTransformActive` emit against `.x-accordion_icon`, so the icon never rotates while the control shows your value; `faq-schema.min.js` names questions with `.x-accordion_header > *:not(.x-accordion_icon)`, so with `faqSchema` on, every Question gets a second, empty `itemprop="name"`; and BE's hardcoded fallback rotate matches `.brxe-icon` only, so an `svg` loses that too. Copy `settings._hidden._cssClasses` across verbatim on any child swap. Audit by walking every non-revision tree for `icon`/`svg` descendants of `x*` elements and printing their `_hidden`. Verify in a browser: `getComputedStyle(svg).transform` in both states (`none` twice = dead) and the `[itemprop="name"]` count (equal to the item count, not double). The microdata is injected at `DOMContentLoaded`, so curl sees none of it either way.
+**First seen:** MMHN, 2026-07-21 — a FAQ accordion on a guide single, built entirely by WP-CLI and verified working (click, Enter, close-sibling) with no builder round-trip. · **Clemente, 2026-07-26/27** — an About FAQ accordion lost its icon rotation and doubled its FAQPage names after an icon-library unification swapped `icon` children for `svg`.
 
 ### Bricks mega menu: there's no BricksExtras mega element — core `nav-menu` and BE Slide Menu render the same template, and an offcanvas `flex-wrap` throws it off-screen
 **Symptom / When:** (1) Looking for a BricksExtras mega-menu element. There isn't one, and BE Popover is `role="tooltip"` plus Popper, not a nav panel. (2) After a long sub-panel opens inside a BricksExtras offcanvas, the whole menu vanishes; `.x-offcanvas_inner` reports a `scrollWidth` about twice its width.
@@ -1996,7 +2184,7 @@ grep -n -A10 "controls\['<key>'\]" wp-content/plugins/bricksextras/components/cl
 Then: **checkbox → set `true` or omit the key, never `false`.** **Select → use one of its literal option strings.** On BE 1.7.1 a builder save didn't reintroduce omitted checkbox keys, but re-read them after a save anyway. The `02` ProSlider table records these types.
 **A third shape: a select whose render compares against a string none of its options produce.** The OffCanvas `returnFocus` control offers `'true'` / `'false'`, but `x-offcanvas-nestable.php` renders `isset( $settings['returnFocus'] ) ? 'enable' === $settings['returnFocus'] : true`. `'enable' === 'true'` is false, so **any** explicit value, including choosing "Enable" in the builder, disables return-focus, and only the unset default works. Close drops keyboard focus to the top of the document. `unset()` the key headlessly, and verify from the rendered `data-x-offcanvas` JSON, which reads `"returnFocus": false` while the settings say `'true'`. The neighboring `esc_to_close`, `trapFocus` and `preventScroll` pass through correctly, which is what makes the odd one easy to miss.
 **Same mechanism as "Bricks Form: `redirectAdminUrl` silently overrides the custom redirect AND mangles it into a literal path"** (must be unset, not `false`, because the code tests `isset()`). That entry was recorded as one element's quirk. It is a pattern across BricksExtras and Bricks alike.
-**First seen:** WCDP, 2026-09-14 — building a news ticker on a Pro Slider. One cause produced three bugs in a single element: `pagination => false` rendered dots, `keyboard => true` stole the arrow keys on a page with three sliders, and the `arrows` breakpoint string built DOM that only BE's own CSS was hiding. · **Extended:** THM, 2026-08-11, BE 1.7.1 — the `returnFocus` case on a mobile-header offcanvas, caught by reading back the rendered JSON.
+**First seen:** WCDP, 2026-09-14 — building a news ticker on a Pro Slider. One cause produced three bugs in a single element: `pagination => false` rendered dots, `keyboard => true` stole the arrow keys on a page with three sliders, and the `arrows` breakpoint string built DOM that only BE's own CSS was hiding. · **Extended:** THM, 2026-08-11, BE 1.7.1 — the `returnFocus` case on a mobile-header offcanvas, caught by reading back the rendered JSON. · **Clemente, 2026-06-16** — the earliest recorded `returnFocus` hit: a direct-DB header offcanvas stored `'true'` and rendered `returnFocus:false`; removing the key fixed it.
 
 ### BricksExtras Media Player defaults `crossorigin="anonymous"` — a cross-origin source with no CORS headers never plays, silently
 **Symptom / When:** The player loads its poster and controls, and pressing play gives an endless spinner. There's no console error and no failed request, and `curl -I` on the source returns `200` with `video/mp4`, so it looks like a dynamic-tag or PHP problem.
@@ -2108,6 +2296,21 @@ update_post_meta( $tmpl_id, '_bricks_page_content_2', $content );
 ```
 **First seen:** AHML, 2026-07-01 — Blog Single (tmpl 595) `article__inner` reading column and Area Single (tmpl 474) community-body wrapper both went invisible-until-scroll; removed `.anim-fade-up` from the body wrappers, kept hero + CTA animations.
 
+### Frontend Toolkit — measure the fold before choosing reveal targets; on a short site the card-grid stagger animates above-fold content
+**Symptom / When:** Rolling the reveal classes out across a site. Card grids look like the obvious stagger targets, the classes verify in the rendered HTML, the reveal works, and nothing errors. But the cards were already on screen at load, so the page opens with a fade-and-rise of visible content: the LCP element is delayed and the motion reads cheap.
+**Why:** The IntersectionObserver fires for elements already intersecting at load, so an above-fold reveal animates immediately on page open. "Below the fold" is a property of the rendered page at a viewport, not of tree position: an archive's card grid is the second or third node and feels "further down," but on a content-light site header, hero and the first card row can all fit inside 800px. Brochure and early-stage sites are short by nature, so the shorter the site, the less room motion legitimately has.
+**Fix:** Measure every candidate surface once, headless at the target viewport, before writing any classes:
+```js
+document.querySelectorAll('section, .brxe-section').forEach(el => {
+  if (el.closest('header, footer, #brx-header, #brx-footer')) return;
+  const r = el.getBoundingClientRect(), top = Math.round(r.top + scrollY), h = Math.round(r.height);
+  if (!h) return;
+  console.log(top, h, top >= innerHeight ? 'BELOW' : (top + h > innerHeight ? 'STRADDLES' : 'ABOVE'), el.className);
+});
+```
+Animate `BELOW` only; treat `STRADDLES` as above the fold. Then verify end to end, not by class presence: scroll the page headless and assert no `[class*="anim-fade"]` element is left under `opacity: 0.99`. Stagger **containers** never receive `anim-visible` (only their children), so that count legitimately sits below the element count.
+**First seen:** Clemente, 2026-08-23 — the plan was to stagger card grids on four archive templates. Measurement overturned it: one archive was a 1082px document, another had every element above 800px, a third's first card row started at 432px. Of eleven candidate surfaces, three correctly received nothing.
+
 ## ACSS
 
 ### ACSS settings — write via `Database_Settings::save_settings()`, never direct option writes `[stack:acss]`
@@ -2123,13 +2326,14 @@ $db = \Automatic_CSS\Model\Database_Settings::get_instance();
 $db->save_settings($values, true);        // true = regenerate all 8 CSS files
 '
 ```
-1. Use schema **input** keys (`color-primary`, `color-base`) — single hex strings — not the computed shade artifacts.
+1. Use schema **input** keys (`color-primary`, `color-base`) — single hex strings — not the computed shade artifacts. Each slot also has a **`color-<slot>-alt`** key, the value for the alternate (dark) color scheme; set it alongside or the dark scheme keeps the default. To find every hex input on an install, list the 7-character hex values in the option:
+   `wp option get automatic_css_settings --format=json | python3 -c "import sys,json; d=json.load(sys.stdin); [print(k,'=',v) for k,v in d.items() if isinstance(v,str) and v.startswith('#') and len(v)==7]"`
 2. Call `Database_Settings::save_settings($values, true)` — equivalent to a dashboard Save, but reliable.
 3. Run as **user 1** (`wp --user=1 eval`) — the save method requires `manage_options` and throws `Insufficient_Permissions` otherwise.
 
 Discover valid schema keys with `(new \Automatic_CSS\Model\Config\UI())->get_all_settings()`. Close the ACSS dashboard tab before CLI edits (same single-writer hazard as the Bricks builder).
 **Full-recolor mechanics.** The `color-<slot>` hex is the source of truth for the parent var (`--primary`) and its `-h`/`-s`/`-l` partials — but the derived shades are stored **independently**. To genuinely recolor a family, rewrite each shade's `-h` and `-s` while keeping its `-l` lightness target: `primary-{hover,ultra-light,light,semi-light,medium,semi-dark,dark,ultra-dark}-h` / `-s`. Non-color settings ride the same call: `vp-max` → `--content-width` (px ÷ root = rem), `base-radius` → `--radius`. Back up first: `wp option get automatic_css_settings --format=json > backup.json`. Contextual/dark-scheme vars (`--body-bg-color`, `--text-color`, `--h1`, `--space-*`) are better handled by a child-theme `:root` bridge than by settings — see the `automatic-bricks.css` entry.
-**First seen:** V1 baseline, 2026-05-24 (the "regenerate after a DB edit" rule). **Extended:** TAB, 2026-04-25 — color-slot population silently dropped by direct flat-key writes; dashboard saves repeatedly reverted CLI changes via stale React state. · **Extended:** VMG, 2026-06-05 — configured a full palette + content-width + radius entirely from CLI.
+**First seen:** V1 baseline, 2026-05-24 (the "regenerate after a DB edit" rule). **Extended:** TAB, 2026-04-25 — color-slot population silently dropped by direct flat-key writes; dashboard saves repeatedly reverted CLI changes via stale React state. · **Extended:** VMG, 2026-06-05 — configured a full palette + content-width + radius entirely from CLI. · **Clemente, 2026-05-18** — a first pass wrote only H/S/L keys; after a Save the variation overrides landed but `--primary` stayed the ACSS default until the `color-<slot>` hex was written.
 
 ### ACSS per-level heading sizes (`h1-min` / `h1-max`) DO reach `--h1` — if they don't, the write path is wrong `[stack:acss]`
 **Symptom / When:** You set `h1-max`/`h2-max` and the actual `--h1` still compiles from the modular-scale default — the values sit in the option, may even appear as `--h1-max` in the CSS, but the size doesn't change.
@@ -2206,7 +2410,14 @@ Before fighting any `automatic-bricks.css` rule with a selector, check whether i
 }
 ```
 Spacing piggybacks the same mechanic: a brand `--space-*` defined in a token file loading after `automatic.css` overrides ACSS's for the shared steps — no settings edit needed. Don't use `.bg--dark` for brand sections (its bg is `--neutral-dark`); use the raw surface tokens.
-**First seen:** KSCBS, 2026-05-10 — a button padding override with a selector identical to ACSS's had no effect. · **Extended:** VMG, 2026-06-05 — dark-first portal on ACSS 3.3.6; the `:root` bridge carried the whole contextual layer.
+**Links are the sharpest case.** `automatic-bricks.css` styles every non-button link with `body a:where(:not([class*="btn--"])) { color: var(--link-color, var(--primary)); font-weight: var(--link-weight, inherit); text-decoration: var(--link-decoration, …) }`, which is **(0,0,2)**. A site-wide link rule written deliberately low so global classes can override it, `:where(#wrapper) a` or `a:where(.class)`, sits at (0,0,1) and loses silently while the file, the delivered CSS and the selector match all check out. Set the tokens it consumes on the container (`--link-color`, `--link-color-hover`, `--link-decoration`, `--link-decoration-hover`, `--link-weight`); they inherit. Write declarations only for what ACSS doesn't tokenize. Its `text-decoration` shorthand resets `text-decoration-color` to `currentcolor`, so those longhands need to clear (0,0,2): `body main .prose a` is (0,0,3), one step above ACSS and still below any global class. A computed `text-decoration-color` that *looks* right can be `currentcolor` inheriting ACSS's link color. Verify with computed style, never the source.
+**First seen:** KSCBS, 2026-05-10 — a button padding override with a selector identical to ACSS's had no effect. · **Extended:** VMG, 2026-06-05 — dark-first portal on ACSS 3.3.6; the `:root` bridge carried the whole contextual layer. · **Clemente, 2026-08-23** — a new default text link written at (0,0,1) rendered in ACSS's color with no underline; a CSSOM rule walk named the ACSS rule in one pass.
+
+### A `wp_enqueue_style` dependency on a handle that isn't registered silently drops YOUR stylesheet — and ACSS's Bricks handle is `automaticcss-bricks`, not `…-css` `[stack:acss]`
+**Symptom / When:** You enqueue a child-theme or plugin stylesheet with ACSS's Bricks layer as a dependency, so it prints after it and wins on source order. The handle is registered and queued (`in_array( 'my-handle', $wp_styles->queue )` is true), but its `<link>` never appears in `<head>`. No notice, no console error.
+**Why:** In `WP_Dependencies::all_deps()`, a dependent whose dependency handle isn't registered is dropped from the print list without a word. The handle copied from the page source is the trap: WordPress prints a stylesheet as `<link id="<handle>-css">`, so ACSS's `<link id="automaticcss-bricks-css">` comes from the handle **`automaticcss-bricks`**. Depending on `automaticcss-bricks-css` names a handle that never exists. (Clemente read it at the time as ACSS registering the handle late; source review at harvest found the `-css` suffix. Not retested with the corrected handle, so confirm the name on the install: read the `<link id>` off the rendered page and drop the `-css` suffix.)
+**Fix:** Depend on a handle you have confirmed is registered, or drop the dependency and control order with enqueue priority (`add_action( 'wp_enqueue_scripts', '…', 999 )`). For `:root` token overrides, source order after `automatic.css` is all you need (entry above); for equal-specificity rule overrides, the doubled-class trick still works. Whenever a stylesheet "doesn't load," check its dependency handles before anything else.
+**First seen:** Clemente, 2026-05-18 — a brand stylesheet listing `automaticcss-bricks-css` as a dependency was queued and never printed; removing the dependency and enqueuing at 999 put it last in `<head>`.
 
 ### ACSS — button bg-context wrappers override variant classes via specificity `[stack:acss]`
 **Symptom / When:** A button set to `btn--base` (or any `btn--*` variant) inside a `.bg--dark` / `.bg--light` section ignores the variant — it renders the configured bg-context color regardless.
@@ -2240,8 +2451,10 @@ add_filter( 'bricks/elements/button/controls', function ( $controls ) {
 }, 20 );
 ```
 Register it, don't smuggle it. For a filled + outline pair, use one base variant for both and add `acss_import_btn--outline` to `_cssGlobalClasses` on the second — the modifier goes in the class list, never in `style`.
+⚠️ **Grep for the class NAME, never `\.name\s*\{`.** ACSS emits most utilities as grouped selectors, so `{` doesn't follow the class name and that pattern returns nothing for a class that exists. A confirmed absence and a bad grep look identical; confirm with a second method before inventing a project class that duplicates a framework one.
+**Where a variant genuinely doesn't exist, a project class can supply it** by setting the `--btn-*` custom properties (`--btn-background`, `--btn-text-color`, `--btn-border-color` and their `-hover` twins, plus `--focus-color`). The base rule `[class*="btn--"]:where(:not(.btn--none, .wp-block-button))` consumes them, so **the class name must contain `btn--`** for padding, border width, radius and transition to apply at all. Custom properties have no typed control, so this is a legitimate `_cssCustom` case (and mind the BEM-substring entry below).
 **Related:** "Bricks button utility classes (`btn--outline`, `btn--primary`) are Bricks-injected, not user-defined" — the consuming CSS exists only on a real Bricks Button element.
-**First seen:** WCDP, 2026-08-10 — the Donate CTA needed `--action` (the only red in the palette that clears AA under white text) and the dropdown had no way to offer it; fixed with the priority-20 filter. WCDP, 2026-08-18 — an approved wireframe specified a white hero button and a ghost secondary; `.btn--white` was in the picker but `option-white-btn` was off and it emitted nothing. Rebuilt as `btn--secondary-light` (12.39:1 on navy) and `btn--secondary-light` + `btn--outline` (9.34:1), with no new button CSS. ACSS 3.3.6. · **Extended:** THT, 2026-09-01 — a "large" banner CTA built to a mockup's `.btn--lg` would have rendered at base size. The grep found no front-end rule, so the CTA was sized with typed padding/font-size instead.
+**First seen:** WCDP, 2026-08-10 — the Donate CTA needed `--action` (the only red in the palette that clears AA under white text) and the dropdown had no way to offer it; fixed with the priority-20 filter. WCDP, 2026-08-18 — an approved wireframe specified a white hero button and a ghost secondary; `.btn--white` was in the picker but `option-white-btn` was off and it emitted nothing. Rebuilt as `btn--secondary-light` (12.39:1 on navy) and `btn--secondary-light` + `btn--outline` (9.34:1), with no new button CSS. ACSS 3.3.6. · **Extended:** THT, 2026-09-01 — a "large" banner CTA built to a mockup's `.btn--lg` would have rendered at base size. The grep found no front-end rule, so the CTA was sized with typed padding/font-size instead. · **Clemente, 2026-08-03** — `btn--base` sat in the picker on a primary/secondary-only palette and would have shipped an invisible button; a project `btn--paper` class supplied it. The same day a `\.bg--base-light\s*\{` grep wrongly declared a working utility missing.
 
 ### ACSS `[class*="btn--"]` matches ANY class containing the substring — a BEM modifier like `header__btn--panel` picks up button skin `[stack:acss]`
 **Symptom / When:** An ordinary element styled by its own global class (here a `text-link`) loses its background and renders as a transparent box with a 2px `currentColor` border as soon as it also carries a class whose *name* contains `btn--`. Its global-class CSS is emitted and correct, but something later overrides it.
@@ -2270,10 +2483,10 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Symptom / When:** A plugin/PHP-rendered card built as `<section class="card">` (with `<div>` children) renders with content horizontally centred and spread vertically, and direct-child rows you set `display:flex` come out stacked as columns — though your CSS never says so. Shows only on real pages (ACSS loaded), not in a stripped mockup.
 **Why:** ACSS ships `section:where(:not(.bricks-shape-divider)){display:flex;flex-direction:column;align-items:center;gap:…}` and `section > div:where(…){display:flex;flex-direction:column;align-items:flex-start;gap:…}`. Intended for Bricks sections, they match ANY top-level `<section>` and its direct `<div>` children. They use `:where()` (specificity 0,0,1) so they're trivially overridden — but ONLY for properties you explicitly declare; relying on element defaults (no `display`/`flex-direction`) lets ACSS win.
 **Fix:** On hand-authored sections, declare the layout explicitly: `.card{display:block}` and `flex-direction:row` on every direct-child flex row. Don't rely on element defaults inside a `<section>` on an ACSS site.
-**The reverse direction — the gutter.** The same family carries the section gutter, `:where(section:not(section section)) { padding-block: var(--section-padding-block); padding-inline: var(--gutter); }`. It matches the real `<section>` tag, so a Bricks Section element whose `tag` was switched to `div` loses the gutter and sits flush against the viewport on mobile while its siblings are padded. Leave Section elements on the `section` tag, or apply the gutter on the element's class where a `div` is genuinely required.
+**The reverse direction — the gutter.** The same family carries the section gutter, `:where(section:not(section section)) { padding-block: var(--section-padding-block); padding-inline: var(--gutter); }`. It matches the real `<section>` tag, so a Bricks Section element whose `tag` was switched to `div` loses the gutter and sits flush against the viewport on mobile while its siblings are padded. Leave Section elements on the `section` tag, or apply the gutter on the element's class where a `div` is genuinely required. The same rule is lost by **zeroing all four `_padding` sides** on a full-bleed section: the typed class beats the zero-specificity `:where()`, and the content goes hard to the viewport edge. Zero only `top`/`bottom`. (Bricks' own `.brxe-section` carries no padding; the gutter is ACSS's.)
 **Plugin markup gets it too, and the tells look like three different bugs.** WooCommerce's classic order-received and view-order markup is built from `<section class="woocommerce-order-details">`, `<section class="woocommerce-customer-details">` and `<section class="woocommerce-columns--addresses">`. On an ACSS site that produces dead vertical bands (the gutter `padding-block`, once per section), headings that look centered while `text-align` computes to `start` (flex-item `align-items: center`, which `text-align` can't fix), and stacked address columns (`flex-direction: column` beats Woo's own `display: flex`, which sets no direction). Reset on the plugin's classes, not a page class, so My Account → view-order is repaired too: `.woocommerce-order-details, .woocommerce-customer-details { display: block; align-items: initial; padding-block: 0; padding-inline: 0 }`, `.woocommerce-customer-details .woocommerce-column { display: block; align-items: initial }`, `.woocommerce-columns--addresses { display: grid; grid-template-columns: var(--grid-2); gap: var(--space-l) }`.
 **The `gap` shorthand covers both axes.** A Bricks Section overridden to `display: grid` still carries ACSS's `gap: var(--container-gap)` on any axis you don't set. Setting only `_columnGap` leaves the row gap, which is invisible on a one-row desktop grid and opens a visible gap once the grid collapses to one column on mobile. Set `_rowGap` as well, and check computed `row-gap` at a mobile width.
-**First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centered and stacked; the login card too. · **Extended:** THM (inherited from its clone source), 2026-08-09 — the gutter case. Selector re-verified against compiled ACSS 3.3.6 at harvest, 2026-10-05. · **Extended:** MMHN, 2026-07-18 — a 58/42 image-and-panel section opened a gap between image and panel on mobile only, fixed with `_rowGap: 0`. · MMHN, 2026-07-19 — three of five findings logged against a thank-you page were this one rule.
+**First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centered and stacked; the login card too. · **Extended:** THM (inherited from its clone source), 2026-08-09 — the gutter case. Selector re-verified against compiled ACSS 3.3.6 at harvest, 2026-10-05. · **Extended:** MMHN, 2026-07-18 — a 58/42 image-and-panel section opened a gap between image and panel on mobile only, fixed with `_rowGap: 0`. · MMHN, 2026-07-19 — three of five findings logged against a thank-you page were this one rule. · **Clemente, 2026-08-23** — a full-bleed home hero with all four `_padding` sides zeroed sat ~23px left of every other section (logged at the time as a Bricks section default; harvest review kept the ACSS attribution).
 
 ### ACSS palette shades are dashboard-derived — a WP-CLI base-color write leaves the ramp stale `[stack:acss]`
 **Symptom / When:** Scripting the ACSS palette via `save_settings`: you write `color-primary` (or `color-accent`), regenerate, and `--primary` updates but `--primary-light/-dark/-hover/…` stay on the OLD colour.
@@ -2490,8 +2703,9 @@ for ( $i = 0; $i < $count; $i++ ) {
 // …migrate $rows to the new structure, then delete both the value and the `_`-prefixed key per row
 ```
 **Order matters:** read the raw data BEFORE removing the field from the PHP if you can — it's far easier. If the field is already gone, this is the recovery path.
+**Options-page sub-fields orphan the same way, and an admin save doesn't clean them.** Unregister a repeater sub-field and its `options_<repeater>_<i>_<sub>` / `_options_…` rows stay; saving the repeater afterwards writes only the rows for fields ACF currently knows, so the orphans are neither overwritten nor removed. Rows added after the change never get the old keys, so a partial orphan set is expected, not corruption. ⚠️ **The real risk is invisible client copy.** If an orphaned field held text the client authored (a formal credit name, an organization's legal title), it is now reachable only in the database and backups. Transcribe those values into a project doc **when you unregister the field**, not later.
 **The Bricks side: a tag pointing at a removed field renders LITERALLY.** An existing-but-empty field resolves `{acf_<name>}` to `''`. A removed field has no field object, so Bricks' ACF provider never resolves the tag, and the raw string passes through, as `href="{acf_url_cancel}"` on a link, which is worse than no link. When retiring a field, grep `bricks_global_classes` and every `_bricks_page_*_2` for `{acf_<name>}` and remove those settings in the same pass.
-**First seen:** TAB, 2026-04-26 — refactoring a page-level FAQ repeater to a FAQ CPT + relationship; the repeater was removed from the field group first, so the 6 rows had to be read raw. · **Extended:** THM, 2026-08-29 — a footer link rendered a literal tag after its options field was retired, caught on the first post-removal render check.
+**First seen:** TAB, 2026-04-26 — refactoring a page-level FAQ repeater to a FAQ CPT + relationship; the repeater was removed from the field group first, so the 6 rows had to be read raw. · **Extended:** THM, 2026-08-29 — a footer link rendered a literal tag after its options field was retired, caught on the first post-removal render check. · **Clemente, 2026-08-26** — three sub-fields dropped from an options repeater; a later admin add and edit of eight rows left every orphan intact, two holding client-authored formal names.
 
 ### A field group rebuilt with the same names nested in `group` fields — `get_field()` returns the OLD top-level value
 **Symptom / When:** The inverse of the entry above, and worse: not `null`, but a **stale value returned confidently**. The admin shows the correct content, while `get_field('company_name','option')` and any `{acf_company_name}` dynamic tag return something that appears nowhere in the ACF UI — often a scaffold placeholder from the original build, months after it was replaced.
@@ -2506,8 +2720,9 @@ foreach ( acf_get_fields( '<GROUP_KEY>' ) as $g ) {
 }
 // then list every options_* row not in $live
 ```
+**It also bites copy audits.** A DB-wide grep for stale copy can hit an orphan at a plausible key (`options_suggested_amounts_1_description`) that the site no longer reads (it reads `options_<group>_suggested_amounts_1_description`). Confirm which key the site actually reads, via `get_field()` on the current structure, before believing a hit. And read orphans before sweeping them: they are sometimes the only surviving record of an earlier decision.
 **One sweep is not enough.** A first cleanup on one project deleted 16 rows and was recorded as complete; a later audit on the same site found 8 more — including a typo-twin of a live field (`burger_ad_info` beside `burger_add_info`) and an abandoned repeater. Re-run the diff after **any** group rebuild, and treat "we cleaned this up once" as unproven.
-**First seen:** MBC, 2026-08-07 — a header logo text fallback resolved to the build scaffold's placeholder company name months after the real Site Options group replaced it. Follow-on audit 2026-08-25 found the second batch.
+**First seen:** MBC, 2026-08-07 — a header logo text fallback resolved to the build scaffold's placeholder company name months after the real Site Options group replaced it. Follow-on audit 2026-08-25 found the second batch. · **Clemente, 2026-08-03** — a copy sweep hit an orphan row still holding pre-restructure copy, three months after the field moved under a group.
 
 ### ACF `group` fields are structural — reorganising into tabs must WRAP them, never replace them
 **Symptom / When:** "Reorganise these fields into tabs" arrives as a cosmetic request. If the fields currently sit in ACF `group` fields, the obvious implementation is a data migration that destroys data **silently** — no error, no warning; fields render empty and the old rows sit unreferenced.
@@ -2539,8 +2754,9 @@ update_field( 'field_my_group', array( 'my_url' => '' ), 'option' );  // creates
 ```
 Safe for url/text/date subfields. For a group containing a `textarea` with `'new_lines' => 'br'`, create the structure with that subfield empty, then write the textarea's value directly (next entry).
 **Verify:** `get_field( '<group>', 'option' )` must return an **array**, not `null` — a populated raw option row proves nothing.
+**Two more traps on the same storage.** (1) A field nested in a group is unreachable by its own name: a repeater inside a group stores as `options_<group>_<repeater>_<row>_<sub>`, and `get_field()` at options level resolves only top-level names, so `get_field( '<repeater>', 'option' )` returns `null` while the rows exist and every helper that reads the group works. Ask for the group, or read the raw row by its full key. (2) **`update_field()` on a group can return `false` while the values land.** The group updater writes each sub-value and its return doesn't aggregate them, so the return value is not a success test here. (The opposite of `_bricks_page_*_2`, where the return value is the *only* reliable test; don't carry the habit across.) Verify a group write in a **fresh process** or against the raw row (`wp option get options_<group>_<repeater>_0_<sub>`), and mind the next entry before writing a whole group back.
 **Watch for:** an existing group that already works is not evidence the technique is sound. One group on the same install accepted a direct subfield write with no trouble *only because its group rows had been created by the original build*; the two groups added later both read `null` until repaired.
-**First seen:** WCDP, 2026-08-14 — meeting-schedule links on an options group, caught only because the `empty_not` condition was tested by populating a value rather than trusting the absent link.
+**First seen:** WCDP, 2026-08-14 — meeting-schedule links on an options group, caught only because the `empty_not` condition was tested by populating a value rather than trusting the absent link. · **Clemente, 2026-08-03** — a repeater nested in a group read `null` by its own name, and the group `update_field()` that set a new flag returned `false` though the value had landed; about ten minutes chasing a write that had worked.
 
 ### Round-tripping an ACF GROUP through `get_field()` → `update_field()` double-applies subfield formatting
 **Symptom / When:** You add one subfield to an ACF group on an options page by reading the group, setting a key, and writing it back. The new value saves correctly — and an *unrelated* sibling subfield silently gains duplicated markup (`Open Saturdays<br /><br />10 AM to Noon`).
@@ -2551,6 +2767,17 @@ update_option( 'options_my_group_my_subfield', 'Open Saturdays, 10 AM to Noon' )
 ```
 Or read unformatted with `get_field( $name, 'option', false )` before merging. If you have already done it, the raw value is repairable — write the plain-text original back to `options_<group>_<sub>` and re-read to confirm.
 **First seen:** WCDP, 2026-08-10 — adding a short-hours subfield for the header bar corrupted the sibling hours textarea, which the global footer renders on every page.
+
+### ACF `get_field()` caches per request — a read taken before a same-process write reports the OLD value
+**Symptom / When:** A script writes ACF sub-field option rows directly (`options_<repeater>_<n>_<sub>` plus the `_options_…` key row), then reads the repeater back in the same `wp eval` to confirm. Every row comes back with the new sub-field empty. The write reported success.
+**Why:** ACF memoizes field values per request. If `get_field()` ran earlier in the process (the natural script shape is read rows → validate → write), the post-write read is served from ACF's in-request store, not `wp_options`. The rows on disk are correct the whole time.
+**Fix:** Verify in a **fresh process**, or check the raw rows:
+```bash
+wp db query "SELECT option_name, option_value FROM wp_options WHERE option_name LIKE 'options_<repeater>_%_<sub>'"
+wp eval 'foreach ( get_field( "<repeater>", "option" ) as $r ) { echo $r["<sub>"], "\n"; }'   # a NEW invocation
+```
+It's the mirror image of the group entry above (there the return value lies and the data is written; here the read lies), and the process boundary is the honest test in both.
+**First seen:** Clemente, 2026-08-24 — a new sub-field on an options repeater written correctly first time; the in-request readback showed all nine rows blank, `wp db query` and a second `wp eval` showed them correct.
 
 ### Migrating a UI/JSON field group to PHP — `local` lies, the post types can't be trashed, and children orphan
 **Symptom / When:** Moving an ACF group out of the admin UI or Local JSON into `acf_add_local_field_group()`, to satisfy the PHP-registration convention.
@@ -2597,7 +2824,7 @@ WHERE option_name LIKE 'options_<repeater>_%_<subfield>' ORDER BY option_name;
 - Loop element: `hasLoop = true`, `query.objectType = "acf_<field_name>"`.
 - **Repeater** (loop item = a row): `{acf_<repeater>_<subfield>}` → `{acf_service_features_feature_title}`.
 - **Relationship** (loop item = the related *post*): use post-context tags — `{post_title}`, `{post_url}`, and the related post's own `{acf_<field>}`.
-**Also:** the repeater can live on an ACF **options page**, not just the current post. The native loop and the namespaced subfield tags work unchanged there (WCDP, 2026-09, five options-page repeaters, builder-save verified). A custom dynamic tag inside the loop gets the row as an associative array from `\Bricks\Query::get_loop_object()`, not a `WP_Post`.
+**Also:** the repeater can live on an ACF **options page**, not just the current post. The native loop and the namespaced subfield tags work unchanged there (WCDP, 2026-09, five options-page repeaters, builder-save verified). A custom dynamic tag inside the loop gets the row as an associative array from `\Bricks\Query::get_loop_object()`, not a `WP_Post`. For an optional sub-field, add a per-row **boolean gate tag** (`'1'` / `''`, read from the loop object, registered on `render_content`) so one loop renders an image where the row has one and a text fallback where it doesn't; a logo band can then ship before the client supplies logos.
 **No limits — `posts_per_page` is ignored.** A repeater loop with `posts_per_page: 4` renders every row; the key persists in the DB and reads back correctly. `Provider_Acf::set_loop_query()` returns the field's raw value array and never consults `query_vars` — there is no limit, offset or ordering support for `acf_*` loops. Cap it in PHP, scoped by element id so the same repeater can render in full elsewhere:
 ```php
 add_filter( 'bricks/query/run', function ( $results, $query ) {
@@ -2609,7 +2836,7 @@ add_filter( 'bricks/query/run', function ( $results, $query ) {
 `\Bricks\Query` exposes `element_id`, `object_type`, `settings` and `loop_index` as public properties. Delete the dead `posts_per_page` from the element tree afterwards — left in place it misleads the next reader.
 **Relationship / post-object loops are the same, so they cannot paginate.** `set_loop_query()` returns `get_field()`'s whole array for those too, with no `paged` slicing, no `found_posts` and no `max_num_pages`, so a Pagination element shows nothing. For a paginated grid driven by a relationship field, resolve the IDs yourself and feed them to an `objectType: 'post'` loop as `post__in`, in a `bricks/posts/query_vars` filter scoped to that element (keep the element's own `posts_per_page`). That's a real `WP_Query`, and native pagination works. On a singular template, also see "`redirect_canonical` 301s requests you meant to serve…".
 **Native Woo tags render empty in a relationship loop.** `{woo_product_price}` and other tags that read the global `$product` come out blank in an `acf_<relationship>` loop of products, because Bricks sets the Woo product global only for product queries. Post-context tags keep working, which makes it look tag-specific. Register a project tag that resolves the product from `\Bricks\Query::get_loop_object()` (not `get_the_ID()`, which is the page here) and returns `wc_get_product( $id )->get_price_html()`, which handles ranges and sale markup. Build add-to-cart contracts the same way.
-**First seen:** TAB, 2026-05-29 — repeater loops rendered correct row counts with literal subfield tags; grepping `provider-acf.php` gave the namespaced format. · **Extended:** WCDP, 2026-08-10 — capping a repeater list in the global footer while its own page shows the full set. · **Extended:** THM, 2026-08-30 — a 9-per-page grid on a CPT single, rebuilt from an ACF relationship loop to a `post__in` query and confirmed across two pages. · **Extended:** MMHN, 2026-07-21 — a guide single's related-products row: titles, images and links per item, prices blank.
+**First seen:** TAB, 2026-05-29 — repeater loops rendered correct row counts with literal subfield tags; grepping `provider-acf.php` gave the namespaced format. · **Extended:** WCDP, 2026-08-10 — capping a repeater list in the global footer while its own page shows the full set. · **Extended:** THM, 2026-08-30 — a 9-per-page grid on a CPT single, rebuilt from an ACF relationship loop to a `post__in` query and confirmed across two pages. · **Extended:** MMHN, 2026-07-21 — a guide single's related-products row: titles, images and links per item, prices blank. · **Clemente, 2026-07-26** — a footer partner band from an options-page repeater, built on a custom query type in the belief the native loop couldn't reach options (WCDP disproved that); the gate-tag pattern is the part kept.
 
 ### ACF `gallery` / `image` fields are NOT loopable in Bricks — a repeater's image SUBFIELD renders per row only with return format `id`
 **Symptom / When:** (1) A loop set to `objectType: acf_<gallery_field>` renders the loop shell (`data-start=0 data-end=0`) but **zero items**, though the field has images. (2) A repeater loop renders the right row count and text subfields resolve, but an **image** subfield bound to a Bricks image element renders nothing.
@@ -2647,8 +2874,9 @@ Enqueue with `acf-input` as a dependency so the source order is guaranteed. Gate
 ### ACF left-placed tabs: `.acf-tab-wrap.-left` and `.acf-fields.-sidebar` are JS-applied — curl never shows them
 **Symptom / When:** After switching a tab field to `placement: 'left'`, the raw HTML still shows `.acf-fields -top` and no `.acf-tab-wrap`. A headless screenshot taken right after `networkidle` shows every field stacked with no rail.
 **Why:** ACF builds the tab wrap and adds `-sidebar` from its input JS after load. `networkidle` can fire before ACF's init finishes on a large field group (27 top-level fields here).
-**Fix:** Verify in a real browser context and wait for `.acf-tab-wrap` with `state: 'attached'`. Its box is 0-height, so a visibility wait times out. Admin CSS that skins the rail must target the JS-applied classes and should be scoped to the screen. (Headless admin access without a password: the "mint auth cookies with `wp_generate_auth_cookie`" entry under Diagnostic patterns.)
-**First seen:** WCDP, 2026-09-11 — a sidebar-rail pass on an options page; three failed captures before the wait was right.
+**Fix:** Verify in a real browser context and wait for `.acf-tab-wrap` with `state: 'attached'`. Its box is 0-height, so a visibility wait times out. Admin CSS that skins the rail must target the JS-applied classes and should be scoped to the screen.
+**Left tabs do work on an options page** (source-read, ACF Pro `acf-input.min.js`): the postbox init adds `acf-fields` to the metabox `.inside`, and the tab group adds `-sidebar` when its parent has `acf-fields`, so the rail reserves its column once the JS runs. ⚠️ **Don't make `.acf-tab-wrap.-left` sticky, relative or `overflow`-clipped.** The tab `<ul>` is absolutely positioned against `.acf-fields.-sidebar`; a positioned or clipping wrap becomes its containing block, and the list collapses or vanishes in a way that looks like left tabs are broken on that screen. (Headless admin access without a password: the "mint auth cookies with `wp_generate_auth_cookie`" entry under Diagnostic patterns.)
+**First seen:** WCDP, 2026-09-11 — a sidebar-rail pass on an options page; three failed captures before the wait was right. · **Clemente, 2026-09-10** — a Site Options page whose left tabs vanished under custom rail CSS; logged at the time as left tabs being unable to work on options pages, with a fallback to a CSS-laid top-tab column. Harvest source review found the mechanism above; the CSS on the wrap was the cause.
 
 ### A submenu under an ACF options page must hook `admin_menu` above 99 — earlier, its link is a bare `/wp-admin/<slug>` that 404s
 **Symptom / When:** A custom admin screen added with `add_submenu_page( '<acf-options-slug>', … )` shows in the menu, but clicking it opens `/wp-admin/<slug>` → 404. Loading `admin.php?page=<slug>` by hand works.
@@ -2661,6 +2889,35 @@ add_action( 'admin_menu', 'prefix_submenu', 100 );
 **Verify:** over real authenticated HTTP, and `grep` the dashboard HTML for `href='admin.php?page=<slug>'`. A CLI `do_action('admin_menu')` can't load ACF's admin classes and misreports this; see "Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP".
 **First seen:** WCDP, 2026-09-30 — a 404-log screen under the site's settings page, reported by Michael on launch day. The bug was also in dev, but nobody had clicked the link there.
 
+### ACF options page `position` is cast to int — a fractional menu slot needs a late `$menu` move
+**Symptom / When:** `acf_add_options_page( [ … 'position' => 2.5 ] )` to sit between Dashboard (2) and a plugin that also registered at 2. The page lands after that plugin, or after Posts.
+**Why:** ACF Pro standardizes `position` with `(int)` (`pro/options-page.php`), so 2.5 becomes 2, collides, and WordPress appends a hash-derived fraction that may sort after the other entry. `add_menu_page()` itself accepts any numeric; only ACF's wrapper flattens it. WordPress orders `$menu` with `uksort( $menu, 'strnatcasecmp' )` (`wp-admin/includes/menu.php`), so a string key `"2.5"` sorts naturally between `2` and `2.8…`.
+**Fix:** Give ACF any int, then on `admin_menu` above ACF's 99, find the entry by slug in `global $menu`, `unset` it and re-add it as `$menu['2.5']`. Verify over real authenticated HTTP by reading the `#adminmenu` `li` order; `wp eval` can't build the admin menu (see "Firing admin hooks under `wp eval` gives false negatives").
+**First seen:** Clemente, 2026-09-10 — a Site Options page meant to sit directly under Dashboard.
+
+### ACF repeater `layout` decides whether `wrapper.width` is usable, and the widths must total exactly 100
+**Symptom / When:** `'wrapper' => [ 'width' => '33' ]` on three sub-fields, expecting a row of thirds. Either the labels collapse into slivers, or the third field drops to its own line. No error.
+**Why:** Two causes that look alike. (1) `layout => 'row'` puts each sub-field's label in a narrow left column sized as a percentage of the *field*, fine at 100% and unusable at 33%. `block` (labels above) is the layout that makes multi-column rows legible; `table` ignores `wrapper.width` entirely. (2) ACF floats `wrapper.width` as a percentage, so `33/33/33` leaves 1%, which can be enough to wrap the last field.
+**Fix:** `'layout' => 'block'`, and exact arithmetic (`33 / 33 / 34`; state `100` on full-width fields rather than relying on the default, since neighbors share the float context). Verify against the **registered** field, which also catches a typo'd key:
+```bash
+wp eval '$f = acf_get_field( "field_xxx" ); foreach ( $f["sub_fields"] as $s ) printf( "%-18s %s\n", $s["name"], $s["wrapper"]["width"] ?? "(none)" );'
+```
+A sub-field with `conditional_logic` makes the row width variable (a hidden field isn't rendered), so a 33/33/34 row legitimately shows two across when its middle field is gated off. Not a bug.
+**First seen:** Clemente, 2026-08-26 — an options repeater asked to put a logo and two toggles on one line; it was the file's only `row`-layout repeater, and 33/33/33 wrapped the third field.
+
+### ACF `conditional_logic` and Bricks `_conditions` nest the same way (OR of AND-groups) — only the rule keys differ
+**Symptom / When:** You write ACF conditional logic on a project where you just wrote Bricks `_conditions`, and get a field that shows for one value but never the other (or always), typically by putting two OR'd rules inside one group.
+**Why:** Both are two levels deep: the **outer** array is OR'd groups, the **inner** array is AND'd rules. The rules share no keys: ACF `['field' =>, 'operator' =>, 'value' =>]`, Bricks `['id' =>, 'key' => 'dynamic_data', 'dynamic_data' =>, 'compare' =>]`. So a copied rule structure fails loudly, but writing an OR as two rules inside one inner array silently makes it an AND, which can never match a single-value field.
+**Fix:** "Show when format is interview OR conversation" is two single-rule groups:
+```php
+'conditional_logic' => [
+    [ [ 'field' => 'field_my_format', 'operator' => '==', 'value' => 'interview' ] ],
+    [ [ 'field' => 'field_my_format', 'operator' => '==', 'value' => 'conversation' ] ],
+],
+```
+Bricks `_conditions` nesting: `02`.
+**First seen:** Clemente, 2026-08-07 — an interviewer-name field on a story field group. (The original project entry's title said the inner arrays differ; they don't, and the title was rewritten at harvest.)
+
 ### Renaming an ACF options-page group subfield orphans its value unless both option rows move
 **Symptom / When:** A subfield inside an options-page group is renamed (`address` → `mailing_address`), and the field comes up empty although the old value is still in the database.
 **Why:** ACF stores an options group subfield as two `wp_options` rows: `options_<group>_<sub>` (the value) and `_options_<group>_<sub>` (the field-key reference). The name is part of both option names, so a rename points the field at rows that don't exist.
@@ -2672,7 +2929,8 @@ foreach ( [ '', '_' ] as $p ) {
 }
 ```
 Copy the raw option, not `get_field()` output, which applies formatting (`new_lines` → `<br />`) that would then be applied twice.
-**First seen:** pkjsupport, 2026-10-07 — an address field renamed to say what it's for.
+**The same move covers relocating a field between groups or lifting a repeater out to top level:** rename every `options_<old_path>…` row and its `_options_…` reference row to the new path, and rewrite the reference row's value to the **new field key** if the key changed. For a repeater that is every row × every sub-field plus the count row. Done in the same change that moves the field, it never creates the orphans the field-removal entries warn about.
+**First seen:** pkjsupport, 2026-10-07 — an address field renamed to say what it's for. · **Clemente, 2026-08-08** — a partners repeater lifted out of a group and two fields moved between groups: 128 rows renamed, no data loss, no admin visit.
 
 ### ACF `update_field()` by field KEY on an unregistered group silently writes the KEY as the meta key — verify the registration, not the file
 **Symptom / When:** An importer calls `update_field( 'field_abc123', $v, $post_id )` on thousands of posts, every call "succeeds", and the edit screen shows no fields. The meta table holds rows whose `meta_key` is the field key itself. Typical cause: the group's registration code never landed (an append behind a failed `cd dir && cat >> file`, which short-circuits while the next unchained command still runs), and `php -l` passed because lint only checks what *is* in the file.
@@ -2708,6 +2966,16 @@ register_post_type( 'author', [
 ```
 **General rule:** check any CPT name against WP's reserved query vars (`p`, `name`, `page`, `paged`, `author`, `category`, `tag` — see `wp-includes/class-wp.php::public_query_vars`). Any overlap needs an explicit `query_var` override.
 **First seen:** TAB, 2026-05-28 — an `author` CPT for bylines decoupled from `wp_users`; `/authors/` worked, `/authors/trace-baum/` 404'd.
+
+### A taxonomy rewrite nested under a CPT archive slug 404s — the CPT's own attachment rule matches first
+**Symptom / When:** A CPT with `has_archive: 'stories'` and a taxonomy with `rewrite: ['slug' => 'stories/theme']`. The archive and singles work; **every term archive 404s**, though `rewrite_rules` contains the taxonomy rules and the terms exist.
+**Why:** Rules match in array order, and the array is built per permastruct in **registration order**. Registering the CPT first puts its auto-generated attachment rules, including the two-segment `stories/[^/]+/([^/]+)/?$ => index.php?attachment=$matches[1]`, ahead of the taxonomy's. `/stories/theme/<term>/` is resolved as an attachment lookup, finds nothing, and 404s. Flushing doesn't help; the order is the bug.
+**Fix:** Register the taxonomy first, e.g. `add_action( 'init', …, 4 )` for the taxonomy and `5` for the post type, then flush. Keeps the nested URL with no `add_rewrite_rule( …, 'top' )` hack. Diagnose by finding the first matching rule:
+```php
+$rules = get_option( 'rewrite_rules' ); $req = 'stories/theme/some-term/'; $i = 0;
+foreach ( $rules as $k => $v ) { $i++; if ( preg_match( "#^$k#", $req ) ) { echo "FIRST MATCH #$i: $k => $v\n"; break; } }
+```
+**First seen:** Clemente, 2026-08-07 — a stories CPT plus a theme taxonomy, both registered at `init` 5 with the CPT first by file order; the matching rule moved from an attachment rule (#42) to the taxonomy rule (#33).
 
 ### `redirect_canonical` 301s requests you meant to serve — a term archive to a same-slug CPT single, and a custom rewrite endpoint to a trailing slash
 **Symptom / When:** `/projects/category/decks-porches/` 301-redirects to `/services/decks-porches/`. The term query resolves fine server-side (`is_tax=1`, `is_404=false`, found>0), the redirects table is empty, the rewrite rule matches — yet the live request redirects.
@@ -2826,6 +3094,29 @@ clearstatcache( true, $dest );
 **Why:** Post ID 1 is created at install with `comment_status=open` / `ping_status=open`; closing the Discussion defaults later only affects **new** posts. With `comment_moderation` off and no spam plugin, bot comments go straight to approved. `blog_public=0` only adds noindex; the page is public to any human, including a payment processor's reviewer. Also: the DB stores "closed" for `default_comment_status` / `default_ping_status` as an **empty string**, so `''` means closed. Don't misread it as unset.
 **Fix:** Audit: `wp post list --post_type=any --post_status=publish --comment_status=open` plus a count of approved `comment_type='comment'` rows. Back up the comments tables, `wp comment spam` the IDs, trash post 1, set `comment_moderation=1`, then make "no comments" a code fact in the core plugin: `comments_open` / `pings_open` → false, empty `comments_array`, 404 the comment feeds and drop their head link, 403 on `pre_comment_on_post`, remove X-Pingback and the pingback XML-RPC methods, and remove the Comments admin UI. Filter nothing by comment **type**, so WooCommerce `order_note` rows are untouched. Verify with a cache-buster (page caches serve the old copy). Better: delete post 1 at kickoff.
 **First seen:** VMG, 2026-09-26 — 290 off-topic gambling spam comments (~97% with links) accumulated over 11 weeks, publicly served on a live commerce site. A same-day sweep of the other WP sites on the box found one more with the stock post still open (behind basic auth).
+
+### A default-featured-image fallback on `post_thumbnail_id` leaks into REST `featured_media` — exclude admin and REST
+**Symptom / When:** A site-wide default featured image as a resolution-time filter on `post_thumbnail_id`. The front end is right, but the block editor shows a featured image on posts that have none, and if an editor saves, the placeholder is written as a real `_thumbnail_id`, which is what the filter approach was meant to avoid.
+**Why:** `WP_REST_Posts_Controller` fills `featured_media` with `(int) get_post_thumbnail_id( $post )`, the same function the filter hooks. Once it's an integer in JSON, nothing distinguishes "resolved by a filter" from "stored on the post."
+**Fix:** Gate on request context, not just post type:
+```php
+if ( is_admin() ) { return $thumbnail_id; }
+if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) { return $thumbnail_id; }
+```
+The Bricks builder renders on the front end, so the fallback still shows while designing. Verify that the filtered value is `0` under `REST_REQUEST`, not only that the front end renders.
+**First seen:** Clemente, 2026-08-06 — a default featured image for news posts.
+
+### Posts live at the site root under `/%postname%/` — no URL-prefix rule can gate "the blog"
+**Symptom / When:** A rule to hide, redirect or exclude the news/blog section is scoped to `/news/` (or `/blog/`) and silently misses every individual post. The archive redirects, so the rule looks like it works.
+**Why:** The posts page has a URL, but it is not a permalink prefix. Under `/%postname%/`, single posts resolve at the root, indistinguishable by URL from pages. Only the query tells them apart.
+**Fix:** Gate on conditionals, never paths. "The blog is off" is `is_home()` (with a static front page, the posts page is the *home* query, **not** `is_page()`), `is_singular( 'post' )`, `is_category()`, `is_tag()`, `is_date()`, `is_author()`, plus `is_feed()` if feeds carry posts. ⚠️ `is_page( $posts_page_id )` is **false** on the posts page, the natural mistake, and it fails silently. A CPT with `has_archive` and a rewrite slug is the easy case: its URLs really are prefixed, and `is_post_type_archive()`, `is_singular()` and `is_tax()` cover it.
+**First seen:** Clemente, 2026-09-08 — hiding three sections for launch. The CPT gated on three conditionals; news needed six, and an early URL-prefix approach would have left every post publicly readable while `/news/` redirected, which reads as success.
+
+### A staging-only file or a staging-named hostname check is one sync away from gating the wrong environment
+**Symptom / When:** Behavior that must differ between staging and live (a launch kill-switch, a mail trap, debug output) is implemented as a staging-only file or edited constant, or as a check that names the *staging* host. The installs are kept in step by copying files, and either the file travels the wrong way or a non-production hostname changes and the check silently stops matching.
+**Why:** A per-environment *file* has to be remembered at every sync; a per-environment *condition* travels with the code and evaluates correctly wherever it lands. Non-production hostnames change (a migration, a new staging domain), and a check that names them disarms itself without a sound.
+**Fix:** The convention is in `01` (environment-gated code names production; the unknown-host direction is chosen per hazard: a visibility switch fails open, a safety trap fails closed). Implementation notes from the incident: define the production-host list once, guarded with `defined()` so an mu-plugin and the core plugin can both declare it; keep the kill-switch's data in place and have it return empty off-production; and verify both sides anonymously in the same pass (the staging side through the maintenance-mode `should_apply` bypass, the live side with `curl --resolve` to the edge).
+**First seen:** Clemente, 2026-09-08 — a staging hostname change silently disarmed a staging mail trap; the section kill-switch was then made host-aware so staging shows every section and live hides three, with no staging-only file left to exclude from the next promotion.
 
 
 ## Rank Math + Bricks
@@ -3301,8 +3592,8 @@ Woo's JS adds `.display-password` while the password is **visible**, so base = e
 ### WS Form's PHP API needs `wp_set_current_user(1)` from WP-CLI — reads included
 **Symptom / When:** Any WS Form API call from `wp eval-file` throws `Uncaught Exception: Insufficient user capabilities (read_form)` → "critical error on this website".
 **Why:** WS Form gates its API on capabilities (`read_form`/`create_form`/…) via `WS_Form_Common::user_must()`. WP-CLI runs as user 0, which has none. Same class of gotcha as the Bricks meta-write block — and note it gates **reads**, not just writes.
-**Fix:** `wp_set_current_user(1);` as the first line of any script touching the WS Form API.
-**First seen:** TAB, 2026-06-26 — a `db_read()` in a tracking-field build fataled the site.
+**Fix:** `wp_set_current_user(1);` as the first line of any script touching the WS Form API. Several methods also take a `$bypass_user_capability_check` argument, but setting the user is the consistent habit. Note the failure is the opposite of Bricks': Bricks silently no-ops and reports success, WS Form throws loudly. The same line fixes both.
+**First seen:** TAB, 2026-06-26 — a `db_read()` in a tracking-field build fataled the site. · **Clemente, 2026-07-25 / 07-29** — newsletter and donation form builds, same throw.
 
 ### WS Form `WS_Form_Field::db_create()` needs an EMPTY label or the field gets ZERO meta
 **Symptom / When:** Building a field via the PHP API (`$f->type='checkbox'; $f->label='X'; $f->db_create();`) produces a field row with **no meta at all** (0 rows in `wsf_field_meta`) and a warning `Undefined variable $field_type_config`. The field renders broken — no choices, no required, no width.
@@ -3313,15 +3604,61 @@ $f = new WS_Form_Field(); $f->form_id = $fid; $f->section_id = $sid; $f->type = 
 $f->db_create();   // label '' → full meta auto-built
 // then set label + overrides on the form object and db_update_from_object()
 ```
-**First seen:** TAB, 2026-05-30 — a first build pass set labels pre-create; choice fields came back with 0 meta. Re-created with empty labels → 37/34 meta keys including the choice grids.
+The second pass in full:
+```php
+$read = new WS_Form_Field(); $read->id = $id; $obj = $read->db_read();
+$obj->label = 'Real label';
+foreach ( $meta as $k => $v ) { $obj->meta->$k = $v; }
+$upd = new WS_Form_Field(); $upd->id = $id; $upd->form_id = $form_id; $upd->section_id = $section_id;
+$upd->db_update_from_object( $obj );
+```
+**First seen:** TAB, 2026-05-30 — a first build pass set labels pre-create; choice fields came back with 0 meta. Re-created with empty labels → 37/34 meta keys including the choice grids. · **Clemente, 2026-07-29** — a donation form on WS Form Pro 1.11.19; the only clue was an `Undefined variable $field_type_config` warning lost under other output. Re-hit on 2026-08-25 despite this entry being in the project's copy.
+
+### WS Form — the HTML field's content meta key is `html_editor`, not `html`
+**Symptom / When:** You add an `html` field programmatically and set `meta->html` to your markup. The form saves and publishes, the field wrapper renders, and it is empty. A DB readback shows your value sitting in the meta.
+**Why:** The `html` field type reads its content from **`html_editor`** (`includes/class-ws-form-config.php`: `'meta_keys' => array('hidden', 'html_editor', 'summary_html_insert')`). `html` isn't a registered meta key for it, so it persists as inert data, the same silent strip as a Bricks setting under the wrong key.
+**Fix:** `$field->meta->html_editor = '<p>…</p>';`. Before setting any field type's meta programmatically, read its real keys: `grep -n "meta_keys" wp-content/plugins/ws-form-pro/includes/class-ws-form-config.php`, or build one in the editor and read it back. The golden rule applies to WS Form as much as to Bricks.
+**First seen:** Clemente, 2026-07-25 — restoring a terms line on a newsletter form. Re-hit on 2026-08-25 in a `wsf_pre_render` filter despite the project entry.
+
+### `WS_Form_Field::db_delete()` throws "Invalid form ID" unless `form_id` is set on the field object
+**Symptom / When:** Trimming a field from a form via the API fatals with `Uncaught Exception: Invalid form ID (WS_Form_Field | db_check_form_id)`.
+**Why:** `db_delete()` calls `db_check_form_id()` first, which validates `$field->form_id`, not `$field->id`.
+**Fix:**
+```php
+$field = new WS_Form_Field();
+$field->form_id = $form_id;   // REQUIRED
+$field->id      = $field_id;
+$field->db_delete();
+```
+To derive a variant of a known-good form, `WS_Form_Form::db_clone()`, then retitle with `db_update_from_object()`, trim fields, and `db_publish()`.
+**First seen:** Clemente, 2026-07-26 — a compact footer newsletter form cloned from the full one.
+
+### WS Form renders a PUBLISHED SNAPSHOT — API edits to an existing form don't reach the front end until you republish, and the checksums say it's in sync
+**Symptom / When:** You add or change a field on an existing form through the PHP API. Every readback is right (`db_read()` shows the field, meta, `sort_index`, classes), and the front end keeps serving the old form. Nothing is cached: the server is sending the previous version, which invites a pointless round of cache and CDN flushing.
+**Why:** `wp_wsf_form` carries a **`published`** longtext column holding a full snapshot, plus `published_checksum`. **The front end renders the snapshot**, not the working copy the field API writes. A new form publishes as part of its build, so this bites only on edits. ⚠️ **The staleness indicators mislead:** `checksum` and `published_checksum` stayed identical with the snapshot four field-writes out of date, because field-level writes don't touch the form row at all, and `date_updated` still showed the previous week. `db_publish()` sets `date_updated` and `date_publish` to the same instant, so on a healthy form they always match. Neither pair tells "just published" from "edited, never published."
+**Fix:** End every form-edit script with a publish (signature `db_publish( $bypass_user_capability_check = false, $data_source_schedule_reset = true )`, returns `NULL` on success, so don't test the return):
+```php
+wp_set_current_user( 1 );
+$f = new WS_Form_Form(); $f->id = $form_id;
+$f->db_publish();
+```
+Diagnose by reading the snapshot itself: `SELECT published FROM wp_wsf_form WHERE id = N` and grep it for content you expect. A `date_updated` older than your edit is the secondary tell.
+**First seen:** Clemente, 2026-08-02 — first and last name added to a footer form were correct in the DB and absent on the page. WS Form Pro 1.11.19.
 
 ### WS Form — choices live in `data_grid_checkbox`/`data_grid_radio`; the export JSON is the importable artifact
 **Symptom / When:** You need to set choice options programmatically and want a reusable form artifact, but WS Form has **no WP-CLI command** and no per-type default-meta accessor.
-**Why / shape:** Each choice field stores options in a `data_grid_<type>` meta key: `{rows_per_page, group_index, default:[…checked values], columns:[{id,label}], groups:[{id,label,rows:[{id,data:[label,value]}]}]}`. Default-checked options go in the grid's top-level `default` array (by value). Field width = `meta.breakpoint_size_75` (12-col). Form-level actions live in `form.meta.action` as a data-grid of `[ActionLabel, json-encoded {id,meta,events}]` rows — **JSON-string-encoded inside the data cell**, so `json_decode` → mutate → `wp_json_encode` back. (URLs inside are JSON-escaped: `\/path\/`.)
+**Why / shape:** Each choice field stores options in a `data_grid_<type>` meta key: `{rows_per_page, group_index, default:[…checked values], columns:[{id,label}], groups:[{id,label,rows:[{id,data:[…cells]}]}]}`. **Which cell is the label and which the value is not fixed by position:** two sibling meta keys name the column indices, `<type>_field_label` and `<type>_field_value` (`select_field_*`, `radio_field_*`, `checkbox_field_*`). A grid built `[value, label]` with `radio_field_value = '0'`, `radio_field_label = '1'` is just as valid as `[label, value]` (rendered on WS Form Pro 1.12.6). ⚠️ **The default grid has ONE column, with both keys pointing at `0`**, so the submitted value *is* the visible label, and any PHP branching on the value is matching display copy that breaks the moment an option is reworded. Add a second column and point the value key at it:
+```php
+'select_field_label' => '0',
+'select_field_value' => '1',
+'data_grid_select'   => [ 'columns' => [ ['id'=>0,'label'=>'Label'], ['id'=>1,'label'=>'Value'] ],
+                          'groups'  => [ [ 'id'=>0, 'label'=>'Options', 'page'=>0, 'rows'=>[ ['id'=>1,'data'=>['In memory of someone','memory']] ] ] ] ],
+``` Default-checked options go in the grid's top-level `default` array (by value). Field width = `meta.breakpoint_size_<bp>` (12-col), one key per breakpoint tier (`_50`, `_75`, …): `breakpoint_size_50 => '6'` on two fields puts them side by side at that tier. Those widths emit **inline per page** as `flex: 0 0 X% !important`, so change the field meta, never CSS. Form-level actions live in `form.meta.action` as a data-grid of `[ActionLabel, json-encoded {id,meta,events}]` rows — **JSON-string-encoded inside the data cell**, so `json_decode` → mutate → `wp_json_encode` back. (URLs inside are JSON-escaped: `\/path\/`.)
+**Action rows, specifically.** `id` values include `database` (Save Submission), `email`, `message`, `redirect`, `googlesheetsv4`. **Row order is execution order**, so anything that must run before the browser leaves sits above `redirect`. Every action reads its settings through `WS_Form_Action::get_config( $config, $key )`, which returns `$config['meta'][$key]` and nothing else: a key at the row's top level (a cloning leftover like `"action_email_subject"` beside `"meta"`) is dead weight that looks like live config, and calling an action's `post()` by hand needs the **whole row** (`{id, meta, events}`), not just its `meta`, or every setting reads `false` and looks like a broken configuration. To edit one action key narrowly: `WS_Form_Meta` (`object = 'form'`, `parent_id = <form id>`) → `db_update_from_object( (object) [ 'action' => $grid ], false, true )`, then `db_publish()`, and verify in the `published` column (next entries), not the draft.
 **Fix / workflow:** `db_create` → sections → fields (empty label) → `db_read` → set labels/meta/`data_grid_*`/`meta.action` → `db_update_from_object` → `db_publish`. All of it needs `wp_set_current_user(1)`. Then `db_read(true,true)` + `wp_json_encode` → save as `*.wsf.json`, which is WS Form's native import format for other environments.
 **⚠️ Render order is each field's `sort_index`, not its position in the section's `fields` array.** A field object added without one defaults to `0` and renders **first**. For example, a consent notice appended under the submit publishes above "First name". When adding a field through the API, give it an explicit `sort_index` (max + 1, or re-index the section) before `db_update_from_object()` → `db_publish()`. Then check the order in the **published** copy (`wsf_form_get_object($id, true)`), not the draft, and re-export the `.wsf.json`, because the portable artifact goes stale silently. This is the API route, and it's safe. The caution in the Turnstile/CAPTCHA entry below is about patching `wp_wsf_field.sort_index` directly in the database, which does nothing until the form is republished.
 **⚠️ Verify in a real browser, NOT curl** — WS Form renders fields **client-side** (JS hydrates a `wsf-form-canvas` skeleton), so curl shows the canvas and section labels but few or no `<input>`s. That is expected, not a failure.
-**First seen:** TAB, 2026-05-30 — a quote form built entirely via the API and exported as a re-importable artifact; the curl output nearly read as a broken build. · WCDP, 2026-08-18 — a consent-notice field added via the API published at the top of the form until the section was re-indexed.
+**First seen:** TAB, 2026-05-30 — a quote form built entirely via the API and exported as a re-importable artifact; the curl output nearly read as a broken build. · WCDP, 2026-08-18 — a consent-notice field added via the API published at the top of the form until the section was re-indexed. · **Clemente, 2026-07-29** — a tribute select submitted its label text as its value. · **Clemente, 2026-08-25** — a value-first chip grid (`radio_field_value: 0`, `radio_field_label: 1`) built against a builder-saved radio. · **Clemente, 2026-09-10** — a cloned form carried a stray top-level `action_email_subject`; the subject that fired was the published `meta` value all along.
 
 ### WS Form — skin it by overriding root `--wsf-form-*` vars, never by writing rules against `.wsf-field` / `.wsf-label`
 **Scope:** this is the fallback for a WS Form site **without** ACSS's form layer — which includes every `bricks-native` site unless its stack file names another form owner. `[stack:acss]` The rest of this paragraph: On the ACSS stack (the 2026-08-18 convention) this entry does **not** apply: WS Form is skinned by ACSS's native form settings (`f-light-*` / `f-dark-*`, written with `save_settings()`), and the WS Form styler is off (`css_style` false). `--wsf-*` remaps are dead code there, because their consumers ship in the skin that `css_style: false` dequeues. See `01` → "Skinning third-party UI — check ACSS first", `assets/acss-form-brand.css`, and "WS Form `css_style: false` drops more than the skin" below.
@@ -3334,13 +3671,15 @@ curl -s <url> | grep -oE '\-\-wsf-[a-z0-9-]+\s*:'
 ```
 **Specifics worth knowing.** `--wsf-form-color-base-contrast` is the "light text on a coloured fill" role (button text → near-white) — **not** a literal contrast of base. On a DARK theme, field *text* (`--wsf-field-color`) must be remapped separately from field *border* (`--wsf-field-border-color`): both default to `var(--wsf-form-color-base)` but need different values. `--wsf-field-box-shadow-width-focus: 0` gives border-only focus. The submit button renders as `.wsf-button-primary`, drawing the `--wsf-field-button-primary-*` tier (bg = primary, text = base-contrast) — no need to touch the neutral tier. Button typography is fully var-driven (`--wsf-field-button-font-family`/`-weight`/`-letter-spacing`/`-text-transform`). Keep the block a **bridge** (roots → your tokens) and reshade by editing the tokens. Fields are JS-injected at runtime, so a form can't be verified over curl — confirm visually.
 Choice fields render as chips only when the field meta `checkbox_style`/`radio_style` = `button`; submit picks the primary family via `class_field_button_type=primary`.
-**First seen:** TAB, 2026-05-31 — a ~130-line hand-written `.wsf-*` skin with dead selectors, fighting the Styler. Replaced by a ~25-declaration root remap that branded inputs/labels/legends/help/submit/chips in one pass. · **Scoped:** WCDP, 2026-08-11 to 2026-08-18 — a `--wsf-form-*` bridge was built and shipped on an ACSS site before anyone checked ACSS's own form layer, then the WS Form styler was retired in favour of ACSS native form settings.
+**Not everything derives from a root.** Field-level keys to set directly: `--wsf-field-padding-vertical` / `-horizontal` (input interior), `--wsf-field-label-color` / `-font-size` / `-font-weight`, `--wsf-field-label-gap` / `--wsf-field-help-gap`, `--wsf-form-font-size-small` (help and validation), `--wsf-form-line-height`. Defaults and which vars are derived vs. literal are in `includes/templates/style/standard/wsf-style-standard-light.json`. And if a style was customized in the Styler with a **literal** field-level value, no root override reaches it; set that field var directly. Child-theme CSS doesn't apply in WS Form's admin preview, so check on a front-end page.
+**First seen:** TAB, 2026-05-31 — a ~130-line hand-written `.wsf-*` skin with dead selectors, fighting the Styler. Replaced by a ~25-declaration root remap that branded inputs/labels/legends/help/submit/chips in one pass. · **Scoped:** WCDP, 2026-08-11 to 2026-08-18 — a `--wsf-form-*` bridge was built and shipped on an ACSS site before anyone checked ACSS's own form layer, then the WS Form styler was retired in favor of ACSS native form settings. · **Clemente, 2026-05-28** — a contact-form brand skin (color, then type and spacing) entirely through the root cascade plus the field-level keys.
 
 ### WS Form — per-field-type CSS loads AFTER the theme; the native checkbox IS the styled box (sibling of the label, no wrap mode)
 **Symptom / When:** Child-theme CSS overriding a WS Form field rule doesn't take at equal specificity. And trying to put the choice `<input>` *inside* its `<label>`, or drawing your own checkbox box, fights WS Form.
 **Why:** (1) WS Form enqueues per-field-type stylesheets (`ws-form-public-checkbox.css`, …) **after** the theme, so on equal specificity it wins on source order. (2) WS Form **styles the native input itself**: `input[type=checkbox].wsf-field { appearance:none; … }` IS the visible box, `:checked::after` is the checkmark, driven by `--wsf-field-checkbox-*` vars. The input is `position:absolute` and is a **sibling rendered before** `label.wsf-label`. There is **no input-inside-label wrap mode** — don't try to nest it.
 **Fix:** Beat the source-order win with the doubled-class trick (`.scope.scope [data-row-checkbox] > input.wsf-field + label.wsf-label {…}`). Don't hand-draw a box with `::before` — brand WS Form's native one via the vars. For a clickable card option: keep `label.wsf-label` as the full-width card (override its `margin-left:0`, add left padding), set the row `position:relative`, and absolutely-position the input inside the card's gutter. Add a scoping class per field via the `class_field_wrapper` meta.
-**First seen:** TAB, 2026-05-31 — matching choice fields to a wireframe (card grid + pills); needed doubled-class to beat WS Form's checkbox CSS, and a hand-drawn `::before` box turned out to be redundant.
+**Button-style radios weld the border to the FILL token.** WS Form's rule is `.wsf-form input[type=radio].wsf-field.wsf-button + label.wsf-label { background-color: var(--wsf-field-radio-button-color-background); border: … var(--wsf-field-radio-button-color-background) }`, so a white chip gets a white border and a "faint outline" resting state renders as nothing. No token values can express fill ≠ border; it needs a declaration, the one case where token bridging can't do the job. That rule counts **(0,5,2)**, and the natural override (`.wsf-form[data-id="N"] input[type=radio].my-chip + label.wsf-label`) is also (0,5,2) and loses on source order. Keep the fills on tokens (the checked state needs no rule) and climb the outline states with the doubled class, `…input[type="radio"].my-chip.my-chip:not(:checked) + label.wsf-label` at (0,7,2). Bind hover to the **label's** `:hover`: the input is visually hidden and the label is the whole hit area. Confirm the load order on the rendered page (compare the `<link>` byte offsets); it decides the tie and is invisible from the CSS.
+**First seen:** TAB, 2026-05-31 — matching choice fields to a wireframe (card grid + pills); needed doubled-class to beat WS Form's checkbox CSS, and a hand-drawn `::before` box turned out to be redundant. · **Clemente, 2026-08-25** — donate-page amount chips: no resting outline (fill token) and an override that tied and lost, both live at once, so fixing either alone looked like it hadn't worked.
 
 ### WS Form `css_style: false` drops more than the skin — the section fieldset chrome and `.wsf-hidden-element` lose their CSS
 **Symptom / When:** With the WS Form styler off (`ws_form_css.css_style = false`, the ACSS-stack convention in `01`), the form renders on ACSS's form layer as intended. But each section `<fieldset>` shows the **UA default `2px groove` border**, and a section whose label is set not to render prints it anyway ("Section" above the fields). Choice rows set to Horizontal stack vertically.
@@ -3355,6 +3694,25 @@ Choice fields render as chips only when the field meta `checkbox_style`/`radio_s
 ```
 Turn section labels off at the data level (`label_render = ''` per section, set through the PHP API and carried by the `.wsf.json` export), not with CSS.
 **First seen:** WCDP, 2026-08-18 — found by a `getComputedStyle` DOM probe after screenshots showed "Section" with a rule through it. The legend markup fix had already landed and been verified in the served JSON, so the missing CSS was the only remaining explanation.
+
+### WS Form layout — `--wsf-form-grid-gap` drives BOTH axes, and the tile padding IS the gutter, so killing the grid's negative margins indents the form
+**Applies only where WS Form's base CSS loads** (styler on). With `css_style: false` (the ACSS-stack convention) these rules are dequeued; see the entry above.
+**Symptom / When:** In a narrow, unpadded container (a footer column, a sidebar) the form is ~24px wider than its parent and pushes real horizontal page overflow on mobile. Zero the grid's margins to fix that, and the whole form is now indented ~half a gap. Or: input and submit sit on different baselines, and zeroing wrapper margins to fix it collapses the space between rows.
+**Why:** One variable, two axes, in `ws-form-public-base.css`:
+```css
+.wsf-form .wsf-field-wrapper { margin-bottom: var(--wsf-form-grid-gap); }              /* row rhythm    */
+.wsf-form .wsf-tile { padding-left/right: calc(var(--wsf-form-grid-gap) / 2); }        /* column gutter */
+.wsf-form .wsf-grid { margin-left/right: calc(-1 * var(--wsf-form-grid-gap) / 2); }    /* edge cancel   */
+```
+The negative margins exist only to cancel the tile padding at the outer edges. Zero them and the padding stays.
+**Fix:** Zero both, then re-add only the gutters you need, on the left-hand item of each row by field class (`class_field` + `:has()`), never `:nth-child`, which misapplies as soon as a field is added:
+```css
+.my-scope .wsf-form .wsf-grid { margin-left: 0; margin-right: 0; }
+.my-scope .wsf-form .wsf-tile { padding-left: 0; padding-right: 0; }
+.my-scope .wsf-form .wsf-tile:has(.my-first-of-row) { padding-right: var(--wsf-form-grid-gap); }
+```
+Tiles are `flex: 0 0 N%` with `box-sizing: border-box`, so the padding can't overflow the row. In a narrow column also give the input and submit `width: 100%`. To compact a form, override `--wsf-form-grid-gap` alone: rows and columns tighten together, and the button's padding vars default to the field's (`--wsf-field-button-padding-vertical: var(--wsf-field-padding-vertical)`), so heights stay matched. ⚠️ Never fix vertical alignment by zeroing `.wsf-field-wrapper` margins (they are the row rhythm); use `align-items` on `.wsf-grid`. Column widths are inline `!important` per page; change `breakpoint_size_<bp>` instead. None of this is visible to curl; measure in a browser (`scrollWidth` against the viewport catches the overflow).
+**First seen:** Clemente, 2026-07-26 — a footer newsletter form at 402px in a 390px viewport. Then 2026-08-02: the overflow fix had been silently indenting the same form for a week.
 
 ### WS Form prints its entire compiled CSS inline on every page — while identical files sit unused in uploads
 **Symptom / When:** The HTML document is unexpectedly large, and much of it is CSS. The rendered page has tens of KB of `.wsf-*` rules in unlabelled `<style>` blocks near `</body>`. That happens on any page with a form, and on **every** page if the global header or footer carries one. Meanwhile `wp-content/uploads/ws-form/css/public/` already holds `public.layout.min.css` and `public.style.N.min.css` with byte-identical content, enqueued nowhere.
@@ -3407,16 +3765,18 @@ curl -s https://challenges.cloudflare.com/turnstile/v0/siteverify -d 'secret=<ke
 **Symptom / When:** Adding Cloudflare Turnstile to a form. The Cloudflare dashboard prompts you to "set up siteverify with Spin", which reads like a required step, and Spin will happily generate backend code for you.
 **Why:** Two things are being conflated. **`siteverify` is not new and not optional** — `https://challenges.cloudflare.com/turnstile/v0/siteverify` is the server-side validation call that every Turnstile integration must make, and it is what the *secret* key is for (the client widget alone protects nothing). **WS Form Pro already makes that call**, via `WS_FORM_TURNSTILE_ENDPOINT` in `ws-form.php` — so on this stack it is already done. **Spin** (new in 2026, docs updated 2026-07-23 — postdates common model knowledge cutoffs, so it will not be in an assistant's memory) is a *setup convenience* that creates the widget, issues the keys, and **injects a siteverify call into your backend**, via dashboard / `wrangler turnstile widget create` / a prompt pasted into an AI coding agent. Cloudflare's own docs state it is not required and deploys nothing on your behalf.
 **Fix:** On any site whose form plugin handles CAPTCHA validation (WS Form, Fluent Forms, Gravity), **do not run Spin.** Its output lands as either dead code in the site plugin or a second validation path competing with the plugin's own. Create the widget in the dashboard, put the keys where the plugin expects them, and stop. In WS Form the global keys live in the **`ws_form` option** as `turnstile_site_key` / `turnstile_secret_key`; the `turnstile` **field type** declares `required_setting_global_meta_key`, so a field added to any form inherits the global keys automatically.
+**⚠️ Keys in Settings protect nothing on their own.** Turnstile (and reCAPTCHA, hCaptcha) is a **field type**; the global keys only supply credentials to fields that exist, and protection is per form, opt-in. Census before believing "Turnstile has been added": `SELECT type, COUNT(*) FROM wp_wsf_field GROUP BY type`; no `turnstile` row means no form is protected. Fields reach a form through `wp_wsf_field.section_id → wp_wsf_section.group_id → wp_wsf_group.form_id` (there is no `form_id` on the field or section row). Add the field, republish, and prove it reached the front end by finding `"type":"turnstile"` in each form's `published` column; the census alone proves only the editor state.
 **⚠️ Add every hostname to the widget's domain list** — production *and* staging. Turnstile validates against that list, so a production-only widget makes staging fail in a way indistinguishable from a broken configuration.
-**First seen:** Highland, 2026-08-04 — the dashboard prompted for Spin after the widget was created manually; the plugin source showed siteverify was already wired.
+**First seen:** Highland, 2026-08-04 — the dashboard prompted for Spin after the widget was created manually; the plugin source showed siteverify was already wired. · **Clemente, 2026-09-08** — keys set, zero `turnstile` fields on any form; fields placed on two forms by intent and verified in the published snapshots.
 
 
 ### A client-rendered form cannot be verified with `curl` — check the CAPTCHA provider's own call count instead
 **Symptom / When:** Verifying a CAPTCHA integration by fetching the page and grepping for the widget markup or the provider's script. You get zero hits for `challenges.cloudflare.com` and conclude the integration is broken — or you get the markup, conclude it works, and ship a form that silently rejects every submission.
 **Why:** WS Form builds its fields **client-side** from a JSON definition embedded in the page. What `curl` returns is that definition, not the rendered DOM; the provider's script is injected at runtime. **Zero `challenges.cloudflare.com` in page source is the expected result and proves nothing in either direction.** The inverse is worse: a widget that renders is no evidence at all that the token validates server-side, and that is the half that actually gates the submission.
 **Fix:** Verify at the provider, not the page. **Submit the form for real, then check the widget's siteverify call count in the Cloudflare Turnstile dashboard** — a recorded call proves the token reached Cloudflare *and* validated server-side. Zero calls after a submission means the integration is not live regardless of what the page looks like. Then confirm the notification actually arrived, which closes the path end to end. This is cheaper and more conclusive than a headless browser, which only ever re-checks the client half.
+**The same applies to every WS Form check.** Server HTML holds an empty `<form>` shell and the definition JSON, so a fields grep false-alarms. Count `.wsf-field` in a headless browser after hydration and drive conditional logic by setting the trigger field. DB-side, `SELECT status, published_checksum FROM wp_wsf_form WHERE id = N` shows whether a published version exists at all (not whether it's current; see the published-snapshot entry). Form meta joins on `parent_id`, not `form_id`.
 **Also — position the CAPTCHA field ABOVE the submit button.** WS Form sorts by `wp_wsf_field.sort_index` and will happily place it after submit; the challenge then renders below the button and invites a click before it is solved, turning a lead into a validation error. Fix it by dragging in the WS Form UI, **not** by patching `sort_index` in the database — WS Form DB edits do not take effect until the form is republished.
-**First seen:** Highland, 2026-08-04 — grepping the live pages returned `challenges.cloudflare.com: 0` on both forms and briefly read as a broken integration; the forms are client-rendered. The same inspection found the turnstile field sorted *after* submit on both forms.
+**First seen:** Highland, 2026-08-04 — grepping the live pages returned `challenges.cloudflare.com: 0` on both forms and briefly read as a broken integration; the forms are client-rendered. The same inspection found the turnstile field sorted *after* submit on both forms. · **Clemente, 2026-07-24** — static HTML suggested a 44-field application form wasn't rendering; headless render showed 48 fields in 9 sections and a working conditional reveal.
 
 
 ### WS Form tracking meta is written whenever the form toggle is on — an empty value proves nothing
@@ -3531,6 +3891,10 @@ jQuery(document).on('wsf-rendered wsf-submit-before-ajax', function (e, form, id
   (`ws-form-public.js:3223`). This is the **guarantee**: the payload is built from the DOM form, so
   anything present at this instant is posted. Bind here and render timing stops mattering.
 
+**These are jQuery events, so `document.addEventListener( 'wsf-rendered', … )` never fires.** jQuery's `.trigger()` on a non-native event name dispatches no native DOM event; use `jQuery( document ).on( … )` and gate on the form id from the payload.
+
+**Where your classes land on the client-built DOM** (`shared/js/ws-form.js` and the framework config): `class_field` goes onto the field's own class array, so for a radio or checkbox it is on **each `<input>`** (`input[type="radio"].my-class`, never `.my-class input`). `class_field_wrapper` goes onto the column, which the framework also gives `wsf-tile wsf-field-wrapper`, so it is the **same element** as `.wsf-field-wrapper` and `.my-wrapper .wsf-field-wrapper` can never match. That element also holds the field's label, so making it a grid puts the label in a cell. Match on values you wrote (`input[value="other"]`) rather than sibling position. A WS Form field can't be visually verified from the server: verify the published payload, the delivered CSS/JS and the load order, then look in a browser.
+
 `wsf-submit` also exists but fires earlier in `form_post()`; `-before-ajax` is the one adjacent to
 serialization. WS Form posts over AJAX, so a native `submit` listener may never fire — do not rely
 on it as the primary path.
@@ -3543,7 +3907,18 @@ the inputs exist at the end reproduces it in a second:
 the test is wrong).
 
 **First seen:** TAB, 2026-08-19 — first-touch attribution build. Caught by Mike's live browser
-submission (41), not by any server-side check.
+submission (41), not by any server-side check. · **Clemente, 2026-08-25** — donate-page chips: three wrong selectors (`class_field` assumed on a wrapper, a descendant `.wsf-field-wrapper` selector) and one dead `addEventListener`.
+
+### WS Form — a section `custom_attributes` entry named `id` ships a DUPLICATE `id`; anchor on `data-id`
+**Symptom / When:** You want stable anchors on a form's sections (a progress rail, "jump to step") and set `id` through the section's Custom Attributes repeater. It round-trips into the published JSON and reaches the page, and the rendered `<fieldset>` carries **two** `id` attributes. Browsers use the first, so it works while failing validation.
+**Why:** The default framework's section mask is `<fieldset#attributes class="#class" id="#id" data-id="#data_id">#section</fieldset>` (`includes/frameworks/class-ws-form-framework-ws-form.php`). `#attributes` and `id="#id"` are separate substitutions, and `attribute_modify()` de-duplicates only within the attributes string it is handed. WS Form's own id is `wsf-{form_instance_id}-section-{section_id}`, and ⚠️ **`form_instance_id` counts forms in render order on the page**, so adding a form above renumbers it and breaks any hard-coded anchor.
+**Fix:** Don't set `id` through custom attributes and don't hard-code `wsf-N-section-N`. Resolve at runtime from **`data-id`**, which the mask always emits and which doesn't depend on the instance:
+```js
+var fieldset = formEl.querySelector( 'fieldset[data-id="' + sectionId + '"]' );
+link.setAttribute( 'href', '#' + fieldset.id );
+```
+Build the rail as a plain list server-side and upgrade it on `jQuery( document ).on( 'wsf-rendered', … )` (fail-open, since fieldsets don't exist at DOM ready). Section meta lives in `wp_wsf_section_meta`, with repeater values PHP-serialized; write it through `WS_Form_Meta` (`object = 'section'`, `parent_id = <section id>`, `db_update_from_array()`), never by hand-building the string, then `db_publish()`. There is no `WS_Form_Form::db_save()`.
+**First seen:** Clemente, 2026-08-25 — an application form's sticky progress rail; a live probe (write, publish, curl) showed the value reaching the page and reading the mask showed the duplicate. Probe reverted.
 
 ### Custom WS Form trackings silently OVERWRITE the plugin's built-ins if you reuse a key name
 
@@ -3651,8 +4026,9 @@ field you have not confirmed is mapped** — a blank then proves nothing about t
 step will condemn a working chain. Verify capture at the database, and treat the sheet as a separate
 delivery question.
 
+**The other side of the same mechanism: headers are the contract.** `get_list_fields()` reads `<SheetName>!1:1` and uses each header **string** as the column id, and the mapping stores that string (`'action_googlesheetsv4_list_fields' => 'Email'`). An empty row 1 yields no columns at all (`get_list_fields()` returns `false`) and `post()` writes nothing though `check_configured()` is true; renaming a header orphans its mapping with no warning. Write the header row before wiring the action. `list_sub_id` is the numeric gid, and gid `0` is valid (the plugin tests `!== false`; don't "fix" it). A non-field column such as a date goes through the Custom Mapping repeater: `[ 'action_googlesheetsv4_meta_value' => '#submit_date_added_custom("Y-m-d H:i")', 'action_googlesheetsv4_list_fields' => 'Date', 'action_googlesheetsv4_format' => 'text' ]`. Cleaning up test rows: `WS_Form_Submit::db_delete()` trashes by default (`db_delete(true)` is permanent), and the form's visible `count_submit` is a stored counter on `wp_wsf_form` to reset afterwards.
 **First seen:** TAB, 2026-09-11 — found while verifying the sheet for an unrelated row-count audit.
-The project's own lead-source verification recipe had step 2 pointed at exactly this column.
+The project's own lead-source verification recipe had step 2 pointed at exactly this column. · **Clemente, 2026-07-29** — a form's sheet action that returned `false` and wrote nothing because row 1 was empty.
 
 ### Reading a WS Form–linked Google Sheet from the server: use the add-on's credential, not a service account
 **Symptom / When:** You need to read the spreadsheet a form writes to — to audit rows, reconcile
@@ -3697,6 +4073,16 @@ token-check method before provisioning anything.
 **First seen:** pkjsupport, 2026-10-07 (WS Form Pro 1.12.12) — a site dropdown fed by an options-page repeater, and the recipient read from site options.
 
 ## Fluent Forms
+
+### Read WS Form submitted values by field CLASS, not field id
+**Symptom / When:** A `wsf_action_*` filter reads `$submit->meta['field_47']` and silently returns nothing after someone edits the form.
+**Why:** Submission meta is keyed `field_<id>`, and ids change whenever a field is deleted and recreated, which is often what "rename that field" means in the editor. Nothing errors; the handoff just stops carrying data.
+**Fix:** Put a stable class on the field (`class_field` meta) and read with WS Form's helper, which returns an **array** because a class can match more than one field:
+```php
+$values = wsf_submit_get_value_by_field_class( $form, $submit, 'my-email-field', '' );
+```
+Same principle as finding fields by class in `wsf_pre_render` (`wsf_field_get_objects_by_class()`).
+**First seen:** Clemente, 2026-07-29 — a donation handoff to a third-party payment page.
 
 ### Fluent Forms `fluentform_submission_success` never bubbles from the `<form>` — an `e.target` listener reads an empty form id
 **Symptom / When:** A GTM→GA4 form-conversion pipeline is built, verified green in Tag Assistant / DebugView, and published — then weeks of real submissions produce **zero** analytics events while the entries sit in `wp_fluentform_submissions` the whole time. Nothing errors anywhere in the chain.
@@ -3907,11 +4293,18 @@ A delivered-but-unparsed rule means a parse error upstream, and the comment imme
 
 ## Fonts
 
+### Painted ink can overflow its box with no layout overflow — `scrollWidth` passes, an element screenshot catches it
+**Symptom / When:** A decorative glyph (an oversized quotation mark in a `::before`/`::after`, an italic display letter) is visibly clipped at a container or viewport edge, yet `document.documentElement.scrollWidth` equals `innerWidth` and every overflow check passes.
+**Why:** Layout overflow measures boxes, and the box is inside its container. Glyph ink isn't bound by the box: italic and leaning faces (and marks that carry their ink high in the em box) paint past the advance width, so an absolutely positioned pseudo at `right: 0` puts ink beyond the edge. Large `line-height` reductions also move the ink well away from where `top`/`bottom` arithmetic puts the box.
+**Fix:** Give the mark a small positive inset (e.g. `right: 0.1em`) and confirm with an **element screenshot**, which clips to the border box and makes escaped ink obvious. Position by measuring the rendered result, not by arithmetic.
+**First seen:** Clemente, 2026-08-08 — a 96px italic quote mark in a leaning variable display face painted into a grid gap on desktop and over the viewport edge on mobile, with a clean `scrollWidth`.
+
 ### Variable-font prep for Bricks: TTF→WOFF2 (keep axes), subset, and the opsz-instance trap
 **Symptom / When:** Google Fonts downloads are TTF; Bricks Custom Fonts wants WOFF2. And a "variable" font added to Bricks may quietly be a single optical-size **instance** (wght axis only, no `opsz`), so `font-optical-sizing:auto` does nothing at display sizes.
 **Why:** WOFF2 is just a compression container — `fontTools` (`f.flavor='woff2'; f.save()`) converts TTF→WOFF2 losslessly, keeping all axes (wght, opsz, ital). Full-glyph variable files are big (~210–240KB); latin-subset via `pyftsubset --unicodes=<latin range> --flavor=woff2` (keeps axes), and optionally clamp wght to used weights (`fonttools varLib.instancer wght=400:600`) to shrink (~100KB). Bricks stores faces in `bricks_font_faces` post meta (weight/style → attachment id); **variable weights point multiple weights at ONE file** (400 & 600 → same attachment), italic is a **separate file**. A file whose internal family name is e.g. "Newsreader 16pt" is the 16pt instance — no opsz.
-**Fix:** Verify axes with fontTools (`'fvar' in TTFont(f)` → list `f['fvar'].axes`), don't trust the filename. For optical sizing, download the full variable font WITH the opsz axis. `@font-face` maps discrete `font-weight:400/600` to the same variable file — true weights only if the file is really variable (else "600" renders 400 outlines). `font-optical-sizing` defaults to `auto`; don't set it `none`.
-**First seen:** MMHN, 2026-07-16 — first-added Newsreader files were the 16pt instance (no opsz); re-converted the full opsz+wght TTFs to latin-subset WOFF2.
+**Fix:** Verify axes with fontTools (`'fvar' in TTFont(f)` → list `f['fvar'].axes`), don't trust the filename. For optical sizing, download the full variable font WITH the opsz axis.
+**Custom axes fail the same way, and DevTools hides it.** A stripped file drops every axis but `wght`, so `font-variation-settings: "SOFT" 100, "WONK" 1` is a silent no-op; DevTools shows the declaration as applied because it is valid CSS, and the no-op happens inside the font file. Tells: a tiny file (~36 KB for a Latin variable subset) and `wght` as the only axis (a `default` weight of 900 is not a tell; genuine files can ship that). Source genuine variable builds from the **google/fonts GitHub repo** (`ofl/<family>/<Family>[axes].ttf` plus the `-Italic[…]` file), not the css2 API, which serves instanced subsets. And point every `*italic` slot in Bricks Custom Fonts at the italic file: a roman file in an italic slot makes the browser synthesize an oblique. Bricks emits one `@font-face` per weight you register, so only those weights reach the `wght` axis. Verify on the rendered page with `curl -sk <url> | grep -oiE "@font-face[^}]*<family>[^}]*}"`. `@font-face` maps discrete `font-weight:400/600` to the same variable file — true weights only if the file is really variable (else "600" renders 400 outlines). `font-optical-sizing` defaults to `auto`; don't set it `none`.
+**First seen:** MMHN, 2026-07-16 — first-added Newsreader files were the 16pt instance (no opsz); re-converted the full opsz+wght TTFs to latin-subset WOFF2. · **Clemente, 2026-05-27** — an uploaded 36 KB "variable" display font had only `wght`, so every SOFT/WONK declaration was dead, and its `300italic` slot pointed at the roman file; replaced with full four-axis roman and italic builds.
 
 ### Bricks custom fonts — `bricks_font_faces` meta schema + italic key encoding (also a `02` schema-library harvest candidate)
 **When:** Registering or auditing Bricks native Custom Fonts programmatically, or verifying every weight/style in a brand's type spec is actually installed.
@@ -4004,6 +4397,12 @@ function k( $n ) { return $GLOBALS['my_cls'][ $n ]; }
 ```
 Or declare `global $X;` at the top of the file before assigning, so both sides bind the real global, or pass state as arguments and avoid the shared-global pattern entirely. Either way, keep read-back counts and a non-empty assertion on shared settings in the success output: `written: 0 elements` catches this, a bare "WRITE OK" does not.
 **First seen:** WCDP, 2026-08-10 — building a footer element tree, where a class-name→id map was shared with an element-builder helper. · WCDP, 2026-08-19 — an /about build script run via `wp eval 'include …'` wrote a 0-element tree with exit 0 and every integrity check green; the readback count in the log exposed it. · WCDP, 2026-09-13 — five `icon` elements built by a helper that read a file-level `$ICON` through `global` all shipped `icon: null`; the builder showed them as "no icon selected".
+
+### A multi-surface Bricks write must validate EVERY surface before writing ANY — there is no transaction
+**Symptom / When:** A script that fixes several page trees plus `bricks_global_classes` writes them one at a time and aborts partway on a guard. Pages already stripped of settings now point at a destination class that was never saved. The site is in neither the old state nor the new one, and nothing announces it.
+**Why:** Each `update_post_meta()` and `update_option()` commits on its own, so an abort at step 4 of 6 is a half-applied refactor. Moving settings from elements onto classes is the classic case, because the two halves of one logical change live in different rows.
+**Fix:** Build every tree in memory, verify all of them, then write: build-all → verify-all → write-all, never validate-as-you-go. Back up every tree and the class option to JSON first, somewhere that survives a reboot (not `/tmp`). And watch the guard itself: a check that compares Bricks color arrays key for key reports differences the CSS doesn't have (a missing `"name"` key while both emit `var(--primary)`). Compare emitted values, not raw setting structures.
+**First seen:** Clemente, 2026-08-02 — a refactor script wrote four surfaces, then aborted on a cosmetic color-array mismatch; restored from backup and rewritten atomically.
 
 ### WP-CLI in the wrong webapp: a cross-site class-id collision silently edits a sibling install
 **Symptom / When:** A keyed edit to a Bricks global class ("find id X, set one key") reports success, but the change never appears on the target site, and a DIFFERENT site on the same box changes instead. The underlying cause: the shell's working directory persists across tool calls, so a `wp` command that follows a screenshot or utility command runs against whatever webapp was last `cd`-ed into.
@@ -4235,9 +4634,10 @@ curl -s -o /tmp/.o -b "$(cat /tmp/.c)" -w '%{http_code}\n' "https://example.com/
 wp eval '$t=trim(file_get_contents("/tmp/.t")); WP_Session_Tokens::get_instance(1)->destroy($t);'
 shred -u /tmp/.c /tmp/.t /tmp/.o
 ```
+**Assert which artifact you're on before measuring anything.** A preview that depends on session state (an admin-only `?template=v2` switch) silently falls through to the live version when the cookie expires, and a live template that lacks the class you're grepping for looks exactly like a failed write. Make the first check of every verification pass a grep for a marker that exists **only** in the target. Re-mint when the short expiry lapses rather than lengthening it.
 **Two traps.** Send a browser-like `-A` user-agent if the site runs a bot block, or the request may be filtered. And **follow or inspect redirects** — a bare `curl` without `-L` on an admin URL returns an empty body with no error, which reads exactly like a fatal.
 **Store pages and carts.** The minted `logged_in` cookie is enough for the front end and for WooCommerce's coming-soon gate. In Playwright, pass it with `context.addCookies([{ name, value, domain, path: '/', httpOnly: true, secure: true }])`. To seed a Blocks cart for a screenshot, drive `?add-to-cart=<id>&quantity=<n>` navigations in the same context (Store API hydration needs JS, so curl sees an empty cart). ⚠️ **An add-to-cart test through a minted cookie writes to that real user's cart:** the wc session row and `_woocommerce_persistent_cart_<blog id>` user meta survive logins. Clean up with `DELETE FROM {$wpdb->prefix}woocommerce_sessions WHERE session_key='<uid>'` plus `delete_user_meta( <uid>, '_woocommerce_persistent_cart_' . get_current_blog_id() )`, knowing that empties anything the person really had in it. Mint for a throwaway user where you can.
-**First seen:** MBC, 2026-08-07 — an admin-bar layout bug needed logged-in HTML to diff against anonymous. Reused throughout 2026-08-25 to verify admin screens after an ACF migration. · **Extended:** MMHN, 2026-07-18 / 2026-07-19 — verifying gated cart, checkout and account surfaces; a notice-flow test landed items in the real admin user's cart.
+**First seen:** MBC, 2026-08-07 — an admin-bar layout bug needed logged-in HTML to diff against anonymous. Reused throughout 2026-08-25 to verify admin screens after an ACF migration. · **Extended:** MMHN, 2026-07-18 / 2026-07-19 — verifying gated cart, checkout and account surfaces; a notice-flow test landed items in the real admin user's cart. · **Clemente, 2026-07-26** — several debugging cycles spent measuring the original footer while believing it was v2, after a preview cookie expired mid-session.
 
 ### Firing admin hooks under `wp eval` gives false negatives — verify admin screens over real HTTP
 **Symptom / When:** You want to confirm an admin page or menu registered, so you fire its hook from the CLI — `wp eval 'do_action("admin_menu"); …'` — and it reports the menu entry missing. The page is fine.
