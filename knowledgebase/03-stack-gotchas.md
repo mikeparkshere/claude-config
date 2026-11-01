@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-318 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+317 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -98,11 +98,10 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks 2.3.x `bricks/dynamic_data/render_tag` passes `$tag` as a parsed-tag ARRAY, not always a string
 - A custom dynamic tag used in an element `_conditions` resolves via `render_content`, NOT `render_tag` — register BOTH
 - Bricks `{post_excerpt}` auto-generates from content — an `empty_not` gate on it never fires
-- Bricks `logoHeight` (and any number-unit control) silently rejects `clamp()`
+- Bricks number fields won't hold `clamp()` / `min()` / `var()` in the builder UI — but a headless write emits them fine
 - Bricks `logo` element: `logoText` is escaped into `alt` WITHOUT dynamic-data resolution
 - Bricks link: `useDynamicData` needs `link.type: "meta"` — on `"external"` it is ignored and NO href is emitted
-- Native `{post_url}` resolves to the queried object (not the loop item) in LINK contexts inside a custom-query loop
-- Bricks custom query returning bare IDs (`'fields'=>'ids'`) does NOT establish per-item post context
+- Bricks custom query loop: text tags resolve per item, but links, class attributes and conditions read the OUTER post — and bare IDs lose even the text
 - Bricks custom-query `posts_per_page` arrives at `settings['query']['posts_per_page']`, not `settings['posts_per_page']`
 - Bricks archive template conditions use `archivePostTypes` / `archiveTerms` — NOT `postType` / `taxonomy`
 - Bricks `is_archive_main_query` merge clobbers a plugin's `pre_get_posts` ordering at priority 10
@@ -961,16 +960,14 @@ function prefix_has_excerpt_value( $post_id ) { return has_excerpt( $post_id ) ?
 For card decks that *want* a fallback, use a custom tag that returns `get_the_excerpt()` behind `has_excerpt()` and otherwise `wp_trim_words()` at the length the design wants. WP's 55-word fallback is rarely it.
 **First seen:** WCDP, 2026-08-20 — the Event single's hero lead dumped a 55-word auto-excerpt above the full description as soon as the first excerpt-less event existed. It was invisible for two days because every seeded event carried a custom excerpt.
 
-### Bricks `logoHeight` (and any number-unit control) silently rejects `clamp()`
-**Symptom / When:** Setting the Logo element's `logoHeight` to `clamp(36px, 4vw, 48px)` saves, the builder shows the value, but no `height` rule renders. No console error, no validation warning.
-**Why:** `logoHeight` is a `number-unit` control that parses `<number><unit>` and silently drops anything else. `clamp()`, `min()`, `max()`, `calc()` and `var()` all fail validation and emit nothing.
-**Fix:** Write the rule in the child theme against Bricks' inner `<img>`, and leave the Bricks setting empty so it doesn't fight:
+### Bricks number fields won't hold `clamp()` / `min()` / `var()` in the builder UI — but a headless write emits them fine
+**Symptom / When:** You want a fluid value in a Bricks number-unit control (`logoHeight`, `_widthMax`, `_width`, `_height`…). Typed into the builder, it doesn't stick: TAB (April 2026, Bricks version not recorded) saw `logoHeight: clamp(36px, 4vw, 48px)` produce no `height` rule; Clemente saw the opposite face — a headless-written `_widthMax: clamp(…)` rendered correctly while the builder field displayed **empty**.
+**Why:** The CSS emitter is not the problem. In `includes/assets.php` (ControlNumber branch) Bricks appends a unit only when the value is numeric; any other string is emitted verbatim. Tested 2026-11-01 on Bricks **2.3.12 and 2.4.4** (in-memory render): `_widthMax` `clamp()`, `min(72ch, 100%)` and `var(--width-l)` all emit as written, and `logoHeight: clamp(36px, 4vw, 48px)` emits `#brxe-… .bricks-site-logo {height: clamp(36px, 4vw, 48px)}`. What rejects function values is the builder's number input, which expects `<number><unit>`. (The `<img height>` *attribute* is set only for numeric/`px` values, `elements/logo.php` — irrelevant to the CSS.)
+**Fix:** Write fluid values headlessly into the setting; they emit. Verify by reading the emitted CSS or the rendered size, never by looking at the builder field — a blank field is expected. Because the field shows empty, a later builder edit of that element is the fragile moment: re-read the setting after anyone saves it in the builder. Where a client edits the element in the builder, the alternative still holds — leave the setting empty and put the rule in the child theme:
 ```css
 .header__logo .bricks-site-logo { height: clamp(36px, 4vw, 48px); width: auto; }
 ```
-Applies to any Bricks number-unit setting where you want a fluid expression.
-**First seen:** TAB, 2026-04-25 — header logo responsive sizing.
-
+**First seen:** TAB, 2026-04-25 — header logo responsive sizing. · **Clemente**, 2026-05-19 — a footer logo sized with `_widthMax: clamp(15rem, 36vw, 30rem)` on a global class: saved, emitted and worked on the page, but the builder's Max width field showed blank, which read as "did it save?" · **Corrected 2026-11-01** (Clemente harvest; tested on Bricks 2.3.12 and 2.4.4): this entry previously said number-unit controls "silently drop" `clamp()`, `min()`, `max()`, `calc()` and `var()` and "emit nothing." The emitter passes all of them; `03`'s own `_widthMax` entry depends on `min()` working there.
 ### Bricks `logo` element: `logoText` is escaped into `alt` WITHOUT dynamic-data resolution
 **Symptom / When:** A logo element with `logoText => '{acf_my_org_name}'` renders `alt="{acf_my_org_name}"` — the literal tag, read aloud by screen readers and indexed as-is.
 **Why:** `Element_Logo::render()` does `$image_atts['alt'] = esc_attr( $settings['logoText'] )` on the image branch, with no `render_dynamic_data()` call. The tag is only resolved on the *text-logo* branch further down (`elseif ( ! empty( $settings['logoText'] ) )`), which never runs when an image resolved. So the same setting is dynamic in one branch and literal in the other.
@@ -989,10 +986,18 @@ Inside a **custom query loop**, a custom tag that reads `\Bricks\Query::get_loop
 The Bricks UI sets `meta` automatically when you pick Dynamic Data, so this only bites WP-CLI-authored links copied from a wrong reference. **When it bites, it bites in bulk** — audit every dynamic link on the site, not just the one you noticed.
 **First seen:** TAB, 2026-05-28 — a hrefless CTA copied from another page's button; the scan found the same dead pattern on four more CTAs and their `tel:` links, all silently hrefless. · **Clemente, 2026-08-03** — a partner list built with `type: 'external'`, `url: '{custom_loop_tag}'` on `text-link` rendered a correct href per row, contradicting the old "literal only" line. · **Corrected 2026-11-01** (Clemente harvest, source-read on Bricks 2.4.4): this entry previously said `external` takes a literal `url` only. The symptom and the `meta` fix were right; the "literal only" claim was not.
 
-### Native `{post_url}` resolves to the queried object (not the loop item) in LINK contexts inside a custom-query loop
-**Symptom / When:** A loop driven by a **custom query type** renders cards correctly — `{post_title}`, `{post_date}`, `{post_terms_*}` all resolve per item — but the card's *link* (`link.useDynamicData: "{post_url}"`) resolves to the current/queried post for every card. All hrefs identical, often with a stray `aria-current="page"`. Moving the link deeper doesn't help.
-**Why:** Bricks resolves **text** tags through its loop object (`\Bricks\Query::get_loop_object()`), which IS set during iteration of a custom array result. But the native `{post_url}` provider used for **link** resolution reads the global `$post` / queried object, which Bricks does not `setup_postdata()` for custom-query array results. Native (`objectType: post`) loops don't hit this because Bricks sets the global post for them.
-**Fix:** Add a loop-aware URL tag in the core plugin and use it for the link:
+### Bricks custom query loop: text tags resolve per item, but links, class attributes and conditions read the OUTER post — and bare IDs lose even the text
+**Symptom / When:** A loop driven by a **custom query type** (`bricks/query/run`) renders cards whose text is right — `{post_title}`, `{post_date}`, `{post_terms_*}` per item — but every card's link (`link.useDynamicData: "{post_url}"`) points at the current page (often with a stray `aria-current="page"`), class tags in `_cssClasses` resolve against the page, and per-item `_conditions` never switch (seen with bare IDs; untested with `WP_Post` results, but they read the same global post). If the callback returns **bare IDs** (`'fields' => 'ids'`), even the text resolves to the page. It reads as plausible when the template's own queried object is the same post type as the loop items, which masks the cause.
+**Why:** `Query::render()` (`includes/query.php`) calls `the_post()` — and so `setup_postdata()` — only in its `post` branch. A custom query type falls to the "Other render providers" branch, which sets `\Bricks\Query::get_loop_object()` per iteration and **never touches the global `$post`**. Native text tags resolve through the loop object, so they work when it is a `WP_Post`; anything that reads the global post — link resolution and root attributes such as `_cssClasses` (both tested), and by the same mechanism conditions (not in the test) — stays on the page. A bare integer ID is not a `WP_Post`, so text loses it too. Tested 2026-11-01 on Bricks 2.3.12 and 2.4.4 (in-memory render, three pages through a custom type, hosted on Home):
+
+| Callback returns | Text `{post_title}` | Link `{post_url}` | `_cssClasses` `{post_id}` |
+|---|---|---|---|
+| `WP_Post` objects | per item | **outer page** | **outer page** |
+| bare IDs | **outer page** | **outer page** | **outer page** |
+
+**Fix:**
+1. **If the loop items are posts, use a native post query** (`objectType: 'post'`, `post_type: [...]`). It is the only loop type that sets global post context, so every native tag, condition and pagination works. Reserve custom query types for things that are not posts — an options-page repeater, an API result, a computed array.
+2. If you must drive posts through a custom type, return **`WP_Post` objects**, not IDs (text tags then work), and bind links, classes and conditions to a loop-aware custom tag:
 ```php
 if ( class_exists( '\Bricks\Query' ) ) {
     $obj = \Bricks\Query::get_loop_object();
@@ -1001,16 +1006,8 @@ if ( class_exists( '\Bricks\Query' ) ) {
 // fallbacks: $post / numeric / get_queried_object_id()
 // then: case 'my_post_url': return get_permalink( $post_id );
 ```
-Because the tag reads the loop object explicitly — the same mechanism that makes text per-item — it resolves correctly per card.
-**Class attributes too, even with `WP_Post` results.** The same split hits a dynamic tag in an element's `_cssClasses`, which is parsed in root-attribute context, where the global post can still be the page. A custom query type returning `WP_Post` objects (which "Bricks custom query returning bare IDs" below says get `setup_postdata()`) still resolved a class tag against the page: product cards lost Woo's `add_to_cart_button ajax_add_to_cart` classes, so Add to Cart did a full page load, while their text, href and label were right. Use the loop-object resolver in every tag filter, not just the ones you expect to run in loops, and verify an AJAX CTA by clicking; markup that lost its contract classes still looks correct.
-**First seen:** TAB, 2026-05-28 — related-posts cards; titles were per-item but all three links pointed at the current post. · **Extended:** MMHN, 2026-07-20 — a homepage featured-products carousel (custom query type) reusing the shop archive's card.
-
-### Bricks custom query returning bare IDs (`'fields'=>'ids'`) does NOT establish per-item post context
-**Symptom / When:** A custom query loop renders the right number of cards, but per-item `_conditions` never switch and native dynamic tags (`{post_url}`, `{acf_*}`) all resolve to the **queried post**. Critically this only *looks* wrong when the template's own queried object is the **same post type** as the loop items (a related-projects loop on a Single Project) — because then "wrong" reads as plausible. The identical pattern on a different-type template works, which masks the cause.
-**Why:** When `bricks/query/run` returns **WP_Post objects**, Bricks runs `setup_postdata()` per iteration, so the global `$post` IS the loop item and both `_conditions` ACF resolution and native tags pick it up. When the callback returns **bare integer IDs**, Bricks does not set up post context — everything relying on the global post falls back to the main queried post. (A *loop-aware custom tag* reading `get_loop_object()` still works with IDs — which is why an attachment-ID gallery loop is fine — but nothing else does.)
-**Fix:** For post-card loops, return **WP_Post objects**; drop `'fields' => 'ids'`. Reserve bare-ID returns for loops consumed *only* by `get_loop_object()`-aware custom tags.
-**First seen:** TAB, 2026-06-08 — related-projects card routing; the enabled/disabled overlay condition never flipped and the `<a>` pointed at the page's own project. The same overlay on a Single Service (objects) worked.
-
+Use the loop-object resolver in every tag filter, not just the ones you expect to run in loops, and verify an AJAX CTA by clicking; markup that lost its contract classes still looks correct.
+**First seen:** TAB, 2026-05-28 — related-posts cards; titles were per-item but all three links pointed at the current post. · TAB, 2026-06-08 — related-projects routing returned bare IDs; the overlay condition never flipped and the `<a>` pointed at the page's own project, while a sibling loop returning objects worked. · **Extended:** MMHN, 2026-07-20 — a homepage featured-products carousel (custom query type, `WP_Post` results) lost Woo's `add_to_cart_button ajax_add_to_cart` classes, so Add to Cart did a full page load. · Clemente, 2026-08-07 — reading `query.php` before writing three custom query types for a CPT showed the cards would mis-resolve; built as native post loops instead. · **Corrected 2026-11-01** (Clemente harvest; tested on 2.3.12 and 2.4.4): the former separate entry "custom query returning bare IDs does NOT establish per-item post context" said `WP_Post` results get `setup_postdata()` per iteration. They don't — only text tags follow the loop object. The two entries described one mechanism and are merged here.
 ### Bricks custom-query `posts_per_page` arrives at `settings['query']['posts_per_page']`, not `settings['posts_per_page']`
 **Symptom / When:** You set the loop element's Query → posts-per-page, but your `bricks/query/run` handler ignores it and uses its own default count.
 **Why:** Bricks nests the query controls under the element's `settings['query']` array. A handler reading the flat top-level key finds nothing and silently falls back.
@@ -1114,7 +1111,7 @@ $id = $byname['service-hero'];   // 'svhsec'
 ```php
 return $context === 'image' ? [ (int) $id ] : (string) $id;
 ```
-⚠️ **OPEN CONFLICT (MMHN 2026-10-08, untested).** MMHN saw this fail the other way. A custom tag in `image.useDynamicData` returning a string rendered `src="{"`, and returning an **array** fatalled with `preg_split(): Argument #2 ($subject) must be of type string, array given` in `dynamic-data-parser.php`, attributed to Bricks' own priority-10 `Providers::get_tag_value` re-parsing the value after the plugin's priority-10 filter. Likely a Bricks version difference (2.3.x here, 2.4.x there) or a filter-priority one; it wasn't isolated. **Settle it:** on a Local box running current Bricks, register the tag at priority 10 and then at 20, return `[ $id ]` in image context, and record which one fatals. **Workaround that held either way:** skip the dynamic-data layer and inject the image into the element's settings at render, via `bricks/element/settings` keyed on the element id: `$settings['image'] = [ 'id' => $id, 'url' => wp_get_attachment_image_url( $id, 'full' ), 'size' => 'full' ]`, plus `altText` from `_wp_attachment_image_alt`. It emits a full `srcset` and reaches options-page image fields.
+⚠️ **OPEN CONFLICT (MMHN 2026-10-08, untested).** MMHN saw this fail the other way. A custom tag in `image.useDynamicData` returning a string rendered `src="{"`, and returning an **array** fatalled with `preg_split(): Argument #2 ($subject) must be of type string, array given` in `dynamic-data-parser.php`, attributed to Bricks' own priority-10 `Providers::get_tag_value` re-parsing the value after the plugin's priority-10 filter. **Narrowed 2026-11-01 (Clemente harvest):** neither suspect holds. With the standard three filters (`dynamic_tags_list`, `render_tag` returning `[ $id ]` in image context, `render_content` returning a string), the image renders through the ID branch at priority 10 **and** 20 on Bricks 2.3.12 **and** 2.4.4 — no fatal (in-memory render). MMHN's `preg_split(… array given)` therefore came from something else in its own filter chain — most likely an array reaching a string parse path such as `render_content` or a text field. **Still open until MMHN's filter code is read;** the array return itself is safe. **Workaround that held either way:** skip the dynamic-data layer and inject the image into the element's settings at render, via `bricks/element/settings` keyed on the element id: `$settings['image'] = [ 'id' => $id, 'url' => wp_get_attachment_image_url( $id, 'full' ), 'size' => 'full' ]`, plus `altText` from `_wp_attachment_image_alt`. It emits a full `srcset` and reaches options-page image fields.
 **First seen:** TAB, 2026-06-08 — a gallery loop rendered empty `<li>`s until the tag returned `[$attachment_id]` for image context.
 
 ### Bricks image element: the stored `id`/`url` is a BUILDER PREVIEW, not a frontend fallback
