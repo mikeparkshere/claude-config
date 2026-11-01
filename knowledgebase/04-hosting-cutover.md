@@ -183,6 +183,20 @@ AuthUserFile /home/<user>/.htpasswd-<app>
 Verify all four states with cache-busters: bare → 401, creds → 200, an ACME probe path → **404** (the origin answering; a 401 means the exemption failed), `/wp-cron.php` → 200. The same two exemptions apply to ANY edge gate — Cloudflare Access needs them as Bypass policies.
 **First seen:** 2026-08-11.
 
+### RunCloud hybrid — suspending a site (billing hold, takedown): `site-suspend`, a 503 page in `.htaccess`
+**Symptom / When:** A client's billing has failed (or a site must come down for any reason) and the public site should stop showing, with a way back that's one command and leaves no trace.
+**Why:** Every hybrid webapp honors `.htaccess`, so a rewrite at the **top** of the file catches every request Apache sees, ahead of WordPress and security-plugin blocks. A rule after `# END WordPress` never fires for pages, because WP's own `[L]` catches them first. The page cache is the trap: RunCache/RunCloud Hub pages are served by **nginx** without reaching Apache, so a suspension that skips the purge "works" over a cache-buster while bare URLs still serve the cached live site.
+**Fix:** `~/claude-config/bin/site-suspend`, which arrives on every box with the step-0 pull:
+```bash
+site-suspend on  <app>            # 503 + branded page; wp-admin/wp-login stay reachable
+site-suspend on  <app> --full     # block wp-admin/wp-login too
+site-suspend off <app>            # strip the block, delete the page, purge, verify 200
+site-suspend status               # every webapp under ~/webapps
+```
+It writes `mpd-suspended.html` to the webroot and prepends a marked `# BEGIN/END MPD Suspend` block (`R=503` + `ErrorDocument 503`, plus `Retry-After: 86400` and `no-store` on the 503 only). It backs up `.htaccess` to `~/backups/<app>/`, purges RunCache or RunCloud Hub, and verifies with a cache-buster. A 503 tells Google the outage is temporary, so short holds don't cost rankings; weeks-long ones still will. Public copy is deliberately neutral ("temporarily unavailable"). The client's billing problem isn't shown to their visitors; a "Site owner?" line points to the client portal. Contact name/URL are set at the top of the script.
+Limits: static files nginx serves itself (images, CSS, JS, `.html`) still resolve by direct URL, the same blind spot as the static-files entry above. A webapp owned by another system user (e.g. `parkshere`) needs the script run as that user. On a **Cloudflare-proxied** site, purge the zone too if a cache rule caches HTML. Non-WP webapps need `--url` for the verify step; a `public/` subdir is detected.
+**First seen:** etbauer (parkshere2022), 2026-11-01 — billing hold. Verified: `/`, `/feed/`, `/wp-json/` → 503; `off` restored `.htaccess` byte-identical to the backup.
+
 ### RunCloud hybrid — PHP `error_log()` lands in the apache2 dir; there is NO app-local logs dir
 **Symptom / When:** You go looking for `webapps/<app>/logs/` and it doesn't exist. Docs (including older project notes) that reference one are simply wrong, so you conclude logging is broken.
 **Why:** On **hybrid** apps (nginx → Apache → FPM), PHP `error_log()` output is captured by `proxy_fcgi` and lands in Apache's log — the same hybrid architecture behind the static-file entry above.

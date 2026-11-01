@@ -405,6 +405,12 @@ to 50 and sorts by the first metric, so rare events get truncated (use `--limit 
 
 ---
 
+## Suspending a site (billing hold)
+
+`~/claude-config/bin/site-suspend on|off <app>` (and `status`) puts any hybrid webapp behind a 503 "temporarily unavailable" page and purges the page cache; `off` restores `.htaccess` exactly. Mechanism, flags and limits: `knowledgebase/04-hosting-cutover.md`, the `site-suspend` entry. Record the suspension in the webapp's CLAUDE.md.
+
+---
+
 ## Audit Mode
 
 Auditing an existing site is its own command: **`/wordpress-audit`**. It layers on top of this session — webapp root, WP-CLI access and CLAUDE.md context carry over, so do not re-run the webapp selection step. Run it rather than improvising an inventory here.

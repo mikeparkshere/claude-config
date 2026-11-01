@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# site-suspend — put a RunCloud webapp behind a "temporarily unavailable" page, or take it back off.
+#
+#   site-suspend on  <app> [--full] [--url https://example.com]
+#   site-suspend off <app> [--url https://example.com]
+#   site-suspend status            # every webapp under ~/webapps
+#
+# How it works (hybrid stack: nginx -> Apache -> FPM, so .htaccess is honored):
+#   - writes <public>/mpd-suspended.html (the page)
+#   - prepends a marked "# BEGIN MPD Suspend" block to <public>/.htaccess that answers every
+#     request Apache sees with 503 + that page, Retry-After and no-store
+#   - purges the RunCloud Hub page cache (otherwise nginx keeps serving cached pages)
+#   - verifies with a cache-buster
+# Default leaves /wp-admin/ and /wp-login.php reachable so the site can still be administered.
+# --full blocks those too.
+#
+# Limits: static files nginx serves itself (images, css, js, .html) are NOT blocked by .htaccess;
+# direct links to uploads still resolve. Pages, feeds, REST and search are all blocked.
+# A webapp owned by another system user (e.g. app-eamill under parkshere) has to be run as that user.
+set -euo pipefail
+
+MARK_BEGIN="# BEGIN MPD Suspend"
+MARK_END="# END MPD Suspend"
+PAGE="mpd-suspended.html"
+CONTACT_NAME="Michael Parks Design"
+CONTACT_URL="https://client.michaelparksdesign.com/"
+WEBAPPS="${WEBAPPS:-$HOME/webapps}"
+
+die() { echo "site-suspend: $*" >&2; exit 1; }
+
+public_dir() {   # WordPress at root, else /public if present, else root
+  local root="$WEBAPPS/$1"
+  [ -d "$root" ] || die "no webapp at $root"
+  if [ -f "$root/wp-config.php" ] || [ ! -d "$root/public" ]; then echo "$root"; else echo "$root/public"; fi
+}
+
+is_wp() { [ -f "$WEBAPPS/$1/wp-config.php" ]; }
+
+site_url() {
+  if [ -n "${URL:-}" ]; then echo "${URL%/}"; return; fi
+  is_wp "$1" && wp --path="$WEBAPPS/$1" option get home --skip-plugins --skip-themes 2>/dev/null && return
+  echo ""
+}
+
+purge_cache() {  # RunCache (successor) or RunCloud Hub, whichever the site runs
+  is_wp "$1" || return 0
+  local p="$WEBAPPS/$1"
+  if wp --path="$p" help runcache purge >/dev/null 2>&1; then
+    wp --path="$p" runcache purge >/dev/null 2>&1 && echo "  cache: RunCache purged" \
+      || echo "  cache: ⚠️ RunCache purge FAILED, purge it in wp-admin"
+  elif wp --path="$p" plugin is-active runcloud-hub >/dev/null 2>&1; then
+    wp --path="$p" runcloud-hub purgeall >/dev/null 2>&1 && echo "  cache: RunCloud Hub purged" \
+      || echo "  cache: ⚠️ RunCloud Hub purge FAILED, purge it in wp-admin"
+  else
+    echo "  cache: no RunCache/RunCloud Hub, nothing to purge"
+  fi
+}
+
+strip_block() {  # remove our block (and the blank line after it) in place
+  sed -i "/^$MARK_BEGIN/,/^$MARK_END/d" "$1"
+  sed -i '1{/^$/d}' "$1"
+}
+
+write_page() {
+  local host="$1" out="$2"
+  cat > "$out" <<HTML
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Temporarily unavailable</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#1d1d1f; --muted:#5f6368; --line:#e3e3e0; --accent:#2f5d8a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151617; --card:#1f2022; --ink:#ececec; --muted:#a3a7ad; --line:#323438; --accent:#8db4dc; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px 16px;
+         background:var(--bg); color:var(--ink);
+         font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { width:100%; max-width:520px; background:var(--card); border:1px solid var(--line);
+         border-radius:12px; padding:40px 32px; text-align:center; }
+  .host { margin:0 0 8px; font-size:.85rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  h1 { margin:0 0 16px; font-size:1.6rem; line-height:1.25; }
+  p { margin:0 0 12px; color:var(--muted); }
+  .owner { margin-top:28px; padding-top:20px; border-top:1px solid var(--line); font-size:.9rem; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <p class="host">$host</p>
+  <h1>This site is temporarily unavailable.</h1>
+  <p>Please check back soon.</p>
+  <p class="owner">Site owner? Your hosting account needs attention.<br>
+    Contact <a href="$CONTACT_URL">$CONTACT_NAME</a> to restore service.</p>
+</main>
+</body>
+</html>
+HTML
+  chmod 644 "$out"
+}
+
+verify() {  # $1=url $2=expected status
+  [ -n "$1" ] || { echo "  verify: no URL known, pass --url to check"; return 0; }
+  local code; code=$(curl -s -o /dev/null -w '%{http_code}' "$1/?cb=$RANDOM$RANDOM")
+  if [ "$code" = "$2" ]; then echo "  verify: $1 → $code ✓"; else echo "  verify: ⚠️ $1 → $code (expected $2)"; return 1; fi
+}
+
+cmd_on() {
+  local app="$1" full="$2" pub ht url host ts
+  pub=$(public_dir "$app"); ht="$pub/.htaccess"
+  [ -w "$pub" ] || die "$pub is not writable by $(whoami)"
+  url=$(site_url "$app"); host=${url#*://}; host=${host%%/*}; [ -n "$host" ] || host="$app"
+  ts=$(date +%Y%m%d-%H%M%S)
+  mkdir -p "$HOME/backups/$app"; chmod 700 "$HOME/backups" "$HOME/backups/$app"
+  [ -f "$ht" ] && cp -p "$ht" "$HOME/backups/$app/htaccess-$ts" && echo "  backup: ~/backups/$app/htaccess-$ts"
+  touch "$ht"
+  grep -q "^$MARK_BEGIN" "$ht" && strip_block "$ht"   # re-run = refresh
+
+  write_page "$host" "$pub/$PAGE"
+  local admin_cond='RewriteCond %{REQUEST_URI} !^/(wp-admin/|wp-login\.php)'
+  [ "$full" = 1 ] && admin_cond='# --full: wp-admin and wp-login blocked too'
+  local tmp; tmp=$(mktemp)
+  cat > "$tmp" <<HT
+$MARK_BEGIN (site-suspend $ts; undo: site-suspend off $app)
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{REQUEST_URI} !^/$PAGE\$
+$admin_cond
+RewriteRule ^ - [R=503,L]
+</IfModule>
+ErrorDocument 503 /$PAGE
+<IfModule mod_headers.c>
+Header always set Retry-After "86400" "expr=%{REQUEST_STATUS} == 503"
+Header always set Cache-Control "no-store" "expr=%{REQUEST_STATUS} == 503"
+</IfModule>
+$MARK_END
+
+HT
+  cat "$ht" >> "$tmp"; cat "$tmp" > "$ht"; rm -f "$tmp"   # cat > keeps the file's owner/mode
+  echo "  suspended: $app$([ "$full" = 1 ] && echo ' (full, admin blocked)' || echo ' (wp-admin/wp-login still reachable)')"
+  purge_cache "$app"
+  verify "$url" 503
+}
+
+cmd_off() {
+  local app="$1" pub ht url
+  pub=$(public_dir "$app"); ht="$pub/.htaccess"; url=$(site_url "$app")
+  if [ -f "$ht" ] && grep -q "^$MARK_BEGIN" "$ht"; then
+    cp -p "$ht" "$HOME/backups/$app/htaccess-$(date +%Y%m%d-%H%M%S)-pre-off" 2>/dev/null || true
+    strip_block "$ht"; echo "  restored: $app"
+  else
+    echo "  $app was not suspended"
+  fi
+  rm -f "$pub/$PAGE"
+  purge_cache "$app"
+  verify "$url" 200
+}
+
+cmd_status() {
+  local d app pub
+  for d in "$WEBAPPS"/*/; do
+    app=$(basename "$d"); pub=$(public_dir "$app")
+    if grep -qs "^$MARK_BEGIN" "$pub/.htaccess"; then
+      printf '%-22s SUSPENDED  %s\n' "$app" "$(grep -m1 "^$MARK_BEGIN" "$pub/.htaccess" | sed 's/.*(site-suspend \([0-9-]*\).*/since \1/')"
+    else
+      printf '%-22s live\n' "$app"
+    fi
+  done
+}
+
+action="${1:-}"; shift || true
+app=""; full=0; URL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --full) full=1 ;;
+    --url) URL="$2"; shift ;;
+    -*) die "unknown flag $1" ;;
+    *) app="$1" ;;
+  esac; shift
+done
+case "$action" in
+  on)     [ -n "$app" ] || die "usage: site-suspend on <app> [--full] [--url URL]"; cmd_on "$app" "$full" ;;
+  off)    [ -n "$app" ] || die "usage: site-suspend off <app>"; cmd_off "$app" ;;
+  status) cmd_status ;;
+  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
