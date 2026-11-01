@@ -4718,3 +4718,24 @@ Narrow the property filter, or the output is unreadable. Pair it with a `getComp
 # === PROJECT SECTION — "we learned" ===
 
 *Empty at kickoff. New gotchas discovered during this project's build append below, in the entry format above. At go-live these are reviewed and the validated ones fold into the established section of the master.*
+
+*⚠️ The two entries below were written into the **master's** project section by a Tier 2 site (Clemente, 2026-11-01, `00` → After the harvest, rule 1). Unharvested and unreviewed — staged for Michael's review.*
+
+### Settle a Bricks render question with an in-memory render — no DB writes, safe even on LIVE
+**Symptom / When:** Two knowledgebase entries disagree about what Bricks emits (a tag in a loop, a CSS function in a number control, an image-context return shape), and the only "test" on hand is writing a scratch page — which on a live site means DB writes, cache, and cleanup.
+**Why:** Bricks renders and compiles CSS from a plain element array, in process. `\Bricks\Frontend::render_data( $elements )` returns the HTML; `\Bricks\Assets::generate_css_from_elements( $elements, 'content' )` fills the static `\Bricks\Assets::$inline_css['content']`. Both work on an array you build in the script, and filters you `add_filter()` in the same `wp eval-file` process (a custom dynamic tag, a custom query type via `bricks/setup/control_options` + `bricks/query/run`) exist only for that process. Nothing is saved: no post, no meta, no option, no CSS file.
+**Fix:** Build the elements inline (ids 6 chars, `parent`/`children` set), set context with `global $post; $post = get_post( <id> ); setup_postdata( $post );`, then render or compile and grep the result:
+```php
+\Bricks\Assets::$inline_css['content'] = '';
+\Bricks\Assets::generate_css_from_elements( $els, 'content' );
+echo \Bricks\Assets::$inline_css['content'];   // e.g. "#brxe-tstc01 {max-width: clamp(…)}"
+echo \Bricks\Frontend::render_data( $els );   // HTML for <img>/<source>/link/class checks
+```
+Run it on the version that matters (the same script settled questions on 2.3.12 and 2.4.4 side by side) and check the error log byte count before and after. **Limit:** this covers the render and CSS paths only — it says nothing about what the builder UI saves or strips on load. Builder-side claims still need a builder readback (`00`, golden rule).
+**First seen:** Clemente, 2026-11-01 — the harvest's conflict tests (`clamp()` emission, image-context array tags at priority 10 vs 20, native tags inside a custom query loop, image `sources[]` with dynamic data), run on staging and then on LIVE with the error log at +0 bytes.
+
+### A `<[^>]+>` tag-strip regex on Markdown eats everything between a stray `<` and the next `>`
+**Symptom / When:** You diff two documents after stripping HTML tags from both — e.g. "which lines exist only in the Notion mirror" — and get dozens of false hits, or (the dangerous direction) none at all.
+**Why:** `[^>]+` crosses newlines. Markdown is full of bare `<` (`a < b`, `<webroot>` placeholders, PHP/JS in prose) whose nearest `>` can be paragraphs later, so the strip deletes whole sections of whichever side it runs on. Run on the reference side, real content goes missing and everything looks orphaned; run on the side you are auditing, real orphans vanish and the audit passes.
+**Fix:** Match tags, not spans: `</?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>\n]{0,300})?/?>`, and strip only the side that is actually HTML. Before trusting an empty or a huge result, spot-check three "orphans" (or three known-present lines) with plain `grep -F` against the source file.
+**First seen:** Clemente, 2026-11-01 — a pre-`replace_content` orphan check on a Notion mirror: 614 → 98 → 87 false orphans until the regex was fixed; the true count was 1 (the sync footer).
