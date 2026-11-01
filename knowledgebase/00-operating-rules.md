@@ -263,7 +263,18 @@ When a project goes live, its learning is done. Everything it was going to disco
 
 This is a reviewed file edit in the `claude-config` repo. It is the same discipline as the existing CLAUDE.md → Notion sync — edit markdown, review the diff, commit. There is no slash command. The review is the point: the master is what every future project inherits, so nothing reaches it unexamined.
 
-After harvest, the project is done with the knowledgebase. Whatever happens to the site afterward is out of scope.
+After harvest, the project is done with the knowledgebase **as a build**. A site Claude goes on maintaining follows the next subsection.
+
+### After the harvest — the project goes Tier 2
+
+The harvest ends the project's *build* relationship with the knowledgebase, not its relationship with Claude. A harvested site that Claude still works on is **Tier 2** (`global-CLAUDE.md`, project conventions), and four rules apply:
+
+1. **Retire the project's `03`/`04` copies — archive them, don't delete them, don't keep maintaining them.** They are snapshots, stale against the master the moment the harvest commits. Move them to the project's `docs/archive/` with the harvest date in the filename. New learning on a Tier 2 site goes straight into the **master's** project section, flagged unharvested, and waits for review there — the PAWS precedent in `04`'s project section.
+2. **One canon, on the surviving production webapp.** If the build canon lived on a dev or staging webapp, move it to LIVE *before* that webapp goes. LIVE's `CLAUDE.md` becomes the canon, trimmed to Tier 2 shape: coordinates, phase and working contract, current stack versions, open items, and the gotchas that still matter for maintenance. Specs and the build narrative move to `docs/` as history, and the pre-trim `CLAUDE.md` is kept verbatim in `docs/archive/`. A webroot `docs/` is public by default: confirm the deny rules cover it (`04`, webroot working files) and verify with a cache-buster before relying on them.
+3. **Decommission a non-production webapp only after 1 and 2 are verified**, in this order: final archive (DB export + webroot tarball under `~/backups/<app>-final-<date>/`, mode 600, purge date recorded) → canon moved and verified → references repointed (memory files, permission allow-lists, KB and fleet docs) → cron jobs deleted → webapp deleted → its database and DB user deleted (deleting the webapp does not remove them) → DNS record deleted → production verified untouched. Record the retired webapp, with its date, in the project's coordinates table.
+4. **Then push Notion, both surfaces**, so the published view reads Tier 2. Projects/Clients DB records still get confirmed with Mike first.
+
+**First applied:** Clemente, 2026-11-01 — harvested two months after go-live, when the canon and the only copy of the project section still lived on the staging webapp that was about to be deleted. Harvesting first, then moving the canon, is what made the deletion safe.
 
 ---
 
