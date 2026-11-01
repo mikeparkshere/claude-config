@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-319 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+318 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -81,7 +81,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks — typed `_border` setting uses a flat width/style/color shape, not per-side nested objects
 - Bricks — typed-setting breakpoint suffixes go on the OUTER key, not as a sibling inside a nested dict
 - A modifier class without its own breakpoint suffixes overrides the base class's media queries at EVERY width
-- Bricks — `_widthMax: '100%'` is special-cased to suppress horizontal scrollbars
+- Bricks — a `_widthMax` on a Container replaces its viewport-safe cap; a fixed measure overflows on mobile
 - Bricks caps every element at `max-width: 100%` — a full-bleed via width or negative margins needs `_widthMax: 'none'`
 - Bricks — author rules with equal specificity lose to `@layer bricks` framework rules
 - Bricks — `*{border-color}` plus a default 1px border on native inputs = "ghost" borders on every form
@@ -100,7 +100,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Bricks `{post_excerpt}` auto-generates from content — an `empty_not` gate on it never fires
 - Bricks `logoHeight` (and any number-unit control) silently rejects `clamp()`
 - Bricks `logo` element: `logoText` is escaped into `alt` WITHOUT dynamic-data resolution
-- Bricks button/link with a dynamic-data href needs `link.type: "meta"` — `"external"` emits NO href at all
+- Bricks link: `useDynamicData` needs `link.type: "meta"` — on `"external"` it is ignored and NO href is emitted
 - Native `{post_url}` resolves to the queried object (not the loop item) in LINK contexts inside a custom-query loop
 - Bricks custom query returning bare IDs (`'fields'=>'ids'`) does NOT establish per-item post context
 - Bricks custom-query `posts_per_page` arrives at `settings['query']['posts_per_page']`, not `settings['posts_per_page']`
@@ -226,7 +226,6 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS — "light"/"dark" variants of a NEAR-BLACK base resolve to LIGHT colors `[stack:acss]`
 - ACSS — changing a base color hex in the Dashboard can wipe variation overrides on that family `[stack:acss]`
 - ACSS — `:where(section…)` makes any hand-rendered `<section>` flex-column-centered; `section > div` forces its children to column `[stack:acss]`
-- A fixed ACSS width token in a Container's `_widthMax` replaces its viewport-safe max-width — horizontal overflow on mobile `[stack:acss]`
 - ACSS palette shades are dashboard-derived — a WP-CLI base-color write leaves the ramp stale `[stack:acss]`
 - ACSS custom CSS / Global SCSS is delivered INLINE (after automatic.css), not as a linked file `[stack:acss]`
 - ACSS v3 settings UI is a shadow-DOM front-end overlay — a11y-tree automation can't reach it `[stack:acss]`
@@ -738,17 +737,26 @@ foreach($g as $c){ $b=$c["settings"]["_border"]??null; if(!$b) continue;
 This applies to any responsive typed setting a modifier overrides, not just grids.
 **First seen:** WCDP, 2026-08-20 — the Home `card-grid--4` involvement grid rendered four ~90px columns at 390px; caught by screenshot. Hit again 2026-09-13 on a `split--even` modifier (`var(--grid-2)`), which never collapsed until it gained its own `:tablet_portrait` key.
 
-### Bricks — `_widthMax: '100%'` is special-cased to suppress horizontal scrollbars
-**Symptom:** A wrapper with `_widthMax: '720px'` appears to overflow the viewport at narrow breakpoints, even though `max-width` should only constrain.
-**Why:** Bricks' converter treats `_widthMax` set to exactly `'100%'` or `'100vw'` as a scrollbar-suppression directive, distinct from any other value. Any other value (`720px`) goes through the standard `max-width` path and does not get that treatment.
-**Fix:** When a fixed-px `_widthMax` overflows at small viewports, override at the breakpoint with the literal `'100%'`:
-```python
-'_widthMax': '720px',
-'_widthMax:mobile_portrait': '100%',
+### Bricks — a `_widthMax` on a Container replaces its viewport-safe cap; a fixed measure overflows on mobile
+**Symptom / When:** A Container narrowed with `_widthMax` (`720px`, `72ch`, `var(--width-l)`) looks right on desktop, but at phone width the page scrolls sideways and the container is wider than the viewport (720px, or ~820px, at a 390px viewport). Children inherit the overflow. Mobile-only, so it survives desktop review.
+**Why:** `.brxe-container` carries a **fixed** `width: 1100px` in Bricks' frontend CSS, and no responsive width override (its only `@media (max-width:767px)` rule changes `flex-wrap`). What keeps it inside the viewport is a `max-width` cap: Bricks' own `[class*=brxe-]{max-width:100%}`, or on an ACSS site the container's `max-width: var(--content-width-safe)` (= `min(var(--content-width), calc(100% - var(--gutter) * 2))`). A typed `_widthMax` **replaces** that whole declaration. A value with no viewport term (`720px`, `72ch`, or `--width-l` = `calc(var(--content-width) * 0.6)`) clamps the 1100px down to your measure, and nothing clamps the measure down to the screen. `_widthMax: '100%'` works only because it reinstates the original cap; Bricks does not special-case it. Containers with no `_widthMax` are fine.
+**Fix:** keep a viewport term in the same value, or don't constrain the container at all:
+```php
+'_widthMax' => 'min(72ch, 100%)',                                  // plain Bricks
+'_widthMax' => 'min(var(--width-l), var(--content-width-safe))',   // ACSS [stack:acss] — THT's verified form
 ```
-`'auto'` / `'unset'` / omitting the key do not trigger the same path — it has to be exactly `'100%'` or `'100vw'`.
-**First seen:** KSCBS, 2026-05-07 — `home-cta__inner` overflowed below 478px.
+- Or put the measure on a **child block**. A block is not a `.brxe-container` and has no fixed width to fight.
+- Or pair the `_widthMax` with `_width: '100%'` on the same class, or override at the breakpoint (`'_widthMax:mobile_portrait' => '100%'`, KSCBS's original fix).
 
+Audit any container class that constrains width without setting one, then verify at 390px with `document.documentElement.scrollWidth` against `innerWidth`, not by reading settings:
+```bash
+wp option get bricks_global_classes --format=json \
+  | python3 -c "import json,sys; [print(c['name']) for c in json.load(sys.stdin)
+      if (c.get('settings') or {}).get('_widthMax') and not (c.get('settings') or {}).get('_width')
+      and c['name'].endswith('__container')]"
+```
+Related, different mechanism: *Theme Style `containerMaxWidth` only reaches ROOT containers* (below) reaches the same 1100px base width from the Theme Style side.
+**First seen:** KSCBS, 2026-05-07 — `home-cta__inner` (`720px`) overflowed below 478px; fixed with `:mobile_portrait: '100%'`. · THT, 2026-09-06 — an ACSS FAQ container (`var(--width-l)`), found in a 390px iframe test. · Clemente, 2026-08-06 — a single-post container (`72ch`), live on every post for seven weeks before a headless measurement caught it (`scrollWidth` 741 vs 390). · **Corrected 2026-11-01** (Clemente harvest; source-read on Bricks 2.4.4 `includes/converter.php` and `assets/css/frontend-layer.min.css`): this entry previously said Bricks' converter special-cases `'100%'`/`'100vw'` as scrollbar suppression. That converter branch is a one-time legacy root-container → section migration. KSCBS's fix was right; the mechanism was not. THT's entry (formerly separate, same mechanism) is merged in here.
 ### Bricks caps every element at `max-width: 100%` — a full-bleed via width or negative margins needs `_widthMax: 'none'`
 **Symptom / When:** A block given `width: calc(100% + 2rem)`, or negative inline margins to bleed past its parent's padding, renders at exactly the parent's content width and shifted sideways. The far edge falls short and nothing errors.
 **Why:** Bricks' base layer ships `[class*=brxe-]{max-width:100%}`, which hits every element. `width: calc(100% + …)` is clamped back to 100%, and a negative margin then only *moves* the box. Two different-looking symptoms have one cause. (Different mechanism from the `_widthMax: '100%'` converter special case above.)
@@ -969,15 +977,17 @@ Applies to any Bricks number-unit setting where you want a fluid expression.
 **Fix:** Put a literal string in `logoText`. If the org name must come from options, resolve it in PHP when writing the tree rather than leaving a tag in the field. Audit it on any inherited header — it fails silently and only an accessibility pass or a page-source read catches it.
 **First seen:** WCDP, 2026-08-10 — an inherited header carried an ACF tag in `logoText` for a field that did not exist on the new install either, so the alt would have been a literal tag for a value that was never coming.
 
-### Bricks button/link with a dynamic-data href needs `link.type: "meta"` — `"external"` emits NO href at all
+### Bricks link: `useDynamicData` needs `link.type: "meta"` — on `"external"` it is ignored and NO href is emitted
 **Symptom / When:** A button / text-link / block-with-`tag:a` has `link = { "type": "external", "useDynamicData": "{some_tag}" }`. It renders as an `<a>` with **no `href` attribute**. No error. CTA buttons look fine and go nowhere; `tel:`/`mailto:` links are dead.
-**Why:** Bricks' link control treats `type: "external"` as "use the literal `url` field" and ignores `useDynamicData`. Dynamic-data links are a different type (`meta`). The combination is internally inconsistent, so Bricks emits the element with no resolved href rather than erroring.
-**Fix:** `link.type = "meta"` whenever the href comes from `useDynamicData`. `"external"` is for a literal `url` string only.
+**Why:** Each link type reads its own key. `meta` reads `useDynamicData`; `external` reads **`url`** and never looks at `useDynamicData`, so with `url` absent there is nothing to emit and Bricks writes the `<a>` with no href rather than erroring. `external` is **not** literal-only, though: since Bricks 1.12 (`includes/elements/base.php`, "External link: Use same logic as dynamic data link") the `url` string runs through the dynamic-data renderer, so tags inside it resolve — including composed values like `tel:{tag}` or `https://x.com/?p={post_id}`.
+**Fix:** Put the tag in the key the type reads. Either form works:
 ```php
-'link' => [ 'type' => 'meta', 'useDynamicData' => '{acf_cta_url}' ]
+'link' => [ 'type' => 'meta',     'useDynamicData' => '{acf_cta_url}' ]   // what the builder writes for "Dynamic Data"
+'link' => [ 'type' => 'external', 'url' => '{acf_cta_url}' ]              // also resolves; use it for composed URLs (tel:{tag})
 ```
+Inside a **custom query loop**, a custom tag that reads `\Bricks\Query::get_loop_object()` itself resolves per row in either form; native `{post_url}` in a link context can resolve to the queried object instead — see the custom-query entries below before relying on a native tag there.
 The Bricks UI sets `meta` automatically when you pick Dynamic Data, so this only bites WP-CLI-authored links copied from a wrong reference. **When it bites, it bites in bulk** — audit every dynamic link on the site, not just the one you noticed.
-**First seen:** TAB, 2026-05-28 — a hrefless CTA copied from another page's button; the scan found the same dead pattern on four more CTAs and their `tel:` links, all silently hrefless.
+**First seen:** TAB, 2026-05-28 — a hrefless CTA copied from another page's button; the scan found the same dead pattern on four more CTAs and their `tel:` links, all silently hrefless. · **Clemente, 2026-08-03** — a partner list built with `type: 'external'`, `url: '{custom_loop_tag}'` on `text-link` rendered a correct href per row, contradicting the old "literal only" line. · **Corrected 2026-11-01** (Clemente harvest, source-read on Bricks 2.4.4): this entry previously said `external` takes a literal `url` only. The symptom and the `meta` fix were right; the "literal only" claim was not.
 
 ### Native `{post_url}` resolves to the queried object (not the loop item) in LINK contexts inside a custom-query loop
 **Symptom / When:** A loop driven by a **custom query type** renders cards correctly — `{post_title}`, `{post_date}`, `{post_terms_*}` all resolve per item — but the card's *link* (`link.useDynamicData: "{post_url}"`) resolves to the current/queried post for every card. All hrefs identical, often with a stray `aria-current="page"`. Moving the link deeper doesn't help.
@@ -1461,7 +1471,7 @@ LC_ALL=C grep -a 'POST /wp-admin/admin.php?page=<options-slug>' <webapp apache a
 
 ### Bricks Code element written headlessly renders nothing until you regenerate its code signature
 **Symptom / When:** You create a Bricks `code` element with `'executeCode' => true` via WP-CLI / direct DB write. DB read-back confirms the element and its code, the page returns 200, but the element renders **nothing** on the front end (no output, no `brxe-code` wrapper, no error) — as if the element isn't there.
-**Why:** Bricks (1.9.7+) signs executable code with an HMAC (`settings.signature`) to stop DB-injected code from running as PHP — a security control against exactly this write path. `Code::render()` calls `Helpers::sanitize_element_php_code( $post_id, $element_id, $code, $signature )`; with no/invalid signature it returns empty and renders nothing. The signature is keyed to the post id + element id + code, so it can only be produced by Bricks itself, not hand-written.
+**Why:** Bricks (1.9.7+) signs executable code with an HMAC (`settings.signature`) to stop DB-injected code from running as PHP — a security control against exactly this write path. `Code::render()` calls `Helpers::sanitize_element_php_code( $post_id, $element_id, $code, $signature )`; with no/invalid signature it returns empty and renders nothing. That check is `Helpers::verify_code_signature()`: **`wp_hash( $code ) === $signature`** — the signature is over the code content alone. Post id and element id are used only to *locate* the stored copy, which is then re-verified the same way. `wp_hash()` is keyed to the site's salts, so any code already running inside this install can produce a valid signature and nothing outside it can — the control stops DB injection, not authorized headless writes.
 **Fix:** After writing the code element, sign all code instances as an admin with the code-execution cap:
 ```php
 wp_set_current_user( 1 );
@@ -1469,7 +1479,9 @@ wp_set_current_user( 1 );
 \Bricks\Assets_Files::regenerate_css_files();
 ```
 Verify the element now carries `settings.signature` (32 chars) on read-back and the code renders. Requires `executeCodeEnabled` on (Bricks → Settings → Custom code) and the user to hold the cap. If `BRICKS_LOCK_CODE_SIGNATURES` is defined, signing is blocked by design — don't use the Code element for headless writes there; use a Shortcode element backed by a plugin shortcode instead. Re-sign after any later headless edit to the code (the signature is content-bound).
-**First seen:** Highland, 2026-06-30 — contact page (#21) form built as a static stub in a Code element (`executeCode`+`noRoot`); the `<form>` rendered nothing until `crawl_and_update_code_signatures()` signed it. Belongs with the auth gotcha (`wp_set_current_user(1)`) as a headless-write prerequisite.
+**Or sign it in the writing script itself** — one element, no DB-wide crawl: `$el['settings']['signature'] = wp_hash( $el['settings']['code'] );` before saving. Same `executeCodeEnabled` requirement at render. **Not where `BRICKS_LOCK_CODE_SIGNATURES` is defined** — the lock blocks only Bricks' own signing path, so a hand-computed hash would bypass a site owner's deliberate policy; respect the lock.
+**Scope — only the `code` field is gated.** `render()` runs the check only when `settings.code` is set. A Code element carrying only `cssCode` outputs its CSS with no signature at all, and because the signature is content-bound rather than position-bound, deleting or editing *sibling* elements never invalidates a signed one. Re-sign only when the `code` field itself changes.
+**First seen:** Highland, 2026-06-30 — contact page (#21) form built as a static stub in a Code element (`executeCode`+`noRoot`); the `<form>` rendered nothing until `crawl_and_update_code_signatures()` signed it. Belongs with the auth gotcha (`wp_set_current_user(1)`) as a headless-write prerequisite. · **Clemente, 2026-06-16** — elements removed beside a CSS-only Code element; it stayed unaffected, which is what exposed the scope. · **Corrected 2026-11-01** (Clemente harvest, source-read on Bricks 2.4.4 `includes/helpers.php` `verify_code_signature()` / `sanitize_element_php_code()`): this entry previously said the signature was keyed to post id + element id + code and "can only be produced by Bricks itself." The observed symptom and the crawl fix were right; the mechanism was not.
 
 
 ### A mockup's "reuse these classes" note goes stale after a builder rework — reconcile against live `bricks_global_classes` BEFORE building
@@ -2265,12 +2277,6 @@ Still brand-tracked (hue and saturation follow the palette), and guaranteed dark
 **Plugin markup gets it too, and the tells look like three different bugs.** WooCommerce's classic order-received and view-order markup is built from `<section class="woocommerce-order-details">`, `<section class="woocommerce-customer-details">` and `<section class="woocommerce-columns--addresses">`. On an ACSS site that produces dead vertical bands (the gutter `padding-block`, once per section), headings that look centered while `text-align` computes to `start` (flex-item `align-items: center`, which `text-align` can't fix), and stacked address columns (`flex-direction: column` beats Woo's own `display: flex`, which sets no direction). Reset on the plugin's classes, not a page class, so My Account → view-order is repaired too: `.woocommerce-order-details, .woocommerce-customer-details { display: block; align-items: initial; padding-block: 0; padding-inline: 0 }`, `.woocommerce-customer-details .woocommerce-column { display: block; align-items: initial }`, `.woocommerce-columns--addresses { display: grid; grid-template-columns: var(--grid-2); gap: var(--space-l) }`.
 **The `gap` shorthand covers both axes.** A Bricks Section overridden to `display: grid` still carries ACSS's `gap: var(--container-gap)` on any axis you don't set. Setting only `_columnGap` leaves the row gap, which is invisible on a one-row desktop grid and opens a visible gap once the grid collapses to one column on mobile. Set `_rowGap` as well, and check computed `row-gap` at a mobile width.
 **First seen:** VMG, 2026-06-07 — My Account dashboard cards (`<section class="card">`) rendered centered and stacked; the login card too. · **Extended:** THM (inherited from its clone source), 2026-08-09 — the gutter case. Selector re-verified against compiled ACSS 3.3.6 at harvest, 2026-10-05. · **Extended:** MMHN, 2026-07-18 — a 58/42 image-and-panel section opened a gap between image and panel on mobile only, fixed with `_rowGap: 0`. · MMHN, 2026-07-19 — three of five findings logged against a thank-you page were this one rule.
-
-### A fixed ACSS width token in a Container's `_widthMax` replaces its viewport-safe max-width — horizontal overflow on mobile `[stack:acss]`
-**Symptom / When:** A narrowed content column (`_widthMax: 'var(--width-l)'` on a Container) looks right on desktop, but at 390px the page scrolls sideways and the column is ~820px wide.
-**Why:** The container's own `max-width` is `var(--content-width-safe)` = `min(var(--content-width), calc(100% - var(--gutter) * 2))`. A typed `_widthMax` replaces that whole declaration, and `--width-l` is `calc(var(--content-width) * 0.6)`, a fixed value with no viewport term, so nothing clamps it below the screen width anymore.
-**Fix:** `_widthMax: 'min(var(--width-l), var(--content-width-safe))'`. That keeps the narrow column on desktop and the safe cap everywhere else. Or leave the Container alone and narrow an inner block.
-**First seen:** THT, 2026-09-06 — an FAQ container, found in a 390px iframe test.
 
 ### ACSS palette shades are dashboard-derived — a WP-CLI base-color write leaves the ramp stale `[stack:acss]`
 **Symptom / When:** Scripting the ACSS palette via `save_settings`: you write `color-primary` (or `color-accent`), regenerate, and `--primary` updates but `--primary-light/-dark/-hover/…` stay on the OLD colour.

@@ -379,7 +379,7 @@ Full `srcset`, the attachment's own alt, field stays client-editable. Works for 
 ```
 
 - The Link control on Container/Block elements appears only when the HTML tag is `a`. Change the tag first.
-- For non-dynamic external URLs: `"type": "external", "url": "..."`. Root-relative `url` values (`/legal/…`) work in `external` links and survive a domain change.
+- External URLs: `"type": "external", "url": "..."`. Root-relative `url` values (`/legal/…`) work in `external` links and survive a domain change. `url` also **resolves dynamic tags** (Bricks 1.12+, source-read on 2.4.4), so `"url": "{tag}"` and composed values like `"tel:{tag}"` work; `useDynamicData` on an `external` link is ignored and emits no href — `03` → *Bricks link: `useDynamicData` needs `link.type: "meta"`*. (Corrected 2026-11-01; this line used to say "non-dynamic external URLs.")
 - New tab (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2): `"newTab": true`, a **boolean**. Bricks adds `target="_blank"` and `aria-describedby="brx-new-tab-link-description"`, pointing at a visually hidden description it prints once per page (`base.php`).
 
 ## Heading with a link, and rich text (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
