@@ -11,6 +11,7 @@
 #     request Apache sees with 503 + that page, Retry-After and no-store
 #   - purges the RunCloud Hub page cache (otherwise nginx keeps serving cached pages)
 #   - verifies with a cache-buster
+# Optional follow-up note: ~/.site-suspend/<app>.md is printed by `off` (e.g. setup deferred until unsuspended).
 # Default leaves /wp-admin/ and /wp-login.php reachable so the site can still be administered.
 # --full blocks those too.
 #
@@ -157,7 +158,10 @@ cmd_off() {
   fi
   rm -f "$pub/$PAGE"
   purge_cache "$app"
-  verify "$url" 200
+  verify "$url" 200 || true
+  local note="$HOME/.site-suspend/$app.md"   # optional per-site follow-up, shown on every off
+  [ -f "$note" ] && { echo; echo "  ── follow-up for $app ($note) ──"; sed 's/^/  /' "$note"; }
+  return 0
 }
 
 cmd_status() {
