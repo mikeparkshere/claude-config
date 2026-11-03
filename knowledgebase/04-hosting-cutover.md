@@ -1003,3 +1003,15 @@ wp db query "SELECT id,status,ROUND(progress) pct,flags,created,archive_name \
 **Why:** The webapp resource owns the vhost, the webroot, the SSL cert, the panel NGINX configs and the webapp's own log files; it does not own the database, the database user or RunCloud cron jobs, which are separate resources. The directory removal is asynchronous — the webroot was still on disk right after the 200 and gone a few seconds later.
 **Fix:** Archive first (DB export + webroot tarball outside every webroot, mode 600). Then `DELETE …/cronjobs/{id}`, `DELETE …/webapps/{w}`, `DELETE …/databases/{id}` and `DELETE …/databaseusers/{id}`, re-listing each collection after its delete; then the DNS record. Look up ids by name first and assert the name before each delete. Verify the surviving webapp afterward (`00` → After the harvest, rule 3, has the full order).
 **First seen:** Clemente, 2026-11-01 — staging webapp retired after the go-live harvest; the DB and DB user would have been left behind. *(Tier 2 site, master project section, unharvested.)*
+
+### PHP edits on the OLS boxes can take up to 60 s to go live — opcache `revalidate_freq=60`
+**Symptom / When:** A one-line fix to a plugin file "doesn't work": a curl test right after the edit still shows the old behavior. `php -l` is clean and the CLI (`wp eval`) shows the new code.
+**Why:** lsphp runs opcache with `validate_timestamps=On`, `revalidate_freq=60`. The web workers keep serving the cached bytecode for up to a minute. The CLI has `opcache.enable_cli=Off`, so it always reads fresh. That's why CLI and web disagree.
+**Fix:** Wait at least 60 s (a background `sleep 70; <test>`) before retesting over HTTP. Never conclude a fix failed from a test run inside that window.
+**First seen:** Millersburg Brewing (app-mbc25, jbm001), 2026-11-02. A case-insensitive regex fix appeared not to apply, then passed 75 s later with no further change. *(Tier 2 site, master project section, unharvested.)*
+
+### Plugin updates on a 1-minute wp-cron tier leave fatals in the cron log — recognize the race before chasing it
+**Symptom / When:** After a manual plugin update pass, `~/cron-logs/<app>.log` or `wc-logs/fatal-errors-*` shows `Failed opening required …/plugins/<plugin>/…` or `class "…" not found` fatals, sometimes several in a row with *different* missing files.
+**Why:** wp-cron (and Action Scheduler's async runner via `admin-ajax`) fires while the updater is mid-extraction, so the plugin's files are partially present. Each run trips over whichever file hasn't landed yet.
+**Fix:** Confirm the race rather than debug the plugin. The named file is present now, its mtime falls in the update window (`stat` the plugin dir), and nothing has been logged in the minutes since. If all three hold, no action. If a fatal recurs after the window, it's real.
+**First seen:** Millersburg Brewing (app-mbc25, jbm001): PDF Invoices 2026-09-26, then Duplicator Pro 5.0.5 (×3) and LiteSpeed Cache 7.9.2 on 2026-11-02. *(Tier 2 site, master project section, unharvested.)*

@@ -4739,3 +4739,70 @@ Run it on the version that matters (the same script settled questions on 2.3.12 
 **Why:** `[^>]+` crosses newlines. Markdown is full of bare `<` (`a < b`, `<webroot>` placeholders, PHP/JS in prose) whose nearest `>` can be paragraphs later, so the strip deletes whole sections of whichever side it runs on. Run on the reference side, real content goes missing and everything looks orphaned; run on the side you are auditing, real orphans vanish and the audit passes.
 **Fix:** Match tags, not spans: `</?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>\n]{0,300})?/?>`, and strip only the side that is actually HTML. Before trusting an empty or a huge result, spot-check three "orphans" (or three known-present lines) with plain `grep -F` against the source file.
 **First seen:** Clemente, 2026-11-01 — a pre-`replace_content` orphan check on a Notion mirror: 614 → 98 → 87 false orphans until the regex was fixed; the true count was 1 (the sync footer).
+
+*⚠️ The five entries below come from the Millersburg Brewing (app-mbc25) closer, 2026-11-03. It is a live Tier 2 site with no project knowledgebase copy, so they go into the master's project section. They are unharvested and unreviewed; same bar as any project-section entry.*
+
+### WordPress.com now reaches WooCommerce Shipping sites at `POST /?for=jetpack&jetpack=comms`, which a `POST /` bot-block rule 403s
+**Symptom / When:** The admin shows *"WordPress.com requests to your site are being blocked, usually by a firewall or security rule. See Site Health…"* on a WooCommerce Shipping site, even though `xmlrpc.php` was already exempted. The access log shows a daily signed `POST /?for=jetpack&jetpack=comms&token=…&signature=…` from `192.0.x` answered **403**.
+**Why:** The bundled `jetpack-connection` package now sends WordPress.com → site traffic to the homepage with a query string, not to `xmlrpc.php`. A "block POST to the bare homepage" rule (the `MPD_BOT_BLOCK` pattern) catches it, the same way it caught Stripe's `/?wc-api=` webhooks. Recent WC Shipping (2.5.0) surfaces the stored error (`jetpack_connection_xmlrpc_errors`, code `xmlrpc_request_blocked`) as the admin notice. The block itself may be months older than the notice.
+**Fix:** Add a third exclusion beside `wc-ajax=` / `wc-api=`, then ask WordPress.com to call back and clear the stale error:
+```apache
+RewriteCond %{QUERY_STRING} !(^|&)jetpack=comms(&|$)
+```
+```bash
+wp eval '$r=Automattic\Jetpack\Connection\Client::wpcom_json_api_request_as_blog(sprintf("/jetpack-blogs/%d/test-connection",Jetpack_Options::get_option("id")),"1.1"); echo wp_remote_retrieve_body($r);'   # {"connected":true}
+wp eval 'Automattic\Jetpack\Connection\Error_Handler::get_instance()->delete_all_errors();'
+```
+After the fix, an unsigned test POST should get **200 with Jetpack's XML-RPC fault** (the plugin rejecting it) instead of the firewall's 403. A plain `POST /` should still return 403.
+⚠️ **Conflict, flagged for harvest:** this extends *"WooCommerce Shipping label printing needs `xmlrpc.php` reachable"* above the seam. In app-mbc25's logs (10/02–11/02) there were **zero** WordPress.com requests to `xmlrpc.php`, so that entry's premise may be out of date for current versions. Not tested by re-blocking `xmlrpc.php`.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-03. 403'd for the whole retained log window, about one request a day, zero successes. *(Tier 2 site, master project section, unharvested.)*
+
+### WordPress REST route matching is case-insensitive — a route-guard regex without `/i` is bypassable
+**Symptom / When:** A `rest_pre_dispatch` (or similar) guard that matches `$request->get_route()` against `#^/wc/store/…#` blocks the canonical URL, but `/wp-json/WC/Store/v1/checkout` still reaches the handler.
+**Why:** `WP_REST_Server` matches routes with a case-insensitive regex, so any capitalization dispatches to the same endpoint, while `get_route()` returns the path exactly as requested.
+**Fix:** Add the `i` flag to every route-matching pattern, and test mixed case, the unversioned alias, `?rest_route=` and a trailing slash before calling a guard done.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-02. The first version of a Store API guard was bypassed by `/WC/Store/v1/checkout`. *(Tier 2 site, master project section, unharvested.)*
+
+### A Bricks-template (classic) checkout still leaves the WooCommerce Store API checkout open — and that's what bots use
+**Symptom / When:** Failed orders that come in through `/wp-json/wc/store/v1/cart/add-item` → `/wc/store/v1/checkout` on a site whose real checkout is a Bricks `wc_form_checkout` template posting to `?wc-ajax=checkout`. On app-mbc25, one such order carried a stored-XSS payload (`<img onerror>` in the billing and shipping `company` fields) built to beacon out and hit `user-new.php` when an admin viewed the order. WooCommerce stored it entity-encoded and it never ran.
+**Why:** The Store API is registered by WooCommerce whether or not anything on the site uses block checkout. Scripted clients prefer it because it needs no page scrape or form nonce.
+**Fix:** If the logs show no legitimate Store API **writes** (check every retained log; real orders should all arrive via `wc-ajax=checkout`), and the site has no checkout or cart block and no Stripe express checkout (`payment_request=no`), refuse writes plus all `checkout` routes in the core plugin. Read-only GETs keep working:
+```php
+add_filter( 'rest_pre_dispatch', function ( $result, $server, $request ) {
+	$route = $request->get_route();
+	if ( ! preg_match( '#^/wc/store(?:/v\d+)?/#i', $route ) ) return $result;
+	$read = in_array( $request->get_method(), array( 'GET', 'HEAD', 'OPTIONS' ), true );
+	if ( $read && ! preg_match( '#^/wc/store(?:/v\d+)?/checkout#i', $route ) ) return $result;
+	return new WP_Error( 'store_api_disabled', 'This endpoint is not available.', array( 'status' => 403 ) );
+}, 10, 3 );
+```
+Then verify the real flow end to end: add-to-cart, the checkout page, `update_order_review`, a `wc-ajax=checkout` POST that returns field-validation errors, and fragments. **Remove the guard before** enabling block cart/checkout or Stripe express checkout.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-02 (order 782, 2026-10-31). *(Tier 2 site, master project section, unharvested.)*
+
+### Bricks product query loop: out-of-stock products drop out at render, not in the query — and nothing backfills
+**Symptom / When:** A "3 featured products" Bricks loop shows 2 cards. `WP_Query` with the loop's exact args returns all 3.
+**Why:** With `woocommerce_hide_out_of_stock_items=yes`, the out-of-stock product is removed while the cards render (WooCommerce product visibility), after `posts_per_page` has already been applied. The slot just stays empty.
+**Fix:** Diagnose with the render, not the query. To give a client control over which products show, add an ACF relationship field (max 3, return IDs) on an options page and swap the loop's query by element ID:
+```php
+add_filter( 'bricks/posts/query_vars', function ( $vars, $settings, $element_id ) {
+	if ( 'zqfnww' !== $element_id ) return $vars;          // the loop's element ID
+	$ids = array_filter( array_map( 'absint', (array) ( get_field( 'homepage_merch', 'option' )['products'] ?? [] ) ) );
+	if ( ! $ids ) return $vars;                               // empty field → Bricks settings unchanged
+	unset( $vars['tax_query'] );
+	return array_merge( $vars, [ 'post__in' => $ids, 'orderby' => 'post__in', 'posts_per_page' => count( $ids ) ] );
+}, 10, 3 );
+```
+The element ID is the weak point: a rebuilt section gets a new ID and silently falls back. Keep it in one named constant and document it.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-02. The featured cap was set out of stock by the shop manager on 2026-09-29, and the homepage ran on two cards for a month. *(Tier 2 site, master project section, unharvested.)*
+
+### Saving an ACF options page doesn't purge LiteSpeed — and a `shop_manager` can't purge
+**Symptom / When:** A client edits Site Options (hours, ticker, picked products) and the change "doesn't take". Logged-in admins see it while cached public pages don't.
+**Why:** LSCache purges on post saves, not on ACF options-page saves, and its purge UI needs `manage_options`.
+**Fix:** In the core plugin:
+```php
+add_action( 'acf/save_post', function ( $post_id ) {
+	if ( 'options' === $post_id ) do_action( 'litespeed_purge_all' );
+}, 20 );
+```
+CLI writes (`update_field`) don't fire `acf/save_post`, so keep running `wp litespeed-purge all` after scripted changes.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-02. *(Tier 2 site, master project section, unharvested.)*
