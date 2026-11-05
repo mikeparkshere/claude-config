@@ -50,6 +50,8 @@ define( 'MP_UEH_BLOCK_AUTHOR_ARCHIVES', false );  // site has real author byline
 define( 'MP_UEH_GENERIC_LOGIN_ERRORS', false );   // client objects to the wording
 ```
 
+**A Bricks login form needs its own message.** Bricks prints the login error itself, so the plugin's `login_errors` filter never runs on it. Set `loginErrorMessage` on the form (`02`), or a custom login page keeps confirming valid usernames. Test it on the rendered form with a wrong password, not by reading the plugin list. (MFH, 2026-11-04.)
+
 **Check before deploying** — the only two real breakage risks:
 
 1. **Author archives.** Blocking them 404s `/author/<slug>/`. Fine on a site with no blog; on a site with indexed author archives it 404s live URLs. Check post count and RankMath indexing, then set the constant.
@@ -239,7 +241,7 @@ The tag on this heading covers the whole section, including the pinned-token sub
 Configure ACSS the way we build Bricks: **programmatically, verified against output** — not by hand in the dashboard. The mechanism is `Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $values, $trigger_css_generation = true )`:
 
 - **`save_settings()` is an instance method, not static.** `Database_Settings` is `final` and uses the `Singleton` trait, so the call goes through `get_instance()`. Calling it statically throws `Error: Non-static method … cannot be called statically` and fatals *before* writing — fail-closed, so nothing is half-saved, but the script dies.
-- `wp_set_current_user(1)` first — `save_settings` requires `manage_options` and throws `Insufficient_Permissions` otherwise (same class of gotcha as Bricks' gated `_bricks_page_*` writes). `wp --user=1 eval` does the same job.
+- `wp_set_current_user( <admin_id> )` first, with a real administrator resolved on this install (`00`) — `save_settings` requires `manage_options` and throws `Insufficient_Permissions` otherwise (same class of gotcha as Bricks' gated `_bricks_page_*` writes). `wp --user=<admin> eval` does the same job.
 - **Pass the full settings array**, merged from the current option — `save_settings` resets any *omitted* allow-listed variable to its default.
 - One call saves **and** regenerates the CSS (ScssPhp compiler). No separate regen step.
 

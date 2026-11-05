@@ -525,9 +525,9 @@ To migrate `cssCode` to a central stylesheet: dump it, copy to the right `style.
 
 **Fix — three routes around the same guards.** Both guards are registered **by the Bricks theme** (`Bricks\Ajax`), which is why (b) works and why (c) sidesteps them entirely:
 
-**(a) Set the user — the canonical route.** First line of any `wp eval` / `wp eval-file` script. User 1 = admin with `full_access` + code execution, so `security_check_elements_before_save()` returns your elements as-is:
+**(a) Set the user — the canonical route.** First line of any `wp eval` / `wp eval-file` script. A real administrator with `full_access` + code execution, so `security_check_elements_before_save()` returns your elements as-is. Resolve the ID on this install; user 1 may not exist (`00`):
 ```php
-wp_set_current_user( 1 );
+wp_set_current_user( <admin_id> );
 $content = get_post_meta( $tmpl_id, '_bricks_page_content_2', true );
 // ... mutate $content ...
 update_post_meta( $tmpl_id, '_bricks_page_content_2', $content );
@@ -578,7 +578,7 @@ update_option( 'bricks_element_manager', $m );
 **Why:** Bricks maintains three filter tables: `wp_bricks_filters_element`, `wp_bricks_filters_index_job` (queued jobs), `wp_bricks_filters_index` (the lookup table). `reindex()` from WP-CLI populates the job queue, but the jobs are processed by the `bricks_indexer` cron event — they sit unprocessed until cron ticks.
 **Fix:** After `reindex()`, force the cron event:
 ```php
-wp_set_current_user( 1 );
+wp_set_current_user( <admin_id> );  // a real administrator (`00`)
 // ... add filter element ...
 ( new \Bricks\Query_Filters() )->reindex();
 // Then from shell (cron runs in its own request):
@@ -4806,3 +4806,21 @@ add_action( 'acf/save_post', function ( $post_id ) {
 ```
 CLI writes (`update_field`) don't fire `acf/save_post`, so keep running `wp litespeed-purge all` after scripted changes.
 **First seen:** Millersburg Brewing (app-mbc25), 2026-11-02. *(Tier 2 site, master project section, unharvested.)*
+
+### Bricks update regen changes the size of an element-bound SVG icon set in `em`
+**Symptom / When:** After updating Bricks 2.3.8 → 2.4.5 with no other change, icons on one page grow from about 60px to about 130px. Every other page stays pixel-identical. Version checks and fatal scans look clean.
+**Why:** The update regenerates per-post CSS. The stored `icon.width: 4em` on the element now emits `#brxe-<id> { width: 4em }`, and `em` resolves against the font size the icon's class sets (`iconSize`). The old CSS file was gone, so exactly what it emitted before is not known.
+**Fix:** Take a screenshot baseline before any Bricks update and compare byte for byte; this was found no other way. Move the size to the class as typed `_width` / `_height` and remove `icon.width` / `icon.height` from the element. On a site with staging and production, ship the class change with the update, because production will shift the same way.
+**First seen:** MFH, 2026-11-04. *(Tier 2 site, master project section, unharvested.)*
+
+### Removing ACSS leaves `acss_import_*` references inside surviving global classes
+**Symptom / When:** After an ACSS-to-native migration, classes and tokens look clean and every page renders, but a scan of `bricks_global_classes` still finds `acss_import_` strings.
+**Why:** A color picked from the ACSS palette stores `{ id: 'acss_import_neutral', name: …, raw: … }`, and rewriting `raw` leaves `id` and `name`. Some classes also carry a top-level `_mappedId`. Tree references to removed classes are a separate problem: they're dangling IDs, and the ID itself carries the old name (`acss_import_btn--primary`), so the role can be read back after the class is gone.
+**Fix:** Reduce those color objects to `{ raw }` and unset `_mappedId`. Grep the whole export for `acss_import_` before calling a migration done. Map colors by what they do (fill, border, text), not by name: on MFH `--neutral` was all three.
+**First seen:** MFH, 2026-11-04. *(Tier 2 site, master project section, unharvested.)*
+
+### reCAPTCHA v3 failure on a WS Form shows the visitor nothing
+**Symptom / When:** A form is submitted, no error appears, no submission is stored, no email arrives. The REST call returns 200, so it looks like success in the access log. On a Local domain it fails every time.
+**Why:** The response is `error_validation: true` with `field_invalid_feedback` on the reCAPTCHA field, "Invalid captcha response." A v3 field has no visible UI, so the message has nowhere to show.
+**Fix:** Replay a complete submission without a token (`03`: `wsf_post_mode=submit`) and read the JSON. To prove the rest of the chain on Local, drop the field for the test with a temporary `wsf_pre_render` filter; the real test has to happen on the production domain. On a support or lead form, also consider surfacing that failure to the visitor.
+**First seen:** MFH, 2026-11-04. *(Tier 2 site, master project section, unharvested.)*

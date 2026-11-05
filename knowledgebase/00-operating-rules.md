@@ -309,7 +309,7 @@ There are three surfaces for build work. They are complementary, not interchange
 | Turning a token-aware wireframe into a built Bricks page | **WP-CLI build** — the pipeline in `02`. This is the primary path. |
 | Discovering an unknown Bricks schema; building or extending a template with Bricks UI controls available | **Bricks builder** — visual, authoritative. Build one example, save, read it back. |
 | Bulk operations: batch class creation, global class CSS population, custom query types, dynamic tags, CPT scaffolding, ACF fields | **WP-CLI direct DB edit** — the back half of `02`. |
-| `[stack:acss]` Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::get_instance()->save_settings($merged, true)` (instance method, not static) after `wp_set_current_user(1)`; convention in `01`, procedure in `02`. The **color palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
+| `[stack:acss]` Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::get_instance()->save_settings($merged, true)` (instance method, not static) after `wp_set_current_user( <admin_id> )` (a real administrator, see Authentication below); convention in `01`, procedure in `02`. The **color palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
 
 When a WP-CLI edit stalls — Bricks stripping writes, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
 
@@ -497,13 +497,17 @@ Full convention and the styling-layers reasoning are in `01`. The principle is n
 
 ## Authentication requirement
 
-**The first line of any WP-CLI script that writes Bricks template meta is `wp_set_current_user(1)`.**
+**The first line of any WP-CLI script that writes Bricks template meta sets a real administrator, resolved on this install, never assumed to be ID 1.**
 
 Bricks hooks `update_post_metadata` and returns false — blocking the write — when the builder capability check fails. WP-CLI runs as user 0 by default, so the check fails and the write silently no-ops: no error, no log entry, the script reports success, nothing lands.
 
 ```php
-wp_set_current_user( 1 );  // or any user ID with builder access
+$admin = get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] )[0] ?? 0;
+wp_set_current_user( (int) $admin );
+if ( ! \Bricks\Capabilities::current_user_can_execute_code() ) { fwrite( STDERR, "no user can write Bricks trees\n" ); exit( 1 ); }
 ```
+
+User 1 is often deleted or replaced on a migrated site. A missing user fails exactly like a missing capability: no error, no log entry, the script reports success, nothing lands. Bricks also caches its capability answer for the whole request (`Capabilities::$capabilities_set`), so set the user before the first check, and don't test two users in one process: the second answer is the first user's. (Corrected 2026-11-04, MFH: user 1 did not exist, every tree write was discarded while the unguarded class writes landed, and the page rendered half-migrated.)
 
 This gates the three per-post keys: `_bricks_page_content_2`, `_bricks_page_header_2`, `_bricks_page_footer_2`. Writes to the `bricks_global_classes` option are **not** gated this way — that option can be updated without setting the current user. Knowing the difference is useful when isolating a failure mode.
 

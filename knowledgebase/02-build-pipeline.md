@@ -37,7 +37,7 @@ Before any build, these must be in hand. If any is missing, ask for it — do no
 Required-context item 1 (the ACSS token map) assumes ACSS is **already** configured to the brand. That configuration is its own procedure — WP-CLI-first, per the convention in `01`:
 
 1. **Palette (the one interactive step).** Prompt the user to enter the brand palette in the ACSS dashboard (`?acssOpenDashboard=1`) — base colours + which slots to enable (governance-minimal). This is the only dashboard step; the shade derivation is JS-side (`03` → ACSS). Or run a PHP derivation helper.
-2. **Everything else by WP-CLI** — one `wp eval-file`: `wp_set_current_user(1)`, read the option, merge type sizes / per-level Font Size Overrides (mobile=min, desktop=max = brand ranges) / scales / radius / button typography / fonts / line-heights / focus, then `\Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $merged, true )` — an **instance** method via the Singleton trait, never a static call (see `01`).
+2. **Everything else by WP-CLI** — one `wp eval-file`: `wp_set_current_user( <admin_id> )` (`00`), read the option, merge type sizes / per-level Font Size Overrides (mobile=min, desktop=max = brand ranges) / scales / radius / button typography / fonts / line-heights / focus, then `\Automatic_CSS\Model\Database_Settings::get_instance()->save_settings( $merged, true )` — an **instance** method via the Singleton trait, never a static call (see `01`).
 3. **Tokens** — pinned customs (`--cream`, a `--display` step above `--h1`, focus overrides) into ACSS Global CSS (the dashboard field formerly labeled Global SCSS) — the only token home, by law (`01` → Pinned custom tokens). This delivers **inline** after `automatic.css` (`03` → ACSS), so `:root` overrides win the cascade. Irregular heading ladders are not tokens — they go into per-level Font Size Overrides in step 2, never as `--h1`–`--h6` re-declarations in any CSS home.
 4. **Verify on the rendered front end, not the on-disk files** — `curl` and grep the inline `automaticcss-core-inline-css` block + compiled `automatic.css` for palette hexes, per-level clamp sizes, button vars, and that custom overrides win. Pinned tokens specifically: confirm every one resolves — `getComputedStyle(document.documentElement).getPropertyValue('--token')` in the console, or grep the inline block. Any move or re-home of tokens is not complete until this passes and only then is the old copy deleted (`00` → doc/reality mismatches).
 5. **Then extract the token map** (below) — now that ACSS is brand-true.
@@ -135,7 +135,7 @@ wp post meta get <id> _bricks_page_content_2 --format=json \
 The first line of any WP-CLI script that writes Bricks template meta:
 
 ```php
-wp_set_current_user( 1 );  // or any user ID with builder access
+wp_set_current_user( <admin_id> );  // a real administrator on THIS install; ID 1 may not exist (`00`)
 ```
 
 Bricks hooks `update_post_metadata` for `_bricks_page_content_2`, `_bricks_page_header_2`, and `_bricks_page_footer_2`, and blocks the write when the builder capability check fails. WP-CLI runs as user 0 — the check fails, the write silently no-ops, the script reports success, nothing lands.
@@ -177,7 +177,7 @@ For each approved section:
 
 2. **Create global classes.** Project BEM classes get registered in `bricks_global_classes`. Use the verified global class shape below. `settings` must be `array()`, never `new stdClass()` — a stdClass there crashes Bricks site-wide.
 
-3. **Write the element tree.** `update_post_meta` on `_bricks_page_content_2` (or header/footer key), after `wp_set_current_user(1)`.
+3. **Write the element tree.** `update_post_meta` on `_bricks_page_content_2` (or header/footer key), after `wp_set_current_user( <admin_id> )` (`00`).
 
 4. **Apply values as typed settings first — CSS is the exception, not the default.** Before writing any CSS, check whether Bricks has a typed control for the value. Layout, spacing, gap, borders, backgrounds, typography, grid all have typed schemas — use them. This is the typed-settings rule from `00`, and it is the most-violated rule in the knowledgebase: the instinct to reach straight for `_cssCustom` is fast but produces inline CSS that is invisible in the UI and unmaintainable for a junior dev or client handoff. `_cssCustom` is only for what a typed schema genuinely cannot express; global needs go to the child theme. Full order in `01`.
 
@@ -191,7 +191,7 @@ For each approved section:
 
 ```php
 // /tmp/bricks-regen-css.php
-wp_set_current_user( 1 ); // builder cap check blocks CLI writes without this
+wp_set_current_user( <admin_id> ); // a real administrator (`00`); builder cap check blocks CLI writes without this
 \Bricks\Assets_Files::regenerate_css_files();
 $files = glob( WP_CONTENT_DIR . '/uploads/bricks/css/post-*.min.css' );
 echo "post-*.min.css count: " . count( $files ) . "\n";
@@ -381,7 +381,7 @@ Static images default to lazy **even as the LCP hero** — set `loading: 'eager'
 - Empty dynamic data renders nothing on the front end (the placeholder is builder-only), so no hide-when-empty gate is needed for the image itself.
 - Bricks captions are absolute overlays, and `tag: figure` changes sizing; see `03` before styling one.
 
-**Responsive `sources[]` bound to dynamic data** (rendered — Clemente harvest, 2026-11-01, Bricks 2.4.4, in-memory render, no DB write):
+**Responsive `sources[]` bound to dynamic data** (rendered — Clemente harvest, 2026-11-01, Bricks 2.4.4, in-memory render, no DB write; **builder-verified** — MFH, 2026-11-04, Bricks 2.4.5, survived a builder save and swapped files at the breakpoint):
 
 ```php
 'image'   => [ 'id' => <attachment_id>, 'size' => 'full' ],   // base image
@@ -394,6 +394,8 @@ Static images default to lazy **even as the LCP hero** — set `loading: 'eager'
 - Each source runs through `get_normalized_image_settings()`, so a dynamic tag works per source. With a tag that returns `[ $id ]` in image context, this rendered `<source media="(max-width: 478px)" srcset="…" type="image/svg+xml">`: `media` comes from the breakpoint width, `type` from the attachment's MIME type.
 - The image-context tag rules apply unchanged: return an array in image context (`03`).
 - Order matters (the control's own help text): the browser takes the first matching source, so list sources below the base breakpoint smallest first.
+
+⚠️ **Conflict to test (MFH, 2026-11-04, Bricks 2.4.5):** `{acf_*}` image fields on an options page rendered in both the `logo` and `image` elements there, including in `sources`, which the next entry says can't happen. One site doesn't settle it; re-test before relying on either statement.
 
 **Image fed from an options page — `bricks/element/settings`, keyed on element id** (builder-verified — MMHN, 2026-07-21). `{acf_*}` tags can't reach an options page, and a custom tag in `image.useDynamicData` fails (a string lands raw in `src`; an array fatals in the dynamic-data parser). Inject the static-image shape at render instead:
 
@@ -567,6 +569,8 @@ Authoritative source: `bricks/includes/conditions.php` → `Conditions::check()`
 Width is a per-side object, style is a scalar, color is a single object, radius is a per-side object. Per-side nested shapes (`_border.bottom.{width,style,color}`) persist in the DB without error but emit zero border CSS. For "bottom border only," set `width.bottom = '1'`, other sides `'0'`. Full incident: `03`.
 
 ## SVG element
+
+**Without `source`** (builder-saved on a sibling, then proven — MFH, 2026-11-04, Bricks 2.4.5): `'file' => [ 'id' => <att>, 'filename' => 'x.svg', 'url' => '…' ]` with no `source` key renders the file inline. `_attributes` carry `role` / `aria-*`; width and height go on a class. The attachment ID is per-install, so resolve it by filename in a script.
 
 ```json
 {
@@ -850,7 +854,7 @@ Re-verified on Bricks 2.4.3 (VMG, 2026-10-18): same meta, live 404 render, build
 update_post_meta( $id, '_bricks_template_type', 'content' );
 update_post_meta( $id, '_bricks_editor_mode', 'bricks' );
 update_post_meta( $id, '_bricks_template_settings', [] );   // no templateConditions, on purpose
-// tree in _bricks_page_content_2 (wp_set_current_user(1) first)
+// tree in _bricks_page_content_2 (wp_set_current_user( <admin_id> ) first, `00`)
 $gs = get_option( 'bricks_global_settings' ); $gs['maintenanceTemplate'] = (string) $id;   // inert until maintenanceMode is set
 update_option( 'bricks_global_settings', $gs );
 ```
@@ -1031,6 +1035,7 @@ Read back from working login / lost-password / reset-password forms. The action 
 - `redirect` + `redirectAdminUrl` are **not** mutually exclusive — the admin branch overwrites the rendered redirect and re-wraps the *raw* string. To use a dynamic redirect, `redirectAdminUrl` must be **unset**, not `false` (the code tests `isset()`). Full mechanism in `03`.
 - The reset form needs **no** hidden key/login fields — Bricks renders `form-field-key` / `form-field-login` itself from `$_GET` whenever `resetPasswordNew` is set and `reset-password` is in `actions`.
 - `?redirect_to=` is honored **only** when no redirect action is configured.
+- **Login error message** (source-read and tested — MFH, 2026-11-04, Bricks 2.4.5, `form/actions/login.php`): `'loginErrorMessage' => 'Incorrect username or password.'`. Rendered through `render_data`, and replaces the `wp_signon()` error, which otherwise names the username. The `login_errors` filter never runs on this form (`01`).
 
 **Field `autocomplete`** (source-read — Clemente, 2026-07-26, Bricks 2.3.12; re-read on 2.4.4, `includes/elements/form.php`): a plain text key on the field row, no JS needed for password-manager hints.
 ```php
@@ -1072,7 +1077,7 @@ Password field with the eye toggle (an entry in `settings.fields[]`):
   'passwordShowIcon' => [ 'library' => 'svg', 'svg' => [ 'id' => <att>, 'url' => '<url>', 'filename' => 'eye.svg' ] ],
   'passwordHideIcon' => [ 'library' => 'svg', 'svg' => [ … ] ] ]
 ```
-Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `html` field types take `'width' => '50'` for a half-width pair. Importing the SVG attachments from WP-CLI needs `wp --user=1 media import` (`03`).
+Renders `.password-input-wrapper > button.password-toggle`. `rememberme` and `html` field types take `'width' => '50'` for a half-width pair. Importing the SVG attachments from WP-CLI needs `wp --user=<admin> media import` (`03`).
 
 ## WS Form choice field — radio chip row (verified — Clemente, 2026-08-25, WS Form Pro 1.12.6; read back from a working radio field, then built against and rendered)
 
