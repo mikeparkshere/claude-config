@@ -22,6 +22,7 @@ import argparse, base64, json, os, sys, time
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.backends import default_backend  # required arg on cryptography < 3.1 (Ubuntu 20.04 ships 2.8)
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://analyticsdata.googleapis.com/v1beta"
@@ -79,7 +80,7 @@ def access_token(sa):
               "iat": now, "exp": now + 3600}
     signing_input = (b64u(json.dumps(header).encode()) + "." +
                      b64u(json.dumps(claims).encode())).encode("ascii")
-    pk = serialization.load_pem_private_key(sa["private_key"].encode(), password=None)
+    pk = serialization.load_pem_private_key(sa["private_key"].encode(), password=None, backend=default_backend())
     sig = pk.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
     assertion = signing_input.decode() + "." + b64u(sig)
     r = requests.post(TOKEN_URL, data={
