@@ -198,3 +198,6 @@ CLAUDE.md is the source of truth and the flow to Notion is **one-way**, **on req
 **Always use surgical edits, never whole-page replacement.** The mirrors carry curator-only blocks (e.g. the **User-Level References** table) that exist nowhere on disk; a replace wipes them. Target cell-level / line-level strings, batch the safe edits, isolate the risky ones, and re-fetch afterward to verify.
 Writes to **Clients/Projects DB records** (as opposed to doc pages) get confirmed with Michael first — those are CRM data, not documentation.
 Slash commands in claude-config repo: /wordpress-audit, /wordpress-runcloud.
+
+## Private
+@~/.claude/private.md
