@@ -4824,3 +4824,41 @@ CLI writes (`update_field`) don't fire `acf/save_post`, so keep running `wp lite
 **Why:** The response is `error_validation: true` with `field_invalid_feedback` on the reCAPTCHA field, "Invalid captcha response." A v3 field has no visible UI, so the message has nowhere to show.
 **Fix:** Replay a complete submission without a token (`03`: `wsf_post_mode=submit`) and read the JSON. To prove the rest of the chain on Local, drop the field for the test with a temporary `wsf_pre_render` filter; the real test has to happen on the production domain. On a support or lead form, also consider surfacing that failure to the visitor.
 **First seen:** MFH, 2026-11-04. *(Tier 2 site, master project section, unharvested.)*
+
+*⚠️ The four entries below come from the Expert T's (expert-t) closer, 2026-11-04. It is a live Tier 2 site with no project knowledgebase copy, so they sit in the master's project section, unharvested, and wait for review here.*
+
+### A post with no Bricks content fatals when `post-author` is disabled in the Element Manager
+**Symptom / When:** One blog post returns a 500 with "There has been a critical error", and every page and archive is fine. The render dies right after the header. With no PHP error log, the only visible evidence is the WordPress error page.
+**Why:** When a post has no Bricks data and no single template matches, `single.php` falls back to `template-parts/post.php`, which runs `new Element_Post_Author()` with no guard. `Elements` skips loading any element the Element Manager (`bricks_element_manager`) marks `disabled`, so the class doesn't exist: `Class "Bricks\Element_Post_Author" not found`. Same code on 2.3.12 and 2.4.5. A site that retired its blog is the likely victim, because one forgotten post is all it takes, and a page cache can hide it for months.
+**Fix:** Re-enable `post-author`, or give posts a single template (type `content`, `02` → Archive template conditions), or unpublish the stray post. Check before disabling post elements: `wp post list --post_type=post --post_status=publish --format=count`. To get the fatal without touching `WP_DEBUG` on a live site, render it from the CLI: `wp --url=<post-url> eval-file <script>`, where the script defines `WP_USE_THEMES`, calls `wp()`, and `require`s `wp-includes/template-loader.php` inside a `try/catch ( \Throwable )`.
+**First seen:** Expert T's (expert-t), 2026-11-04. A 2024 post, the site's only published post, returned 500 during a post-update review. The access log stopped months earlier and showed 200s, possibly cached, so the start date is unknown. *(Tier 2 site, master project section, unharvested.)*
+
+### An empty post can't be trashed — `wp_trash_post()` fails with `empty_content` and leaves trash meta behind
+**Symptom / When:** `wp post delete <id>` prints `Warning: Failed deleting post`. An untitled draft stays a draft, and it may already carry `_wp_trash_meta_status` from an earlier attempt in wp-admin.
+**Why:** `wp_trash_post()` writes its trash meta first, then calls `wp_update_post()` to change the status. `wp_insert_post()` rejects a post with no title, content or excerpt, including on update. So every failed attempt adds another pair of meta rows and changes nothing.
+**Fix:** If it really should go to the trash, lift the check for one call: `add_filter( 'wp_insert_post_empty_content', '__return_false' ); wp_trash_post( $id );`. Prove the cause first with `wp_update_post( [ 'ID' => $id, 'post_status' => 'trash' ], true )`, which returns the `WP_Error`. `--force` also works, but it skips the trash.
+**First seen:** Expert T's (expert-t), 2026-11-04. A 2024 empty draft held three sets of trash meta by the time it finally moved. *(Tier 2 site, master project section, unharvested.)*
+
+### `WS_Form_Field::db_delete()` deletes first and validates after — set `form_id` or it throws halfway
+**Symptom / When:** A script deleting a field dies with `Invalid form ID (WS_Form_Field | db_check_form_id)`. The field and its meta are already gone, so a retry finds nothing, and anything later in the script (the other deletes, `db_publish()`) never ran. Live forms look untouched because they render the published snapshot, which hides the half-finished state.
+**Why:** The method deletes the row and meta, then runs the reference repair behind `db_check_form_id()`. `$field->id` alone passes every check that comes before the delete.
+**Fix:** Set both, then publish: `$f = new WS_Form_Field(); $f->id = $id; $f->form_id = $form_id; $f->db_delete();`. To recover a field that was already deleted: `$r = new WS_Form_Form(); $r->id = $form_id; $r->new_lookup['field'][ $id ] = ''; $r->db_conditional_repair(); $r->db_action_repair(); $r->db_meta_repair();`, then `db_publish()`. Saved submissions keep their `field_<id>` rows.
+**`[for 02 harvest]` Email action shape** (read back from three builder-saved forms, WS Form Pro 1.12.18; rendered and published, no live send): `meta_key = 'action'` in `wsf_form_meta` is a serialized `stdClass`. Each row is `groups[0]->rows[n]->data = [ label, json ]`, and the email row's JSON has `id: "email"`, `meta.action_email_to[0].action_email_email` and `meta.action_email_reply_to_email`. Reply-To takes `#field(<id>)`, which `parse_variables_process()` resolved to the submitted address. Unserialize, edit, `serialize()`, write back, then `db_publish()`. A byte-level replace breaks the serialized lengths.
+**First seen:** Expert T's (expert-t), 2026-11-04. Removing a dropdown from two forms left one deleted and one not until the script was finished by hand. *(Tier 2 site, master project section, unharvested.)*
+
+### `[for 02 harvest]` Bricks native Leaflet map: the shape, and the OpenStreetMap credit it omits
+**Symptom / When:** A `map-leaflet` element renders tiles and a marker, but the credit reads only "Leaflet". OpenStreetMap's license requires crediting them. Written from the CLI with only `layers`, the controls vanish too.
+**Why:** The default layer row has no `attribution`, and it's a per-layer field. The render reads the checkboxes as `$settings['attributionControl'] ?? false`, so the builder's `default => true` doesn't exist for a CLI write: an omitted key is **off**.
+**Fix:** The base keys and layer row are from a builder-saved readback on a sibling install (Bricks 2.3.12). The marker row, `attribution`, `zoom` and `scrollWheelZoom` come from the control definitions on 2.4.5, rendered in Chromium at three widths, and haven't been through a builder save:
+```php
+[ 'name' => 'map-leaflet', 'settings' => [
+    'layers'  => [ [ 'id' => 'abc123', 'name' => 'OpenStreetMap', 'url' => 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                     'attribution' => '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' ] ],
+    'markers' => [ [ 'id' => 'def456', 'coordinates' => '<lat>, <lng>', 'label' => 'Builder label', 'popupText' => '<strong>Name</strong><br>Address' ] ],
+    'center'  => '<lat>, <lng>', 'zoom' => '16',
+    'attributionControl' => true, 'zoomControl' => true, 'dragging' => true, 'boxZoom' => true, 'closePopupOnClick' => true, 'trackResize' => true,
+    'scrollWheelZoom' => 'false',   // select of strings: 'true' | 'center' | 'false'. Unset = ON, which traps page scroll
+] ],
+```
+Height is the element's own `height` control, which emits on a global class, with a breakpoint suffix on the outer key (`'height:mobile_landscape' => '300px'`). Add `_isolation: 'isolate'` on the class so Leaflet's z-indexed panes stay under a sticky header. The default marker image loaded through LiteSpeed's CSS minify with JS defer on. Blank in the builder canvas is expected (the Leaflet entry in this file).
+**First seen:** Expert T's (expert-t), 2026-11-04. The missing credit showed up in the first screenshot, not in the HTML. *(Tier 2 site, master project section, unharvested.)*
