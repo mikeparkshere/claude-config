@@ -4808,7 +4808,7 @@ CLI writes (`update_field`) don't fire `acf/save_post`, so keep running `wp lite
 **First seen:** Millersburg Brewing (app-mbc25), 2026-11-02. *(Tier 2 site, master project section, unharvested.)*
 
 ### Bricks update regen changes the size of an element-bound SVG icon set in `em`
-**Symptom / When:** After updating Bricks 2.3.8 → 2.4.5 with no other change, icons on one page grow from about 60px to about 130px. Every other page stays pixel-identical. Version checks and fatal scans look clean.
+**Symptom / When:** After an update pass that moved Bricks 2.3.8 → 2.4.5 along with WordPress core and other plugins, icons on one page grow from about 60px to about 130px. The regenerated Bricks CSS is the likely cause; it wasn't isolated. Every other page stays pixel-identical. Version checks and fatal scans look clean.
 **Why:** The update regenerates per-post CSS. The stored `icon.width: 4em` on the element now emits `#brxe-<id> { width: 4em }`, and `em` resolves against the font size the icon's class sets (`iconSize`). The old CSS file was gone, so exactly what it emitted before is not known.
 **Fix:** Take a screenshot baseline before any Bricks update and compare byte for byte; this was found no other way. Move the size to the class as typed `_width` / `_height` and remove `icon.width` / `icon.height` from the element. On a site with staging and production, ship the class change with the update, because production will shift the same way.
 **First seen:** MFH, 2026-11-04. *(Tier 2 site, master project section, unharvested.)*
