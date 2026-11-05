@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       mpd-core
  * Description:       Michael Parks Design framework layer for native Bricks sites: framework defaults Bricks has no typed control for, plus the clickable-parent and focus-parent patterns. Consumes design tokens from the Bricks Style Manager; defines none.
- * Version:           0.2.0
+ * Version:           0.3.0
  * Requires at least: 6.5
  * Requires PHP:      8.1
  * Author:            Michael Parks Design
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MPD_CORE_VERSION', '0.2.0' );
+define( 'MPD_CORE_VERSION', '0.3.0' );
 
 /**
  * Frontend and the Bricks builder canvas (the canvas iframe runs wp_enqueue_scripts too).

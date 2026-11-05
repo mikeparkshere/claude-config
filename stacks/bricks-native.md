@@ -1,6 +1,6 @@
 # Stack: bricks-native
 
-**Status: 0.2.0.** Proven on its first production site (pkjsupport, live 2026-10-07) and extracted from it. The framework package lives at `frameworks/mpd-core/`.
+**Status: 0.3.0.** Proven on its first production site (pkjsupport, live 2026-10-07) and extracted from it, then on a first ACSS retrofit (MFH, live 2026-11-04). The framework package lives at `frameworks/mpd-core/`.
 
 A `bricks-native` site runs Bricks with **no Automatic.css installed**, ever: not deactivated, not "for reference." Tokens live in the Bricks Style Manager. A small framework plugin, **mpd-core**, carries the subset of ACSS v3 conventions in actual use (measured by an audit across five sites).
 
@@ -52,8 +52,23 @@ framework: mpd-core <version> (frameworks/mpd-core in claude-config)
 - **If pages are built from scripts, dry-run each script against the live DB before re-running it** (`tools/drift-check.php`; `03`). People edit in the builder between runs.
 - **Read trees back through `tools/readback.php`**, never into the session. It writes the tree to disk and prints the outline, every settings key, and rule flags (element-bound styling, bare `--var`, literal colors, missing BEM classes, ARIA).
 
-## Known limits (0.2.0)
+## Retrofitting an ACSS site
 
+First done on MFH, 2026-11-04: 16 trees and 495 elements in one working session. Measure before you commit to it: count the ACSS classes and variables actually used on published trees, excluding revisions, which can inflate the count tenfold.
+
+1. **Take a baseline first:** HTML and screenshots of every URL, plus a database export. Run updates before the swap and compare, so update fallout doesn't get blamed on the port.
+2. **Deactivate ACSS; don't run both.** `--space-*`, `--text-*` and `--h*` collide. On a site with an audience, do this behind a maintenance page that depends on neither stack (`04`).
+3. **Set the root size explicitly.** A Theme Style `typographyHtml` of `var(--root-font-size)` now resolves from the Style Manager. Unresolved, Bricks can fall back to 62.5%, which shifts every rem.
+4. **Map colors by role, not by name.** One ACSS name can be a fill, a border and text at once. Read each use's setting path. Rewrite CSS inside Code elements too, then re-sign them (`03`).
+5. **Recover class roles from the ID.** Refs to removed ACSS classes are `acss_import_<name>`, so `btn--primary` still tells you the element was a primary button: set `style: primary` before dropping it. Also strip leftover color `id` / `name` keys and `_mappedId` (`03`).
+6. **Guard the write:** every `var()` in classes and trees must resolve to a token, or stop. Then read back from a fresh process; a real administrator is required for tree writes (`00`).
+7. **Clear the child theme:** `:root` type ladders (they load last and win) and any `* { border-color … !important }`, which beats every component border.
+8. **Check what ACSS was quietly covering:** Gutenberg post content, WS Form skinning, and button padding, weight and transform.
+9. **Open every builder page after the swap.** The builder can peak near a stock 128M limit (`04`).
+
+## Known limits (0.3.0)
+
+- **A single-context dark site needs no mechanism** (MFH): purpose tokens simply take dark values. Placeholder values are light-first only.
 - **Light/dark context switching is undesigned.** The purpose tier is built for it (a context re-points purpose tokens, components don't change), but no mechanism ships yet. The first site that needs a second context decides it.
 - **No secondary button, no weighted grids beyond `--grid-1-2` / `--grid-2-3`, no `.eyebrow`.** Each needs a design call; see `frameworks/mpd-core/CHANGELOG.md`.
-- **Verified on Bricks 2.4.2**, with WS Form Pro 1.12 and BricksExtras 1.7.4. Re-check the Style Manager row shapes (`02`) on a newer Bricks before trusting a CLI token write.
+- **Verified on Bricks 2.4.2 and 2.4.5**, with WS Form Pro 1.12 and BricksExtras 1.7.4 (2.4.2), and WS Form Pro 1.12.18 and 1.12.19 (2.4.5). Re-check the Style Manager row shapes (`02`) on a newer Bricks before trusting a CLI token write.

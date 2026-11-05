@@ -21,7 +21,10 @@
  * SEPARATE request afterwards (`03`: a same-request regen writes the pre-update palette).
  */
 
-wp_set_current_user( 1 );
+// A real administrator, resolved here: user 1 may not exist on a migrated site (`00`). ADMIN=<id> overrides.
+$admin = (int) ( getenv( 'ADMIN' ) ?: ( get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] )[0] ?? 0 ) );
+if ( ! $admin || ! get_userdata( $admin ) ) { fwrite( STDERR, "no administrator found; set ADMIN=<id>\n" ); exit( 1 ); }
+wp_set_current_user( $admin );
 $dry  = getenv( 'DRY' ) === '1';
 $file = getenv( 'VALUES' );
 if ( ! $file || ! is_readable( $file ) ) { fwrite( STDERR, "VALUES=<path to values.php> is required and must be readable\n" ); exit( 2 ); }
@@ -88,4 +91,4 @@ update_option( 'bricks_global_variables', $variables );
 update_option( 'bricks_color_palette', $palette_opt );
 // style-manager.min.css loads last and is not rebuilt by regenerate_css_files(); refresh it from the fresh options.
 if ( ! \Bricks\Ajax::generate_style_manager_css_file() ) { fwrite( STDERR, "style-manager.min.css NOT written\n" ); exit( 1 ); }
-echo "written; style-manager.min.css refreshed. Next, in a separate request: wp eval 'wp_set_current_user(1); \\Bricks\\Assets_Files::regenerate_css_files();'\n";
+echo "written; style-manager.min.css refreshed. Next, in a separate request: wp --user=<admin> eval '\\Bricks\\Assets_Files::regenerate_css_files();'\n";

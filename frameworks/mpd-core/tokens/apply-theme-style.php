@@ -11,7 +11,10 @@
  * Idempotent: one style under a fixed key, replaced on re-run. Run apply-tokens.php first.
  */
 
-wp_set_current_user( 1 );
+// A real administrator, resolved here: user 1 may not exist on a migrated site (`00`). ADMIN=<id> overrides.
+$admin = (int) ( getenv( 'ADMIN' ) ?: ( get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] )[0] ?? 0 ) );
+if ( ! $admin || ! get_userdata( $admin ) ) { fwrite( STDERR, "no administrator found; set ADMIN=<id>\n" ); exit( 1 ); }
+wp_set_current_user( $admin );
 $file = getenv( 'VALUES' );
 if ( ! $file || ! is_readable( $file ) ) { fwrite( STDERR, "VALUES=<path to values.php> is required and must be readable\n" ); exit( 2 ); }
 $v  = require $file;
@@ -27,7 +30,8 @@ $font = function ( $f ) {
 	}
 	return [ 'font-family' => $f['family'], 'fallback' => $f['fallback'] ];
 };
-$sans = $font( $v['fonts']['sans'] );
+$sans    = $font( $v['fonts']['sans'] );
+$display = ! empty( $v['fonts']['display'] ) ? $font( $v['fonts']['display'] ) : $sans;   // headings; optional
 
 $color = fn( $token ) => [ 'raw' => "var(--$token)" ];
 $headings = [];
@@ -35,6 +39,8 @@ foreach ( [ 'h1', 'h2', 'h3', 'h4', 'h5', 'h6' ] as $h ) {
 	$headings[ 'typographyHeading' . strtoupper( $h ) ] = array_filter( [
 		'font-size'   => "var(--$h)",
 		'line-height' => $ts['heading_line_heights'][ $h ] ?? null,   // null: inherits --line-height-heading
+		'font-weight'    => $ts['heading_weights'][ $h ] ?? null,         // null: inherits heading_weight
+		'letter-spacing' => $ts['heading_letter_spacings'][ $h ] ?? null,
 	] );
 }
 
@@ -52,7 +58,7 @@ $style = [
 				'letter-spacing' => $ts['body_letter_spacing'],
 				'color'          => $color( 'color-text' ),
 			] ),
-			'typographyHeadings' => $sans + [ 'font-weight' => $ts['heading_weight'], 'line-height' => 'var(--line-height-heading)', 'color' => $color( 'color-text' ) ],
+			'typographyHeadings' => $display + [ 'font-weight' => $ts['heading_weight'], 'line-height' => 'var(--line-height-heading)', 'color' => $color( 'color-text' ) ],
 			'focusOutline'       => 'var(--focus-width) solid var(--focus-color)',
 		] + $headings,
 		'heading'    => [ 'tag' => 'h2' ],   // unset = h3 (`02`)
@@ -84,10 +90,25 @@ $style = [
 		'button'     => [
 			'primaryBackground'       => $color( 'color-accent' ),
 			'primaryBackground:hover' => $color( 'color-accent-hover' ),
-			'primaryTypography'       => [ 'color' => $color( 'color-text-on-accent' ), 'font-weight' => $ts['button_weight'] ],
+			'primaryTypography'       => array_filter( [ 'color' => $color( 'color-text-on-accent' ), 'font-weight' => $ts['button_weight'], 'letter-spacing' => $ts['button_letter_spacing'] ?? null, 'text-transform' => $ts['button_text_transform'] ?? null ] ),
 		],
 	],
 ];
+
+// Optional outline button (`button_outline` => true). A matching 2px border on the solid button keeps both the same height.
+if ( ! empty( $ts['button_outline'] ) ) {
+	$radius = [ 'top' => 'var(--radius)', 'right' => 'var(--radius)', 'bottom' => 'var(--radius)', 'left' => 'var(--radius)' ];
+	$solid  = fn( $token ) => [ 'width' => [ 'top' => '2px', 'right' => '2px', 'bottom' => '2px', 'left' => '2px' ], 'style' => 'solid', 'color' => $color( $token ), 'radius' => $radius ];
+	$style['settings']['button'] += [
+		'primaryBorder'                  => $solid( 'color-accent' ),
+		'primaryBorder:hover'            => $solid( 'color-accent-hover' ),
+		'primaryOutlineTypography'       => array_filter( [ 'color' => $color( 'color-link' ), 'font-weight' => $ts['button_weight'], 'letter-spacing' => $ts['button_letter_spacing'] ?? null, 'text-transform' => $ts['button_text_transform'] ?? null ] ),
+		'primaryOutlineTypography:hover' => [ 'color' => $color( $ts['button_outline_hover_text'] ?? 'color-text-on-accent' ) ],
+		'primaryOutlineBackground:hover' => $color( 'color-link' ),
+		'primaryOutlineBorder'           => $solid( 'color-link' ),
+		'primaryOutlineBorder:hover'     => $solid( 'color-link' ),
+	];
+}
 
 $all = get_option( 'bricks_theme_styles', [] ) ?: [];
 $all[ $key ] = $style;

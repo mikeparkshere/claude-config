@@ -2,7 +2,7 @@
 
 A lightweight framework for **native Bricks** sites: the subset of ACSS v3 conventions Mike actually uses, built on Bricks' own Style Manager and Theme Style, with no Automatic.css. Stack rules: `stacks/bricks-native.md`. History: `CHANGELOG.md`.
 
-**Version 0.2.0.** Verified on Bricks 2.4.2.
+**Version 0.3.0.** Scripts verified on Bricks 2.4.5; the full install path last verified on 2.4.2 at 0.2.0.
 
 ## What's here
 
@@ -39,7 +39,7 @@ cp $F/TOKENS.template.md mpd-core/TOKENS.md
 
 # 3. Tokens, then the CSS regen in a SEPARATE request (`03`: a same-request regen writes the old palette)
 VALUES=mpd-core/values.php wp eval-file $F/tokens/apply-tokens.php            # DRY=1 to preview
-wp eval 'wp_set_current_user(1); \Bricks\Assets_Files::regenerate_css_files();'
+wp --user=<admin> eval '\Bricks\Assets_Files::regenerate_css_files();'
 
 # 4. Theme Style, then pattern classes (close every builder tab first: classes are single-writer)
 VALUES=mpd-core/values.php wp eval-file $F/tokens/apply-theme-style.php
@@ -56,6 +56,19 @@ OUT=mpd-core/style-manager-export.json wp eval-file $F/tokens/export.php
 Also set these Bricks settings, which the scripts don't touch: **Disable class chaining = ON**; "Output global class CSS in Class Manager order" stays **OFF** (no utilities compete with BEM classes); CSS loading = external files.
 
 **Verify on the rendered page, not in the database:** `getComputedStyle(document.documentElement).getPropertyValue('--color-accent')` resolves, a container inside a section measures `--content-width`, and the body font is the one you set. Measure narrow widths in a same-origin iframe; Chrome won't size a window below ~500px (`03`).
+
+## Fonts: Bricks custom fonts or self-hosted by name
+
+Either works. Choose **self-hosted by name** when a site deploys by moving specific items rather than the whole database, because `custom_font_<id>` is a per-install post ID.
+
+- Put the files and `@font-face` rules in the child theme, enqueued on the front end and in the builder.
+- Set `fonts.sans` / `fonts.display` in the values file to the family name with `custom => null`, and `fallback` to any metric-matched fallback stack.
+- Add the names to the builder's dropdown with `bricks/builder/standard_fonts` in the child theme.
+- Turn on Bricks' Disable Google Fonts, or a family that also exists on Google can load from there.
+
+Bricks custom fonts are the simpler choice when the database moves whole. Bricks 2.4 reads variable axes and has a preload setting, but fallback metric rules still need CSS elsewhere.
+
+**Button padding** has no Theme Style control. Set it in the child theme at zero specificity: `:where(.bricks-button) { padding: 0.75em 1.25em; }`.
 
 ## Changing a token later
 

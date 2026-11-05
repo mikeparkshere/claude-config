@@ -17,13 +17,16 @@
  *
  * Schemas: `02` library only (element envelope, section/container/block/heading/text-basic, `_attributes`,
  * `_cssId`, typed `_typography` / `_background` / `_padding`, Global Class shape). Gotchas applied:
- *   wp_set_current_user(1) (00), `_bricks_editor_mode` = bricks (03), `children` derived from `parent` (03),
+ *   a real administrator (00), `_bricks_editor_mode` = bricks (03), `children` derived from `parent` (03),
  *   layout + gap on the Container, not the Section (03), read-back in a separate process (03).
  * BEM: every element gets a named class, the block class goes on the Section, the Container gets
  * `block__container` (`01`). The one exception is `defaults`, which proves the Theme Style and so carries none.
  */
 
-wp_set_current_user( 1 );
+// A real administrator, resolved here: user 1 may not exist on a migrated site (`00`). ADMIN=<id> overrides.
+$admin = (int) ( getenv( 'ADMIN' ) ?: ( get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] )[0] ?? 0 ) );
+if ( ! $admin || ! get_userdata( $admin ) ) { fwrite( STDERR, "no administrator found; set ADMIN=<id>\n" ); exit( 1 ); }
+wp_set_current_user( $admin );
 
 $file = getenv( 'VALUES' );
 if ( ! $file || ! is_readable( $file ) ) { fwrite( STDERR, "VALUES=<path to values.php> is required and must be readable\n" ); exit( 2 ); }

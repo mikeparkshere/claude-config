@@ -1,5 +1,14 @@
 # mpd-core changelog
 
+## 0.3.0 — 2026-11-04
+
+From the first ACSS-to-native retrofit (MFH). No plugin behavior changed: only the version strings, so a site on 0.2.0 doesn't need the plugin re-copied.
+
+- **Scripts resolve a real administrator.** They hardcoded user 1, which doesn't exist on every migrated site. `ADMIN=<id>` overrides, and they stop with an error when none is found.
+- **Optional `fonts.display`** for a separate headings face. Headings fall back to `sans`, so existing values files render as before.
+- **Optional Theme Style values:** per-level heading weights and letter-spacing, button letter-spacing and text-transform, and an outline button (`button_outline`). Nothing is emitted when they're omitted.
+- **README:** choosing between Bricks custom fonts and self-hosting by name, and button padding.
+
 ## 0.2.0 — 2026-10-07
 
 First extraction into claude-config, from the site it was built on (pkjsupport, live 2026-10-07). The 0.1.0-alpha history is that project's gaps log; this entry is its distillation.

@@ -29,6 +29,8 @@ return [
 	'fonts' => [
 		'sans' => [ 'custom' => null, 'family' => 'system-ui', 'fallback' => '-apple-system, "Segoe UI", Roboto, sans-serif' ],
 		'mono' => [ 'custom' => null, 'family' => 'ui-monospace', 'fallback' => '"SF Mono", Consolas, monospace' ],
+		// Optional headings face. Omit it and headings use `sans`.
+		// 'display' => [ 'custom' => null, 'family' => 'Switzer', 'fallback' => "'Switzer fallback', Arial, sans-serif" ],
 	],
 
 	// ---------------------------------------------------------------- palette tier (Variable Manager)
@@ -156,6 +158,13 @@ return [
 		'body_letter_spacing'   => null,   // e.g. '0.01em' for light text on dark
 		'heading_weight'        => '600',
 		'button_weight'         => '500',
+		// Optional. Omit any of these and nothing is emitted.
+		// 'heading_weights'           => [ 'h5' => '700', 'h6' => '700' ],
+		// 'heading_letter_spacings'   => [ 'h1' => '-0.015em', 'h2' => '-0.01em' ],
+		// 'button_letter_spacing'     => '0.05em',
+		// 'button_text_transform'     => 'uppercase',
+		// 'button_outline'            => true,
+		// 'button_outline_hover_text' => 'color-text-on-accent',   // purpose token on the --color-link hover fill
 		// Per-level heading line heights. null = inherit --line-height-heading from the headings group.
 		'heading_line_heights'  => [ 'h1' => null, 'h2' => null, 'h3' => null, 'h4' => null, 'h5' => null, 'h6' => null ],
 	],

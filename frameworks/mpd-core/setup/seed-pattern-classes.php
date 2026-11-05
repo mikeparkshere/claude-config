@@ -12,7 +12,10 @@
  * ⚠️ bricks_global_classes is single-writer (`03`): close every builder tab first, re-read after ~90s.
  */
 
-wp_set_current_user( 1 );
+// A real administrator, resolved here: user 1 may not exist on a migrated site (`00`). ADMIN=<id> overrides.
+$admin = (int) ( getenv( 'ADMIN' ) ?: ( get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] )[0] ?? 0 ) );
+if ( ! $admin || ! get_userdata( $admin ) ) { fwrite( STDERR, "no administrator found; set ADMIN=<id>\n" ); exit( 1 ); }
+wp_set_current_user( $admin );
 $names   = [ 'clickable-parent', 'focus-parent--shadow', 'focus-parent--outline' ];
 $classes = get_option( 'bricks_global_classes', [] ) ?: [];
 $have    = array_column( $classes, 'name' );
