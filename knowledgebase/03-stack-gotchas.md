@@ -4864,3 +4864,29 @@ CLI writes (`update_field`) don't fire `acf/save_post`, so keep running `wp lite
 ```
 Height is the element's own `height` control, which emits on a global class, with a breakpoint suffix on the outer key (`'height:mobile_landscape' => '300px'`). Add `_isolation: 'isolate'` on the class so Leaflet's z-indexed panes stay under a sticky header. The default marker image loaded through LiteSpeed's CSS minify with JS defer on. Blank in the builder canvas is expected (the Leaflet entry in this file).
 **First seen:** Expert T's (expert-t), 2026-11-04. The missing credit showed up in the first screenshot, not in the HTML. *(Tier 2 site, master project section, unharvested.)*
+
+*⚠️ The four entries below come from Clemente Worcester's Mailster setup, 2026-11-06. It is a live Tier 2 site; they wait here for review.*
+
+### Mailster — WS Form add-on subscribers confirm but never join the list, so campaigns reach nobody
+**Symptom / When:** A form signup through the WS Form Mailster add-on, double opt-in on. The subscriber clicks confirm and shows status 1, but the list reports 0 members and `mailster_lists_subscribers.added` stays 0.
+**Why:** With `list_based_opt_in` on (the default), membership waits for a confirm link that names the list. The add-on assigns with `added = null` and its confirmation link names none, so `$extra` explodes to `['']`, filters to nothing, and no list is confirmed.
+**Fix:** `mailster_update_option( 'list_based_opt_in', false )`. Membership applies at signup; subscriber status still gates on the click. Verify with `mailster( 'lists' )->get( $id, null, true )->subscribers`, not the subscriber's status.
+**First seen:** Clemente Worcester, 2026-11-06. *(Tier 2 site, master project section, unharvested.)*
+
+### Mailster — unsubscribe form says "Invalid subscriber hash" and doesn't prefill the email
+**Symptom / When:** The unsubscribe page loads with an empty email field, and submitting returns "Invalid subscriber hash."
+**Why:** Two separate requirements. The form's `_hash` is filled by JS only when the form's `prefill` post meta is on (it was off on the default form that `install()` creates). The data comes from the `mailster` cookie, set only by the `/mailster/unsubscribe/<hash>/` route, not by the homepage URL with a hash.
+**Fix:** `update_post_meta( <form_id>, 'prefill', true )`. Test with `mailster()->get_unsubscribe_link( null, $hash )`, never a hand-built homepage URL.
+**First seen:** Clemente Worcester, 2026-11-06. *(Tier 2 site, master project section, unharvested.)*
+
+### Mailster — activation leaves no tables when the Freemius connection never runs
+**Symptom / When:** Mailster is active and its options exist, including `mailster_dbversion`, but there are zero `mailster_*` tables. The setup wizard loads anyway. Its homepage page's block carries `{"submission":0,"profile":0,"unsubscribe":0}`, because no form existed yet, so the page renders headings with no forms.
+**Why:** On a fresh install, `install()` (`dbstructure()` and the class `on_install` hooks) fires from Freemius's `after_account_connection`, not from activation. No connection, no tables.
+**Fix:** Export the DB, then run `mailster()->install()` once as a real user with `wp --user=<login> eval`. It also creates a list and a form, and subscribes that user: remove with `mailster( 'subscribers' )->remove( $id, null, true, true, false )` (the default only trashes it; the last argument `false` deletes). Then set the homepage block's form ids and the form's `lists` meta. Verify tables through `information_schema` with a control count.
+**First seen:** Clemente Worcester, 2026-11-06. *(Tier 2 site, master project section, unharvested.)*
+
+### Mailster Mailgun add-on — keep the API key out of the DB with a filter
+**Symptom / When:** The add-on stores `mailgun_apikey` in the autoloaded `mailster_options` row, so it travels in every DB export. That matters more when the key can see other domains: check with `GET /v3/domains`, then test events and a test-mode send on another domain before calling it account-wide (on this account a key from Mailgun's domain sending key panel listed all 45 domains and read their details, read its own domain's events, and got 401 on the others' events and sends, so don't assume a sending key is send-only: measure it).
+**Why:** Every read goes through `mailster_option()`, which runs `mailster_option_<name>`. The settings form posts the value back on save.
+**Fix:** Filter `mailster_option_mailgun_apikey` to return the key from a file outside the webroot, and filter `mailster_verify_options` at priority 99 to blank it after the add-on's own verify at 10. Set `mailgun_verified` and schedule `mailster_mailgun_cron` yourself if you configure it outside the settings page. Confirm with a `LIKE` scan of `wp_options`.
+**First seen:** Clemente Worcester, 2026-11-06. *(Tier 2 site, master project section, unharvested.)*
