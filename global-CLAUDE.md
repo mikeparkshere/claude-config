@@ -155,11 +155,11 @@ protect backup archives or static docs. Use file mode (`600`) or a panel NGINX r
 ## Fleet mu-plugins (since 2026-10-19)
 Shared, byte-identical mu-plugins live in the **private repo `mikeparkshere/jbm-mu-plugins`** and are
 deployed by its `bin/mu-sync`; `fleet.conf` there assigns plugins to sites (KB 01, the exception to the
-core-plugin rule). First plugin: **`jbm-mailgun-mailer`** — the standard mail transport.
+core-plugin rule). First plugin: **`mpd-mailgun-mailer`** — the standard mail transport on MPD and JBM properties alike (`MPD_*` constants). jbm001's sites run its predecessor `jbm-mailgun-mailer` and stay on it. Rollout steps: `docs/mailer-rollout-playbook.md` in that repo.
 ⚠️ **Rollout is incomplete. Only jbm001's sites are in `fleet.conf`.** On any other box, at the start of a
 WordPress session, check whether this server is listed (`gh api repos/mikeparkshere/jbm-mu-plugins/contents/fleet.conf
 --jq .content | base64 -d`, or a local clone) and **tell Michael if it isn't** — then offer to: add its rows
-(host = this box's ssh alias), and for each site note how mail is sent — `jbm-mailgun-mailer` already present
+(host = this box's ssh alias), and for each site note how mail is sent — `mpd-mailgun-mailer` or `jbm-mailgun-mailer` already present
 (adopt it: `mu-sync` status should read `current`), a core-plugin SMTP/Mailgun module or an SMTP plugin
 (migration candidate), or nothing (unconfigured — the bigger risk). Report; don't migrate unasked.
 Also check the Mailgun sending subdomain has **MX records** (`mxa`/`mxb.mailgun.org`); without them Exchange-style

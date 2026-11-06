@@ -3032,7 +3032,7 @@ Verify with `has_action()` under a real admin load order (see "Firing admin hook
 add_action( 'phpmailer_init', function( $m ) { error_log( 'FROM: ' . $m->From . ' REPLY: ' . print_r( $m->getReplyToAddresses(), true ) ); } );
 ```
 **First seen:** TAB, 2026-08-31 — spec'ing a submitter autoresponder on WS Form. The SMTP module hooked `wp_mail_from` at priority 99, so the form action's `sales@` had been discarded on every notification since launch without anyone noticing, because the notification reads fine either way.
-**See also:** 04 › Email delivery › "Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails".
+**See also:** 04 › Email delivery › "Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails". New sites use the `mpd-mailgun-mailer` mu-plugin (01), where the same From rule applies.
 
 
 ### `default_category` still references a term with 0 posts — repoint before deleting Uncategorized
@@ -3371,7 +3371,7 @@ wp option update woocommerce_email_from_name 'Site Name'
 ```
 Never assume a plugin's `wp_mail_from` covers WooCommerce — it's a separate From source. Verify with a mail-tester.com send routed through `wp eval 'wp_mail(...)'` and confirm `dkim=pass / spf=pass / dmarc=pass`.
 **First seen:** VMG, 2026-06-07 — Woo mail went out From the admin's own unrelated domain, which publishes `p=reject`, while Mailgun authenticated the client's sending subdomain → rejected outright. Fixed by pointing Woo's From at an address on the authenticated domain; verified 10/10 on mail-tester.
-**See also:** 04 › Email delivery › "Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails".
+**See also:** 04 › Email delivery › "Mailgun SMTP from a core plugin — force From and envelope Sender, or DMARC fails". New sites use the `mpd-mailgun-mailer` mu-plugin (01), where the same From rule applies.
 
 ### WooCommerce — brand transactional emails via SETTINGS, not template overrides (esp. with `email_improvements` ON)
 **Symptom / When:** You need WooCommerce emails on-brand. Tempting to copy `email-header.php`/`email-styles.php` into the theme — don't: `email-styles.php` is version-sensitive and an outdated override silently breaks email layout.
