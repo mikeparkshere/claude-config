@@ -638,6 +638,7 @@ add_filter( 'bricks/dynamic_data/render_content', function( $content, $post, $co
 }, 10, 3 );
 ```
 
+- **A tag used as an image source must register `render_tag` at priority 11 or later.** At 10 from a plugin it runs before Bricks' own `get_tag_value`, and an array return fatals (`03`, the image dynamic-source entry).
 - `render_tag` handles a standalone tag; `render_content` handles a tag embedded in a string (e.g. `tel:{my_tag}` — the prefix makes it a content string, not a standalone tag). A tag used in both contexts needs both filters.
 - **Element `_conditions` resolve via `render_content`, not `render_tag`** — a gate tag registered only on `render_tag` passes through as a literal, and a literal is non-empty, so `empty_not` is always true and the gate never fires. Register both. Boolean gate tags should return `'1'` or `''`.
 - **When you refactor to a shared prefix guard, make it cover every prefix the tag map exposes** — a new tag with a different prefix silently fails the guard. Both failure modes are in `03`.
