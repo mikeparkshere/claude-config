@@ -190,6 +190,10 @@ jobs by API (`/etc/cron.d/runcloud-<user>`, `php<ver>rc … wp-cron.php`, `*/10`
 jbm001 *ideas* there, not the file: stderr → `~/cron-logs/<app>.log` (Clemente job 200747 set the pattern — its staging twin 200748 was deleted with the staging webapp 2026-11-01; Punch 187333 retrofitted 2026-10-06 and XIT 187337 2026-10-16, by PATCH, which needs the full job body —
 `label`, `username`, `command`, `minute`/`hour`/`dayOfMonth`/`month`/`dayOfWeek`, `enabled`;
 the other 10 of 13 still discard stderr, as counted from the API 2026-11-01 — retrofit is an open item) and tier only where a queue actually lags.
+⚠️ **To turn a cron job on or off, use `PATCH /servers/{id}/cronjobs/{id}/status`, not `enabled`** (found 2026-11-08,
+Punch 187333). `"enabled": false` or `0` in the full-body PATCH returns *"successfully updated"* and changes nothing.
+`/status` takes no body and **flips** the job, so read `enabled` back with a GET after the call (and check that the line
+left `/etc/cron.d/runcloud-<user>`). If you call it twice, the job is back where it started.
 
 ## Project conventions
 Three-tier classification: Tier 1 active builds, Tier 2 live Claude-assisted, Tier 3 legacy.
