@@ -302,6 +302,21 @@ Seen on 10.3 (ECT, 2026-10-06). The data filter gets `'sameAs' => ['%%social_acc
 social URLs, dropping a description that just repeats the name) in `seopress_schemas_organization_html`,
 which receives the finished JSON. Done the other way round, the X URL shipped twice.
 
+### 13. Empty `article:author` / `article:publisher` — and `''` is the WRONG fix
+
+Seen on 10.4 (TAB, 2026-11-08). Same NULL-guard bug as #10: with no Facebook page saved,
+`'' !== getSocialAccountsFacebook()` passes and every post prints both tags empty. **Unlike #10, don't fix
+it by saving the key as `''`:** `seopress_social_facebook_og_author_hook()` wraps `article:section` in the
+same `if`, so `article:section` disappears from every post too. Leave the key unsaved and return `''` from
+`seopress_social_og_author` instead.
+
+### 14. Rank Math keeps stale primary-category IDs; SEOPress doesn't fall back
+
+Seen on TAB, 2026-11-08: 3 of 15 `rank_math_primary_category` values pointed at deleted terms (one ID now
+belonged to a HappyFiles folder). RM silently fell back to the post's real category; SEOPress
+`get_category()`s the ID and prints no `article:section`. **Port a primary category only when
+`has_term( $id, 'category', $post )`.**
+
 ### 9. Page cache holds sitemap XML
 
 RunCloud Hub Native cache serves `/sitemaps.xml` and its children. Always `wp runcloud-hub purgeall` after sitemap option changes, and cache-bust (`?cb=$RANDOM`) when verifying by curl.
@@ -407,6 +422,28 @@ capture / configure / port / redirect artifacts. Runbook: `app-ectlive` box, `~/
   301s, so it's harmless. Purge it if the zone token allows.
 - New gotchas: #11 (metabox opener ID), #12 (organization filter runs pre-resolution).
 
+### 7d. Measured: TAB Property Enhancement, 2026-11-08
+
+Fourth port, **the largest so far by redirects and the first on SEOPress 10.4**: 72 sitemap URLs, 37
+exact-match 301s (several hundred hits each), Rank Math schema module already off (all JSON-LD in the core
+plugin). **3 seconds of maintenance mode**, because everything was staged inert first: redirects moved to
+`.htaccess` *while RM was still active*, core-plugin SEOPress hooks deployed and proven a no-op by a head
+diff, SEOPress installed inactive, meta ported and options written before activation. Runbook and
+artifacts: `mpd2026` box, `~/backups/tab-seopress-2026-11-08/`. Reusable tools: `~/bin/head_capture.py`
+(capture + diff) and `~/bin/redirect_check.sh` (TSV-driven check + `.htaccess` generator).
+
+- **Pre-writing the config before activation is safe.** Activation seeds nothing, and `Options/Init` only
+  seeds an option that is *missing*. That's what makes a seconds-long window possible.
+- **Relative `RedirectMatch` targets emit `Location: http://…` behind nginx** (Apache sees plain HTTP),
+  adding an http→https hop. Use absolute `https://` targets. Probe with a throwaway path first.
+- **10.4 adds a merged `@graph` printer** (`src/Services/Schemas/SchemaGraph.php`). On a core-plugin-schema
+  site, silence `seopress_schemas_graph_html` and return false from `seopress_schemas_graph_enabled`,
+  alongside the website/organization filters. Verify one `ld+json` per page.
+- New gotchas: #13 (article:section shares the Facebook guard), #14 (stale primary-category IDs).
+- Result: canonicals and the sitemap URL set identical; only accepted differences remain (list in the TAB
+  checklist, 2026-11-08). The Rank Math Slack "Written by: <login>" labels disappear. That's a fix, not a
+  regression: they leak the WP login name.
+
 ---
 
 ## 8. Decision inputs
@@ -425,8 +462,8 @@ capture / configure / port / redirect artifacts. Runbook: `app-ectlive` box, `~/
 - Migration cost is per-site and non-trivial for anything with schema or redirects.
 
 **Still unknown**
-- One RankMath port executed (Punch, §7a): small, clean, about 20 minutes. Still unmeasured on a site with volume, redirects or plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
-- SEOPress Pro has not been trialled on any site.
+- Four Rank Math ports executed (§7a–§7d), up to ~60 clicks/day, 37 redirects and plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
+- SEOPress Pro has been trialled once: MMHN ran PRO 10.2.1, and it was **removed 2026-10-08**, its Woo jobs moved to the core plugin (KB 03). Every port since has been Free.
 - No SEOPress site has been through a full indexing cycle yet, so there is no ranking or Search Console evidence either way.
 
 ---
