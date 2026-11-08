@@ -141,8 +141,8 @@ webapp is nginx → Apache → FPM and **honors `.htaccess`**, so Apache directi
 sudo and no panel — every webapp checked so far is hybrid, WordPress and static alike. This is easy to
 miss because the boxes read as nginx-only. Prove it in a scratch dir before relying on it (drop a
 `<FilesMatch>` deny, curl the file, expect 200 → 403), put the block **after `# END WordPress`** on WP
-sites since WP overwrites its own markers, and verify with `?cb=$RANDOM` — `x-runcloud-cache` serves
-pre-change copies and will show a 200 over a rule that is already working, while Cloudflare reports
+sites since WP overwrites its own markers, and verify with `?cb=$RANDOM` — the page cache (`x-runcloud-cache`
+on RunCloud Hub; `x-runcache-status` on RunCache 1.x, e.g. TAB since 2026-11-08) serves pre-change copies and will show a 200 over a rule that is already working, while Cloudflare reports
 `DYNAMIC` and looks innocent. A security rule "verified" without a cache-buster can be recorded as fixed
 over a still-live exposure. A belief that `.htaccess` was inert here had already cost one project a PHP
 redirect layer it never needed.
