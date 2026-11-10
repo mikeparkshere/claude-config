@@ -1,6 +1,6 @@
 ---
 name: mpd-bricks-stack
-description: "Use when building or modifying a Michael Parks Design WordPress site on Bricks Builder + Automatic.css (ACSS): writing Bricks element trees or global classes via WP-CLI, discovering Bricks schemas, applying ACSS tokens, BEM structure and styling-layer order, registering ACF fields in PHP, wiring WS Form or Rank Math, or diagnosing non-obvious Bricks/ACSS/ACF behavior. NOT for generic WordPress work with no Bricks or ACSS involvement, static HTML sites, or server administration."
+description: "Use when building or modifying a Michael Parks Design WordPress site on Bricks Builder + Automatic.css (ACSS): writing Bricks element trees or global classes via WP-CLI, discovering Bricks schemas, applying ACSS tokens, BEM structure and styling-layer order, registering ACF fields in PHP, wiring WS Form or Rank Math, writing BricksExtras elements, or diagnosing non-obvious Bricks/ACSS/ACF/BricksExtras behavior. NOT for generic WordPress work with no Bricks or ACSS involvement, static HTML sites, or server administration."
 ---
 
 # MPD Bricks stack

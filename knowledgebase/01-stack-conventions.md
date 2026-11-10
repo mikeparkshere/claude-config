@@ -8,7 +8,9 @@ Verified against Bricks 2.3.4 / ACSS 3.3.6. V1 baseline: 2026-05-24.
 
 ## The stack
 
-WordPress + Bricks Builder 2.3.4+ + Automatic.css (ACSS) 3.3+ + ACF Pro + WS Forms Pro + RankMath Pro + Perfmatters, hosted on RunCloud / DigitalOcean. Claude Code via VSCode Remote-SSH is the build tool.
+WordPress + Bricks Builder 2.3.4+ + Automatic.css (ACSS) 3.3+ + BricksExtras 1.7+ + ACF Pro + WS Forms Pro + RankMath Pro + Perfmatters, hosted on RunCloud / DigitalOcean. Claude Code via VSCode Remote-SSH is the build tool.
+
+**BricksExtras is standard on every build** (added to the stack 2026-11-10). Its elements are opt-in per site and render nothing until switched on (BricksExtras → Elements, or `update_option( 'bricksextras_<element>', '1' )`); element schemas are in `02`, gotchas in `03` → BricksExtras.
 
 `[stack:acss]` ACSS in that list is the fleet default, not a universal. A project declaring `stack: bricks-native` runs with no ACSS and takes its replacements from its stack file (`00`, read protocol step 4).
 

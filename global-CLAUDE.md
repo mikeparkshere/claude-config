@@ -37,7 +37,7 @@ ded3732) and a cron mandate was invented that never existed. When a house conven
 to an unfamiliar environment, establish which layer it belongs to first.
 
 ## Stack
-WordPress, Bricks Builder, ACSS v3, ACF Pro (registered via PHP, never UI), 
+WordPress, Bricks Builder, ACSS v3, BricksExtras, ACF Pro (registered via PHP, never UI), 
 WS Forms Pro, RankMath Pro, Perfmatters. Custom plugins, no logic in functions.php.
 Servers: DigitalOcean managed via RunCloud — **the default, not the only case**; client-owned and bare
 boxes happen, and the Ops layer above does not follow onto them. Dev via VSCode Remote-SSH.
