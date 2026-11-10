@@ -156,7 +156,8 @@ protect backup archives or static docs. Use file mode (`600`) or a panel NGINX r
 Shared, byte-identical mu-plugins live in the **private repo `mikeparkshere/mpd-mu-plugins`** and are
 deployed by its `bin/mu-sync`; `fleet.conf` there assigns plugins to sites (KB 01, the exception to the
 core-plugin rule). First plugin: **`mpd-mailgun-mailer`** — the standard mail transport on MPD and JBM properties alike (`MPD_*` constants). jbm001's sites run its predecessor `jbm-mailgun-mailer` and stay on it. Rollout steps: `docs/mailer-rollout-playbook.md` in that repo.
-⚠️ **Rollout is incomplete. Only jbm001's sites are in `fleet.conf`.** On any other box, at the start of a
+⚠️ **Rollout is incomplete. `fleet.conf` covers jbm001's sites plus single rows on mpd2026 (monitor only) and
+vtla0225 (as of 2026-11-10); every other box is unlisted.** On any other box, at the start of a
 WordPress session, check whether this server is listed (`gh api repos/mikeparkshere/mpd-mu-plugins/contents/fleet.conf
 --jq .content | base64 -d`, or a local clone) and **tell Michael if it isn't** — then offer to: add its rows
 (host = this box's ssh alias), and for each site note how mail is sent — `mpd-mailgun-mailer` or `jbm-mailgun-mailer` already present
@@ -165,6 +166,10 @@ WordPress session, check whether this server is listed (`gh api repos/mikeparksh
 Also check the Mailgun sending subdomain has **MX records** (`mxa`/`mxb.mailgun.org`); without them Exchange-style
 receivers reject every message while Gmail tests pass (KB 04, FMED 2026-10-19). Remove this ⚠️ once every
 server is in `fleet.conf`.
+⚠️ **Vultr boxes all default to hostname `vultr`**, and `mu-sync` and `mail-monitor` pick a box's local rows by
+hostname, so two Vultr boxes would each run the other's rows. On a Vultr box, write its RunCloud server name to
+`~/.fleet-host` (both tools read it first) and use that name as the row's host. vtla0225 does this; mpd2026's
+`tab-staging` row still uses `vultr` and works only because mpd2026 has no `~/.fleet-host`.
 
 ## Cron (server jbm001, all 11 webapps)
 WP-Cron disabled site-side (`DISABLE_WP_CRON=true` in every wp-config.php). Driven by the
