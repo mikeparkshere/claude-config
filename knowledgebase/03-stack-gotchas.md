@@ -4924,15 +4924,20 @@ Height is the element's own `height` control, which emits on a global class, wit
     'tag'                             => 'nav',                // div | nav | aside
     'contentSelector'                 => '.legal-doc__body',   // the post-content element's class
     'headingSelectors'                => [ 'h2', 'h3' ],       // multi-select → array
-    'autoID'                          => true,                 // adds ids (prefix "heading-") to headings without one
+    'autoID'                          => true,                 // adds ids to headings without one
+    'autoIDText'                      => 'text',               // prefix | text: 'text' gives #disclosure-of-your-information, stable and shareable; the default 'prefix' gives #heading-0, which shifts when sections move
     'conditionalDisplay'              => 'enable',
     'conditionalDisplayValue'         => 2,                    // hide when fewer headings are found
     'headerText'                      => 'On this page',
     'headerAriaLabel'                 => 'On this page',
     'header_icon'                     => [ 'library' => 'themify', 'icon' => 'ti-angle-down' ],   // the control's default; set it on CLI writes or the header has no icon
     'closeBreakpoint:tablet_portrait' => 'true',               // string 'true'/'false'; collapsed below 992px
+    'smoothScroll'                    => 'false',              // see below: BE's smooth scroll ignores scroll-margin-top
+    '_attributes'                     => [ [ 'id' => 'tocnav', 'name' => 'aria-label', 'value' => 'On this page' ] ],   // BE labels only its toggle, not the <nav> (`01`: every nav is labeled)
     '_cssGlobalClasses'               => [ '<class id>' ],
 ] ]
 ```
-Pair it with `scroll-margin-top` on the body's headings (`02` → post-content). A sticky rail beside the body: put the aside **first** in the HTML (it stacks above the body on phones) and give the grid `_gridAutoFlow: 'dense'` — without it the aside's `_gridItemColumnSpan: '2'` moves the auto-placement cursor past column 1 and the body drops to row 2.
-**First seen:** ETS, 2026-11-10 — legal-document single; the first CLI write rendered the body under the ToC on desktop, caught only once a headless browser measured it.
+Pair it with `scroll-margin-top` on the body's headings (`02` → post-content), **and set `smoothScroll: 'false'`**: BE's smooth scroll computes its own target with `smoothScrollOffset` (px only, default 0) and ignores `scroll-margin-top`, so headings land flush at the top (measured 0–1px; with it off, 45px = `--space-l`). The native anchor jump also honors reduced-motion.
+
+**Native `post-toc` vs BE, compared (Bricks 2.4.5 / BE 1.7.4, source + render):** both add missing heading ids (native from heading text by default), highlight the active item, and support selectors and an offset. Native renders a bare `<nav aria-label="Table of contents">` with built-in sticky, on Bricks' tocbot alone (3.7 KB gz). BE adds a collapsible header (start closed per breakpoint), **hide below N headings** (native leaves an empty labeled landmark on a document with none), list types and counters, at +3.3 KB gz (its script + CSS). Pick BE when documents vary in length or a phone layout stacks the ToC above the text; pick native for a fixed rail on uniformly long content. A sticky rail beside the body: put the aside **first** in the HTML (it stacks above the body on phones) and give the grid `_gridAutoFlow: 'dense'` — without it the aside's `_gridItemColumnSpan: '2'` moves the auto-placement cursor past column 1 and the body drops to row 2.
+**First seen:** ETS, 2026-11-10 — legal-document single; the first CLI write rendered the body under the ToC on desktop, caught only once a headless browser measured it. The element was first chosen without a native comparison; the comparison above was run afterward, at Michael's request, and confirmed BE.
