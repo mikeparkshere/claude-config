@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-344 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+346 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -188,6 +188,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - Front-end-only CSS: the builder canvas strips `bricks-is-frontend`, and Bricks' component preview keeps it — scope page-shell rules to both facts
 - Bricks image element has no `sizes` control — WordPress derives `sizes` from the chosen image size, so Full ships the original
 - Bricks native `breadcrumbs` climbs the post CATEGORY on blog singles — "Home / Uncategorized / Title"
+- A Bricks outline button takes the Theme Style's primary button text color — on-accent text on a transparent fill
 
 **BricksExtras**
 
@@ -248,6 +249,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - ACSS flow-spacing `[class*="woocommerce"] * + p > * + *` leaks into Woo form rows — and fires on every page `[stack:acss]`
 - ACSS `option-forms` ships ~145 KB of `.form--light` / `.form--dark` rules — about 40% of `automatic.css`, used only if an element carries those classes `[stack:acss]`
 - Right-click in a Bricks field opens Advanced Themer's near-empty variable panel, not the ACSS menu — AT's "CSS Variables Picker" takes the click `[stack:acss]`
+- Removing ACSS: it styles Bricks elements by element type, not by class — a DB-only port silently loses section layout, gaps, the button box and rich-text flow `[stack:acss]`
 
 **ACF**
 
@@ -446,6 +448,7 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - A regex delete across a PHP file can silently remove hundreds of lines — and `php -l` will not notice
 - A hidden tab freezes transitions and `requestAnimationFrame` — a focus ring "missing" and a measurement script that hangs
 - Diagnostic: stop reasoning about the cascade — dump the matched CSS rules via CDP
+
 
 ## WordPress + Bricks Builder
 
@@ -1294,7 +1297,8 @@ foreach ( get_option( 'bricks_components', [] ) as $comp ) {
 // …then add the post-meta walk on top of $used before deciding what to prune.
 ```
 The same blind spot applies to any audit keyed on post meta: silent-strip audits, dynamic-tag usage scans, `_cssCustom` sweeps, element-bound-styling audits. Components are a second home for element data and must be walked explicitly.
-**First seen:** Clemente, 2026-07-25 — a newsletter CTA saved as a component; six of its classes dropped out of post meta entirely. Caught before the sweep ran, minutes after the same session had pruned three genuinely orphaned classes with a post-meta-only scan.
+**Ports and rewrites have the same blind spot.** A script that rewrites settings across `_bricks_page_*_2` (a framework retrofit, a color remap, a `style` migration) skips every element inside a component, and a placement looks like an empty section in the tree: `{"name":"section","settings":[],"cid":"<component id>"}`. Walk `bricks_components[*].elements` in the same pass, and treat an empty-settings element with a `cid` as "go read the component", never as "nothing here".
+**First seen:** Clemente, 2026-07-25 — a newsletter CTA saved as a component; six of its classes dropped out of post meta entirely. Caught before the sweep ran, minutes after the same session had pruned three genuinely orphaned classes with a post-meta-only scan. · **ETS, 2026-11-10** — an ACSS retrofit's tree walk missed a Page Header component placed on seven pages: two buttons kept `style: btn--primary` and two of its classes kept ACSS colors that no longer resolved. The prune sweep (which did union components) is what surfaced it.
 
 ### Pruning orphaned global classes CASCADES — a class's `_cssCustom` can be the only reference keeping its siblings alive
 **Symptom / When:** You run an orphan sweep, prune what it reports, and the site is fine. Re-run it and it reports *more* orphans that it had correctly declined to list a moment earlier. The sweep looks unstable.
@@ -2072,6 +2076,12 @@ Prove the harness with a known difference first, and check the class option's ha
 Keep `$items[0]` (Bricks' Home item) so the element's home label and icon settings still apply, and rebuild what follows. Return an **empty array** to suppress the element entirely, which keeps trails off primary-nav destinations. Related: `bricks/breadcrumbs/home_label`, `bricks/breadcrumbs/separator`. Define the trail once and have any legacy shortcode path read the same function; two copies of breadcrumb branching diverge. This is the visual trail only; separately emitted `BreadcrumbList` JSON-LD is unaffected.
 **First seen:** MMHN, 2026-07-21 — consolidating four templates onto the native element. The news single regressed from `Home / News / {title}` to `Home / Uncategorized / {title}`; caught because one canary template was converted and rendered before the other three.
 
+### A Bricks outline button takes the Theme Style's primary button text color — on-accent text on a transparent fill
+**Symptom / When:** A Button with `style: primary` and `outline: true` renders with near-invisible text: pale on a light section. Filled primary buttons on the same page look right.
+**Why:** An outline button renders `bricks-button outline bricks-color-primary` (not `bricks-background-primary`). The Theme Style's primary button typography is emitted for **both** variants — `.bricks-button:where(.bricks-background-primary), .bricks-button:where(.bricks-color-primary) { color: … }` — while the background rule is `:not(.outline)`. So the outline gets the text color meant to sit on the filled accent.
+**Fix:** Style outline variants on their class: text and 2px border in the accent, `_background:hover` accent, `_typography:hover` on-accent (`_border` shape: `width {top,right,bottom,left}`, `style`, `color {raw}`). A rule that sets a button's full `border` shorthand (a parity layer, a reset) will override the class's border color at higher specificity; set width and style only.
+**First seen:** ETS, 2026-11-10 (Bricks 2.4.5, mpd-core Theme Style) — after converting ACSS `btn--primary` + outline to Bricks `primary`, the header's secondary button text measured `#ECEFF8` on a `#F4F4F4` band.
+
 ## BricksExtras
 
 ### BricksExtras element `name` strips hyphens from the file basename
@@ -2618,6 +2628,18 @@ wp option get bricks-advanced-themer__brxc_builder_tweaks_for_classes --format=j
 ```
 Check it in the builder: `ADMINBRXC.globalSettings.classFeatures` should not contain `variable-picker`, and right-clicking a field's variable icon should open the ACSS menu. **ACSS sites only:** on a native-Bricks (`mpd-core`) site every token lives in the Bricks Variable Manager, so AT's panel is the complete list and the right picker; leave it on there.
 **First seen:** goth-tour, 2026-10-19 — "a conventional Bricks setup so variables appear as dropdowns" looked like a missing integration. ACSS 3.3.6 / AT 3.5 / Bricks 2.4.3. Both goth-tour and goth-members had the picker on; fixed on both the same day, with the ACSS menu confirmed in the builder. Whether AT ships it on by default is unchecked, so run the check on every ACSS site that has AT.
+
+### Removing ACSS: it styles Bricks elements by element type, not by class — a DB-only port silently loses section layout, gaps, the button box and rich-text flow `[stack:acss]`
+**Symptom / When:** You retrofit a site off ACSS (`stacks/bricks-native.md`). Every class and tree var is ported, the guard says every `var()` resolves, rendered HTML matches the baseline element-for-element — and the site still looks wrong: horizontal rows collapse, containers lose their spacing, buttons shrink, rich text tightens or loosens.
+**Why:** ACSS ships structural rules keyed on **element type and Bricks element classes**, not on anything stored in the database, so no DB scan sees what the layouts were leaning on. From compiled ACSS 3.3.6 (`automatic.css` / `automatic-bricks.css`):
+- `section:where(:not(.bricks-shape-divider))` → `display:flex; flex-direction:column; align-items:center; gap: var(--container-gap)`
+- `section > div:where(:not(.bricks-shape-divider))` → flex column, `align-items:flex-start`, `gap: var(--content-gap)` — **both axes**
+- `:where(.brxe-block)`, `:where(.brxe-div)` → `gap: var(--content-gap)` — both axes (mpd-core's Theme Style sets **row-gap only**, so every row layout that relied on the column gap collapses)
+- `[class*="btn--"]:where(:not(.btn--none, .wp-block-button))` → the whole button box: `--btn-padding-block/-inline` (0.35em / 0.65em), `min-inline-size: 8.75rem`, `line-height: 1`, weight 600, 2px border, `--btn-radius`. A Bricks button whose `style` is `btn--primary` renders class `bricks-background-btn--primary`, which matches `[class*="btn--"]`; switch `style` to `primary` and the box goes with it.
+- `.brxe-text` / `.brxe-post-content` flow: paragraph spacing 1em, heading spacing 1.2em, list indent 2em, list items 0.5em. mpd-core's contextual spacing defaults (`--space-s` / `--space-l`) are visibly looser.
+- `:where(h1…h6)` → `text-wrap: pretty`.
+**Fix:** Before the swap, extract these from the site's own compiled ACSS (a `python -I` regex over `automatic*.css`, filtered to `brxe-`/element selectors) — values vary per install. After the swap, restore parity in two places: set the Theme Style's contextual spacing to ACSS's values (`contextualSpacingHeading: 1.2em`, `contextualSpacingParagraph: 1em`, custom targets `1em`), and put the structural rules in a labeled **parity layer** in the child theme with **ACSS's own selectors and specificity**, so classes keep winning exactly as they did. Scope the button box to `.brxe-button.bricks-button`; give it `border-width`/`border-style` only and `border-color: transparent` on `:not(.outline)`, or it hides outline borders. The layer is transitional: retire it rule by rule as layouts move onto BEM classes.
+**First seen:** ETS, 2026-11-10 — a live retrofit (fixed forward at the client's choice). Structural checks were all green after the swap; the client reported "page layouts are off, buttons are off, spacing is inconsistent." The parity layer brought it to "closer to accurate and usable" in one pass.
 
 ## ACF
 

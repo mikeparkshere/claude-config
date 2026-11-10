@@ -1,6 +1,6 @@
 # Stack: bricks-native
 
-**Status: 0.3.0.** Proven on its first production site (pkjsupport, live 2026-10-07) and extracted from it, then on a first ACSS retrofit (MFH, live 2026-11-04). The framework package lives at `frameworks/mpd-core/`.
+**Status: 0.3.0.** Proven on its first production site (pkjsupport, live 2026-10-07) and extracted from it, then on a first ACSS retrofit (MFH, live 2026-11-04), then a live retrofit fixed forward on production (ETS, 2026-11-10). The framework package lives at `frameworks/mpd-core/`.
 
 A `bricks-native` site runs Bricks with **no Automatic.css installed**, ever: not deactivated, not "for reference." Tokens live in the Bricks Style Manager. A small framework plugin, **mpd-core**, carries the subset of ACSS v3 conventions in actual use (measured by an audit across five sites).
 
@@ -56,19 +56,24 @@ framework: mpd-core <version> (frameworks/mpd-core in claude-config)
 
 First done on MFH, 2026-11-04: 16 trees and 495 elements in one working session. Measure before you commit to it: count the ACSS classes and variables actually used on published trees, excluding revisions, which can inflate the count tenfold.
 
-1. **Take a baseline first:** HTML and screenshots of every URL, plus a database export. Run updates before the swap and compare, so update fallout doesn't get blamed on the port.
+1. **Take a baseline first:** HTML and screenshots of every URL, plus a database export. Run updates before the swap and compare, so update fallout doesn't get blamed on the port. No browser on the box is not a reason to skip screenshots: `04` → "Headless Chrome on a RunCloud box without root".
+   **Read the values from the site's compiled ACSS, not its settings screen.** Fluid tokens are `calc(min + slope * ((100vw - 22.5rem) / 50))`, so the denominator gives the real range (ETS: 360–1160px, with `--content-width` 72.5rem, not the framework's 1366). Set `meta.fluid_min/max` and `--content-width` to match, or every fluid token shifts. Steps whose min exceeds their max (ACSS `--space-xs`, `--text-xs`, `--h6` on some installs) shrink as the viewport grows; pin them.
 2. **Deactivate ACSS; don't run both.** `--space-*`, `--text-*` and `--h*` collide. On a site with an audience, do this behind a maintenance page that depends on neither stack (`04`).
 3. **Set the root size explicitly.** A Theme Style `typographyHtml` of `var(--root-font-size)` now resolves from the Style Manager. Unresolved, Bricks can fall back to 62.5%, which shifts every rem.
-4. **Map colors by role, not by name.** One ACSS name can be a fill, a border and text at once. Read each use's setting path. Rewrite CSS inside Code elements too, then re-sign them (`03`).
+4. **Map colors by role, not by name.** One ACSS name can be a fill, a border and text at once. Read each use's setting path. Rewrite CSS inside Code elements too, then re-sign them (`03`). **Walk everything that holds settings**, not just `_bricks_page_*_2`: `bricks_components[*].elements` (a placement is an empty section with a `cid`, `03`), `_bricks_page_settings` (e.g. `siteBackground`), and every class that survives the prune, not only those the trees reference.
 5. **Recover class roles from the ID.** Refs to removed ACSS classes are `acss_import_<name>`, so `btn--primary` still tells you the element was a primary button: set `style: primary` before dropping it. Also strip leftover color `id` / `name` keys and `_mappedId` (`03`).
-6. **Guard the write:** every `var()` in classes and trees must resolve to a token, or stop. Then read back from a fresh process; a real administrator is required for tree writes (`00`).
+6. **Guard the write:** every `var()` in classes and trees must resolve to a token, or stop. Then read back from a fresh process; a real administrator is required for tree writes (`00`). After the swap, run the same check on the **rendered pages**: collect each page's inline styles and stylesheets (including Perfmatters' `data-pmdelayedstyle` links), and list every `var(--x)` used without a fallback that nothing defines. Expected noise: core's runtime `--wp--*` and builder-tool vars. Anything else is a missed reference.
 7. **Clear the child theme:** `:root` type ladders (they load last and win) and any `* { border-color … !important }`, which beats every component border.
-8. **Check what ACSS was quietly covering:** Gutenberg post content, WS Form skinning, and button padding, weight and transform.
-9. **Open every builder page after the swap.** The builder can peak near a stock 128M limit (`04`).
+8. **Check what ACSS was quietly covering — and plan a parity layer for it.** ACSS styles Bricks elements **by element type** (section flex and `--container-gap`, both-axis gaps on containers/blocks/divs, the `[class*="btn--"]` button box, rich-text flow), which no DB scan sees, so a port that passes every structural check can still look wrong. Extract the rules from compiled ACSS before the swap, then restore them in a labeled child-theme parity layer with ACSS's selectors and specificity, and set the Theme Style's contextual spacing to ACSS's values. Full rule list and the button-border trap: `03` → "Removing ACSS: it styles Bricks elements by element type". Also check Gutenberg post content, WS Form skinning, and outline buttons (`03` → "A Bricks outline button takes the Theme Style's primary button text color").
+9. **Clear Perfmatters' used-CSS snapshots after every CSS write** if Remove Unused CSS is on: `wp perfmatters clear-used-css` (`04`). They outlive a Bricks regen.
+10. **`seed-pattern-classes.php` reports "all present" when ACSS imported the same names** (`focus-parent--shadow` with id `acss_import_focus-parent--shadow`). That works, since mpd-core's CSS targets names, but those ids then survive the prune by name. Map imported templates' pattern-class ids onto the site's existing ids by name.
+11. **Open every builder page after the swap.** The builder can peak near a stock 128M limit (`04`).
 
 ## Known limits (0.3.0)
 
 - **A single-context dark site needs no mechanism** (MFH): purpose tokens simply take dark values. Placeholder values are light-first only.
 - **Light/dark context switching is undesigned.** The purpose tier is built for it (a context re-points purpose tokens, components don't change), but no mechanism ships yet. The first site that needs a second context decides it.
-- **No secondary button, no weighted grids beyond `--grid-1-2` / `--grid-2-3`, no `.eyebrow`.** Each needs a design call; see `frameworks/mpd-core/CHANGELOG.md`.
+- **No secondary button, no weighted grids beyond `--grid-1-2` / `--grid-2-3`, no `.eyebrow`.** Each needs a design call; see `frameworks/mpd-core/CHANGELOG.md`. ETS needed two more variants (ACSS `btn--primary-dark` / `-light`) and solved them with BEM modifier classes on the component.
+- **Outline buttons aren't styled by the Theme Style.** The primary typography color applies to `.bricks-color-primary` too, so an outline primary gets on-accent text on a transparent fill (`03`). Until the framework ships an outline rule, style outlines on their class.
+- **Purpose tokens a retrofit tends to need** beyond the framework set (ETS, 14 of them): an inverse context for a dark footer and photo hero (`color-bg-inverse`, `color-text-inverse`, `-inverse-muted`), a non-accent "action" fill for form submits, overlay and shadow colors, an accent border. Candidates for the framework once a second site needs them.
 - **Verified on Bricks 2.4.2 and 2.4.5**, with WS Form Pro 1.12 and BricksExtras 1.7.4 (2.4.2), and WS Form Pro 1.12.18 and 1.12.19 (2.4.5). Re-check the Style Manager row shapes (`02`) on a newer Bricks before trusting a CLI token write.
