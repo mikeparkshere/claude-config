@@ -105,6 +105,17 @@ Discovery workflow:
 
 When a schema is not in the library below, this is how you get it. An incomplete schema library is expected — the golden rule is the method for filling it.
 
+### Verifying a CLI-written tree — a no-change save proves nothing (Bricks 2.4.5)
+
+When a shape had to be written from control definitions (no builder-saved example anywhere), the builder still has to see it. **Opening and saving with no edits does not do that:** the save posts the global classes and a screenshot, but no `content`, so the tree is never re-submitted (`03` → "A Bricks builder save does not bump `post_modified`…", corrected 2026-11-10). Two methods that do work:
+
+1. **Builder memory after load.** The validator runs on load, so the builder's in-memory tree *is* the validated tree. Read `document.querySelector('*')…__vue_app__.config.globalProperties.$_state.content` (find the element carrying `__vue_app__`) and diff it against the DB, element by element.
+2. **A carried save.** Make a builder-only edit (an element `label`), save, and diff the DB tree against the pre-save snapshot: the label should be the only change. Then the tree has genuinely been through a builder save.
+
+Both run without a person at the builder: headless Chromium on the box (`04` → "Headless Chrome on a RunCloud box without root"), an admin session minted with `WP_Session_Tokens::get_instance( $uid )->create( $exp )` plus `wp_generate_auth_cookie()` for `logged_in` and `secure_auth` (cookie file mode 600; `->destroy()` the token afterward), ready when `#bricks-toolbar-top` and `#bricks-builder-iframe` exist (2.4.5), save with Ctrl+S. Capture save payloads by wrapping `XMLHttpRequest.prototype.send` in an init script: the network layer won't expose the multipart screenshot request.
+
+⚠️ **Entries below that say a shape "survived a builder open-and-save with no changes" or a "builder round-trip clean" without naming an edit were verified for render and for classes, not for the tree.** Treat their element-tree keys as source-read until re-checked by one of the two methods above.
+
 **A sibling install is a legitimate golden-rule source.** When this install has no builder-saved example of a shape, read one from another project's builder-saved output — `bricks_global_classes` (an option, so no builder session needed) or a template's `_bricks_page_content_2`. It is builder-saved output either way, and cheaper than a discovery session. It is weaker only when the Bricks versions diverge, so compare versions first. Several WCDP schemas below were lifted this way from MMHN and then proven rendering on WCDP.
 
 ### Discovery cost — the golden rule can evict itself
@@ -443,7 +454,7 @@ Full `srcset`, the attachment's own alt, field stays client-editable. Works for 
 
 ## Text link, Shortcode and WS Form elements (builder-verified — pkjsupport, 2026-10-07, Bricks 2.4.2)
 
-Read from the element control definitions, rendered, then opened and saved in the builder with no changes; every key survived.
+Read from the element control definitions and rendered. ("Opened and saved in the builder with no changes; every key survived" was also recorded here; a no-change save doesn't re-post the tree, so that step didn't test these keys — see "Verifying a CLI-written tree".)
 
 ```php
 [ 'name' => 'text-link', 'settings' => [ 'text' => '{post_title}', 'link' => [ 'type' => 'meta', 'useDynamicData' => '{post_url}' ] ] ]
@@ -1104,7 +1115,7 @@ $field->meta->data_grid_radio = [
 
 ## Nav menu and logo (verified — pkjsupport, 2026-10-04, Bricks 2.4.2)
 
-Sibling builder-saved readback on Bricks 2.3.8, keys re-checked against the 2.4.2 control definitions, rendered and function-tested, then survived a builder open-and-save with no changes.
+Sibling builder-saved readback on Bricks 2.3.8, keys re-checked against the 2.4.2 control definitions, rendered and function-tested. (A no-change builder open-and-save was also recorded; it doesn't re-post the tree — see "Verifying a CLI-written tree".)
 
 ```php
 // nav-menu element
