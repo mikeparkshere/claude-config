@@ -157,7 +157,7 @@ Shared, byte-identical mu-plugins live in the **private repo `mikeparkshere/mpd-
 deployed by its `bin/mu-sync`; `fleet.conf` there assigns plugins to sites (KB 01, the exception to the
 core-plugin rule). First plugin: **`mpd-mailgun-mailer`** — the standard mail transport on MPD and JBM properties alike (`MPD_*` constants). jbm001's sites run its predecessor `jbm-mailgun-mailer` and stay on it. Rollout steps: `docs/mailer-rollout-playbook.md` in that repo.
 ⚠️ **Rollout is incomplete. `fleet.conf` covers jbm001's sites plus single rows on mpd2026 (monitor only) and
-vtla0225 (as of 2026-11-10); every other box is unlisted.** On any other box, at the start of a
+vtla0225, and app-nfhl + app-mpdclient on mpd2025_01 (as of 2026-11-12); every other box is unlisted.** On any other box, at the start of a
 WordPress session, check whether this server is listed (`gh api repos/mikeparkshere/mpd-mu-plugins/contents/fleet.conf
 --jq .content | base64 -d`, or a local clone) and **tell Michael if it isn't** — then offer to: add its rows
 (host = this box's ssh alias), and for each site note how mail is sent — `mpd-mailgun-mailer` or `jbm-mailgun-mailer` already present
