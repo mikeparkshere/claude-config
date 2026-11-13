@@ -405,6 +405,38 @@ to 50 and sorts by the first metric, so rare events get truncated (use `--limit 
 
 ---
 
+## DataForSEO (agency-wide account, spend-capped)
+
+Script: `~/claude-config/bin/dfs.py`: live SERPs with AI Overview references, keyword search volume, and a domain's
+ranked keywords. It answers what GSC can't: a **real organic rank** (GSC averages fold AI Overview citations and the
+local pack into "position"), whether TAB is **named or only cited** in an AI Overview, and **volume** for terms a
+site doesn't rank for yet.
+
+```bash
+python3 ~/claude-config/bin/dfs.py serp "pergola installation ohio" --location "Cleveland,Ohio,United States" --find tabpropertyenhancement.com
+python3 ~/claude-config/bin/dfs.py volume "paver patio cost" "outdoor kitchen cost" --location "Ohio,United States"
+python3 ~/claude-config/bin/dfs.py spend      # this box: today / month / by webapp
+python3 ~/claude-config/bin/dfs.py balance    # account balance (free)
+```
+
+**It costs real money on one shared account, so:**
+- ⛔ **Raising a cap or adding an endpoint needs Michael's OK in the session.** Caps live in `~/.dataforseo/config.json`
+  (defaults: **$0.25 per call · $2 per box per day · $15 per box per month**) and are checked before every paid call
+  against a worst-case estimate. There is deliberately no flag to exceed one.
+- **Batch, don't loop.** `volume` takes up to 100 keywords in one call for the price of one. A shell loop over `serp`
+  is the way to run up a bill; if a task needs more than ~20 SERPs, say so and get a go-ahead first.
+- **`--dry-run` first** for anything new: it prints the request and the worst-case cost and calls nothing.
+- Repeats are free for a while (cache: SERP 24 h, volume 30 days, ranked 7 days). `--fresh` pays again.
+- Every paid call is logged with its **billed** cost to `~/.dataforseo/ledger.jsonl` (with the webapp and `--note`).
+  If one call ever bills high, the estimate for that endpoint rises to match and the per-call cap starts refusing
+  it. That's a signal to look, not a bug to clear.
+- The caps are **per box**. The account-wide backstop is the spending limit in the DataForSEO dashboard.
+
+Setup on a new box: from the Mac, `scp` a one-line `login:password` file (the **API** login from the dashboard, not
+the account password) to `~/.dataforseo/credentials`, then `chmod 700 ~/.dataforseo; chmod 600 ~/.dataforseo/credentials`.
+The script refuses a credentials file anyone else can read. Never in this repo, never in `~/.env`, never pasted
+into chat. Verify with `dfs.py balance`.
+
 ## Suspending a site (billing hold)
 
 `~/claude-config/bin/site-suspend on|off <app>` (and `status`) puts any hybrid webapp behind a 503 "temporarily unavailable" page and purges the page cache; `off` restores `.htaccess` exactly. Mechanism, flags and limits: `knowledgebase/04-hosting-cutover.md`, the `site-suspend` entry. Record the suspension in the webapp's CLAUDE.md.
