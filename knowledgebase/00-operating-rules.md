@@ -19,6 +19,8 @@ The knowledgebase is six files:
 - **04-hosting-cutover.md** — non-obvious **hosting layer** behaviors: the box, the CDN, the caches, and the cutover itself (RunCloud, RunCache, Cloudflare, ShortPixel, Perfmatters). Same catalog contract as `03`.
 - **99-project-context.template.md** — the template for the per-project working log.
 
+Outside this set, SEO retainer engagements have their own canon: `seo/retainer-method.md`.
+
 **Stack files.** The knowledgebase serves more than one stack. Rules that hold only when Automatic.css is installed carry a `[stack:acss]` tag; a project on another stack declares `stack:` in its `CLAUDE.md` and loads the matching file from `stacks/` (read protocol, step 4). Untagged rules are universal.
 
 Two layers. **Bedrock** is `00`, `01`, `02` — settled knowledge, changes slowly, by deliberate decision. **Accumulators** are `03` and `04` — provisional knowledge, each entry a real incident with a fix, grows every project.
@@ -41,7 +43,7 @@ site's rankings, its traffic, its content calendar and its client's targets are 
 test for admitting a post-launch finding is **"would this cost us again on a different client's
 property?"** — not "did we learn it after go-live."
 
-**This repo is PUBLIC.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document **mechanisms, not coordinates** — "the RunCloud panel owns the crontab" travels; an IP address does not. This matters most at harvest time, because auto-memory (the natural source) is full of coordinates, and `04` is the file most likely to attract them. Coordinates belong in auto-memory anyway: per the memory model below, they're per-machine state that goes stale. Real incidents are fine as provenance — scrub the identifying particulars (say "a $95/mo hosting order", not the client's username and order id). Scan the staged diff before committing.
+**This repo is PUBLIC.** Nothing in the knowledgebase may carry credentials, server IPs, zone IDs, or client-confidential business context. Document **mechanisms, not coordinates** — "the RunCloud panel owns the crontab" travels; an IP address does not. This matters most at harvest time, because auto-memory (the natural source) is full of coordinates, and `04` is the file most likely to attract them. Coordinates belong in auto-memory anyway: per the memory model below, they're per-machine state that goes stale. Real incidents are fine as provenance — scrub the identifying particulars (say "a $95/mo hosting order", not the client's username and order id). Scan the staged diff before committing. **Commit messages count too:** scan the message along with the diff, and never name a client in a commit subject or body. History is the one place a scrub can't reach; a squash merge leaves the branch's old messages behind, a plain merge or a PR carries them into `main` for good.
 
 ---
 
@@ -89,6 +91,7 @@ At the start of any build session:
    ```
    Phase: STAGING · CLAUDE.md rule 0, confirmed by .claude/settings.json
    Stack: acss · no stack: line, fleet default
+   Engagement: build · no engagement: line, default
    Mode:  auto, with ask rules on destructive WP-CLI
    Contract: I build and edit without asking. I stop before anything that
              touches the database, deletes plugins or themes, or changes
@@ -119,6 +122,8 @@ At the start of any build session:
    - Rules tagged **`[stack:acss]`** apply only when `stack: acss`, **or when no stack is declared** — the grandfathered fleet default. Every pre-carve-out project is an ACSS site, so an unmarked project falls back to the rules it was built under, the same way an unmarked phase falls back to LIVE.
    - When `stack: bricks-native`, load the stack file named in the project `CLAUDE.md` (master: `stacks/bricks-native.md`) and apply its replacements in place of every `[stack:acss]` rule. A project `CLAUDE.md` suspended-rules table is the per-project override and wins over the stack file where they differ — flag the difference, don't pick one silently.
    - **Untagged rules apply to every stack:** BEM, no `__inner`, the clickable-parent and focus-parent *patterns*, phase gates, the authorization gradient, the golden rule, typed-settings-first, compaction safeguards.
+
+   **Engagement dispatch, same step.** Read `engagement:` too (`grep -m1 '^engagement:' CLAUDE.md`) and state it next to the stack. Absent means `build`. `seo-retainer` loads `seo/retainer-method.md` (via the `mpd-seo-retainer` skill). If `CLAUDE.md` says `seo-retainer` but the box's `~/.dataforseo/config.json` doesn't list the webapp, or the reverse, that's a drift report for Mike, not something to fix.
 
    **How the tag reads.** On a heading, it scopes the whole section, or the whole `03`/`04` entry. Inline, at the start of a sentence, bullet or table row, it scopes only that unit. An entry whose *mechanism* is stack-neutral but whose *fix* names ACSS carries the inline tag on the ACSS part only; the rest still applies everywhere.
 

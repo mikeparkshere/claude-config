@@ -421,22 +421,23 @@ to 50 and sorts by the first metric, so rare events get truncated (use `--limit 
 
 Script: `~/claude-config/bin/dfs.py`: live SERPs with AI Overview references, keyword search volume, and a domain's
 ranked keywords. It answers what GSC can't: a **real organic rank** (GSC averages fold AI Overview citations and the
-local pack into "position"), whether TAB is **named or only cited** in an AI Overview, and **volume** for terms a
+local pack into "position"), whether the site is **named or only cited** in an AI Overview, and **volume** for terms a
 site doesn't rank for yet.
 
 ```bash
-python3 ~/claude-config/bin/dfs.py serp "pergola installation ohio" --location "Cleveland,Ohio,United States" --find tabpropertyenhancement.com
-python3 ~/claude-config/bin/dfs.py volume "paver patio cost" "outdoor kitchen cost" --location "Ohio,United States"
+python3 ~/claude-config/bin/dfs.py serp "deck builder near me" --coord "40.71,-74.01" --aio --find example.com
+python3 ~/claude-config/bin/dfs.py volume "patio cost" "deck cost" --location "United States"
 python3 ~/claude-config/bin/dfs.py spend      # this box: today / month / by webapp
 python3 ~/claude-config/bin/dfs.py balance    # account balance (free)
 ```
 
-**For local SEO, always pass `--coord "lat,lng"` of the town and `--aio`.** Found on the first live run (TAB,
-2026-11-13): small towns are often not valid `--location` names (task error 40101, unbilled), and local results
-change completely between Cleveland and the town itself (Avon: TAB not on page one from Cleveland, **#1 and named in
-the AI Overview** from Avon). The AI Overview renders asynchronously and is often absent without `--aio`. GSC's
-"average position" blends every searcher, device, image block and AI Overview; a live check is one search from one
-place, so check the specific rows you'll show a client, and expect some GSC top positions to not reproduce.
+**For local SEO, always pass `--coord "lat,lng"` of the town and `--aio`.** Found on the first live runs
+(2026-11): small towns are often not valid `--location` names (task error 40101, unbilled), and local results
+change completely between the nearest metro and the town itself (one search showed the site nowhere on page one from
+the metro, and **#1 and named in the AI Overview** from the town). The AI Overview renders asynchronously and is
+often absent without `--aio`. GSC's "average position" blends every searcher, device, image block and AI Overview; a
+live check is one search from one place, so check the specific rows you'll show a client, and expect some GSC top
+positions to not reproduce.
 
 **It costs real money on one shared account, so:**
 - ⛔ **SEO-retainer sites only.** Paid calls run only for webapps in `"retainer"` in `~/.dataforseo/config.json`

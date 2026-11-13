@@ -4,9 +4,9 @@ dfs.py: DataForSEO client with spend guardrails. Agency-wide account, one ledger
 
   python3 ~/claude-config/bin/dfs.py balance                 # account balance (free call)
   python3 ~/claude-config/bin/dfs.py spend                   # this box's ledger: today / month / by webapp
-  python3 ~/claude-config/bin/dfs.py serp "pergola installation ohio" --location "Cleveland,Ohio,United States" \
-      [--device desktop] [--depth 10] [--find tabpropertyenhancement.com]
-  python3 ~/claude-config/bin/dfs.py volume "paver patio cost" "outdoor kitchen cost" --location "Ohio,United States"
+  python3 ~/claude-config/bin/dfs.py serp "deck builder near me" --coord "40.71,-74.01" --aio \
+      [--device desktop] [--depth 10] [--find example.com]
+  python3 ~/claude-config/bin/dfs.py volume "patio cost" "deck cost" --location "United States"
   python3 ~/claude-config/bin/dfs.py ranked example.com --location "United States" [--limit 100]
   Any command: --dry-run (print the request + cost estimate, call nothing) · --fresh (skip the cache) · --note TEXT
 
@@ -14,7 +14,7 @@ GUARDRAILS (read before raising any of them; raising one needs Michael's OK in t
   0. SEO-retainer sites only. Paid calls run only for a webapp listed in "retainer" in ~/.dataforseo/config.json.
      The webapp is the one you are inside (/webapps/<app>/), or --client NAME. Anything else is refused, including
      "no webapp". A one-off exception is an "overrides" entry with an expiry, added only when Michael asks:
-       {"retainer": ["tab-staging"], "retainer_asked": "2026-11-13",
+       {"retainer": ["app-example"], "retainer_asked": "2026-01-15",
         "overrides": {"app-x": {"until": "2026-11-20", "why": "Michael: one-off competitor read"}}}
      No "retainer" key at all means the box was never asked: the session startup asks Michael and records it.
   1. Endpoint allowlist. Only the commands above. No generic passthrough, no task_post bulk queues.

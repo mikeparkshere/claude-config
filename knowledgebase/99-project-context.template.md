@@ -43,9 +43,12 @@ Replace `{PROJECT NAME}` and every `{placeholder}` below. Delete this "How to us
 
 ```markdown
 stack: acss            # or: bricks-native
+engagement: build      # or: seo-retainer | maintenance
 ```
 
-Omitting it means `acss` — the fleet default. On a non-ACSS stack, rewrite rule 6's token home to that stack's (e.g. the Bricks Style Manager on `bricks-native`) and drop the tag; the rule is otherwise unchanged.
+Omitting `stack:` means `acss` — the fleet default. On a non-ACSS stack, rewrite rule 6's token home to that stack's (e.g. the Bricks Style Manager on `bricks-native`) and drop the tag; the rule is otherwise unchanged.
+
+Omitting `engagement:` means `build`. Change it when the project's work changes: `seo-retainer` once an SEO retainer is agreed (it loads `seo/retainer-method.md`; `00`, read protocol step 4), `maintenance` for a delivered site kept running with no SEO contract.
 
 ---
 
