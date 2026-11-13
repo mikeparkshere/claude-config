@@ -189,6 +189,18 @@ def call(cmd, body, args):
     return j
 
 
+def real_site(it):
+    """(domain, url) for an organic item. Google now wraps result links in google.com/goto redirects, and
+    DataForSEO reports domain=google.com for those; the real site is only in the breadcrumb."""
+    dom, url = it.get("domain") or "", it.get("url") or ""
+    if dom in ("google.com", "www.google.com") and it.get("breadcrumb"):
+        url = it["breadcrumb"].replace(" › ", "/").replace("›", "/").strip()
+        dom = url.split("//", 1)[-1].split("/", 1)[0]
+        if dom.startswith("www."):
+            dom = dom[4:]
+    return dom, url
+
+
 def results(j):
     return ((j.get("tasks") or [{}])[0].get("result") or [{}])
 
@@ -254,11 +266,11 @@ def cmd_serp(args):
     hit = None
     for it in items:
         if it.get("type") == "organic":
-            dom = it.get("domain") or ""
+            dom, url = real_site(it)
             mark = "  <==" if find and find in dom.lower() else ""
             if mark and hit is None:
                 hit = it
-            print(f"  #{it.get('rank_group'):>2} (abs {it.get('rank_absolute'):>2})  {dom}  {it.get('url')}{mark}")
+            print(f"  #{it.get('rank_group'):>2} (abs {it.get('rank_absolute'):>2})  {dom}  {url}  · {(it.get('title') or '')[:50]}{mark}")
     if find:
         print(f"{args.find}: " + (f"organic #{hit['rank_group']}" if hit else f"not in the top {args.depth} organic"))
 
