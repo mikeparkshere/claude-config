@@ -243,6 +243,10 @@ def cmd_serp(args):
         die(f"depth {args.depth} > {MAX_DEPTH}. Deeper SERPs cost more and rarely matter.")
     body = [{"keyword": args.keyword, "location_name": args.location, "language_code": "en",
              "device": args.device, "depth": args.depth}]
+    if args.aio:
+        body[0]["load_async_ai_overview"] = True
+    if args.coord:  # "lat,lng" of the town itself; small towns are often missing from location_name
+        body[0].pop("location_name"); body[0]["location_coordinate"] = args.coord
     j = call("serp", body, args)
     if args.json:
         print(json.dumps(j, indent=1)); return
@@ -315,6 +319,9 @@ def main():
     s = sub.add_parser("serp", parents=[common]); s.add_argument("keyword")
     s.add_argument("--device", default="desktop", choices=["desktop", "mobile"])
     s.add_argument("--depth", type=int, default=10); s.add_argument("--find")
+    s.add_argument("--coord", help='search from a point, "lat,lng" (overrides --location)')
+    s.add_argument("--aio", action="store_true",
+                   help="also load Google's AI Overview (it renders asynchronously; without this it is often missing)")
     v = sub.add_parser("volume", parents=[common]); v.add_argument("keywords", nargs="+")
     r = sub.add_parser("ranked", parents=[common]); r.add_argument("target"); r.add_argument("--limit", type=int, default=100)
     args = p.parse_args()

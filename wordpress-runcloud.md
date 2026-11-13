@@ -431,6 +431,13 @@ python3 ~/claude-config/bin/dfs.py spend      # this box: today / month / by web
 python3 ~/claude-config/bin/dfs.py balance    # account balance (free)
 ```
 
+**For local SEO, always pass `--coord "lat,lng"` of the town and `--aio`.** Found on the first live run (TAB,
+2026-11-13): small towns are often not valid `--location` names (task error 40101, unbilled), and local results
+change completely between Cleveland and the town itself (Avon: TAB not on page one from Cleveland, **#1 and named in
+the AI Overview** from Avon). The AI Overview renders asynchronously and is often absent without `--aio`. GSC's
+"average position" blends every searcher, device, image block and AI Overview; a live check is one search from one
+place, so check the specific rows you'll show a client, and expect some GSC top positions to not reproduce.
+
 **It costs real money on one shared account, so:**
 - ⛔ **SEO-retainer sites only.** Paid calls run only for webapps in `"retainer"` in `~/.dataforseo/config.json`
   (recorded at session startup, step 3a). The script refuses anything else, including a call it can't tie to a
