@@ -80,9 +80,11 @@ The knowledgebase on disk does nothing. It only governs behavior while it sits i
 
 ## Read protocol
 
-At the start of any build session:
+At the start of any session:
 
 1. **Read fully:** `00`, `01`, `02`. This is the day-one canon. Read it before touching the build.
+
+   **Retainer exception: Track 2 sessions.** On an `engagement: seo-retainer` project, a session whose work is all Track 2 (reports, KPI work, briefs, competitive reads, drafting or reviewing content) reads `00` fully and `seo/retainer-method.md` fully, and skips `01` and `02`. Steps 3 and 4 still run in full; the phase gate binds every session. The exception ends at the first Track 1 task or the first write to the site beyond publishing post content into an existing template (any template, class, CSS, element tree, plugin, setting, or meta write). At that point, stop, read `01` and `02`, restate the readback with `Session: Track 1`, then make the write. Decide it before the write, never during.
 2. **Lookup tier:** `03` and `04` are catalogs. Do not read them cover to cover. `03` opens with an **Index** of every entry title — scan that first, then grep the file for the exact title you need. Never read `03` whole: at ~31,000 words it triggers the compaction described above, evicting the very canon that sent you to it. Consult `03` when a build symptom matches — a write that silently no-ops, a style that won't override, an element that won't render. Consult `04` when the symptom is infrastructural — a stale response, a 404 that shouldn't be, a cert or DNS question, anything during a cutover. The schema library inside `02` is also lookup tier: read the front-half and back-half method fully, consult individual schemas as needed.
 3. **Read back the project phase.** Phase is not informational and it is not a note. It is the contract that governs how freely you act for the rest of the session, and like a Bricks schema it is discovered, never assumed.
 
@@ -92,6 +94,7 @@ At the start of any build session:
    Phase: STAGING · CLAUDE.md rule 0, confirmed by .claude/settings.json
    Stack: acss · no stack: line, fleet default
    Engagement: build · no engagement: line, default
+   Session: Track 1 | Track 2 · seo-retainer projects only; Track 2 skips 01/02
    Mode:  auto, with ask rules on destructive WP-CLI
    Contract: I build and edit without asking. I stop before anything that
              touches the database, deletes plugins or themes, or changes

@@ -35,6 +35,7 @@ Five that govern almost everything. Full versions, with the incidents behind the
 - **Confirm the engagement first.** `grep -m1 '^engagement:' CLAUDE.md` must say `seo-retainer`
   (`knowledgebase/00`, read protocol step 4). If it doesn't, this skill doesn't apply.
 - **Read fully:** `~/claude-config/seo/retainer-method.md`.
+- **Track 2 sessions skip `01`/`02`** (`00`, read protocol step 1, retainer exception). Read `00` and the canon, state `Session: Track 2` in the readback. The first Track 1 task or site write ends the exception: read `01`/`02` before that write and restate the readback.
 - **Read the project's own copy too**, if it keeps one: entries below its seam are newer than the master and
   additive; nothing above the seam overrides the master.
 - **Instrument behavior** (Search Console, GA4) is in `~/claude-config/knowledgebase/03-stack-gotchas.md` →
