@@ -184,10 +184,11 @@ A sitewide change (nav item, phone number, footer link, new `<head>` tag) is one
 
 ## Conventions
 
-- External CSS and JS only. No inline styles, no inline `<script>` except JSON-LD.
+- External CSS and JS only. No inline styles, no inline `<script>` except JSON-LD. That includes analytics: put the GA4 bootstrap in `assets/js/ga.js` (deferred, ID in a `data-` attribute) instead of Google's inline snippet, so the CSP never needs `'unsafe-inline'` or a hash.
 - Assets in `public/assets/css`, `/js`, `/img`, `/fonts`. Reference them as `/assets/...`.
 - Escape every config value printed into HTML with `e()`.
-- PHP stays at the include/config level: no database, no Composer, no npm, no frameworks. If a project needs more than that, it's not a flat site anymore. Raise it with Michael.
+- PHP stays at the include/config level: no database, no Composer, no frameworks. If a project needs more than that, it's not a flat site anymore. Raise it with Michael.
+- **Build tools are fine for assets** (Michael, 11/13/2026): npm/`sharp` for AVIF/WebP image sets, a Python subsetter for fonts, and so on. The rule is that nothing builds at request time or on deploy: run the build by hand, **commit its output**, and the server serves plain files. Keep the script and its masters in the repo (`scripts/`, `src/`) outside `public/`. Use Node from nvm, not the system Node, which is too old on some boxes. Name built files by content hash: RunCloud caches `/assets/` for 30 days, so a changed image needs a new URL.
 - Contact forms send through the Mailgun HTTP API by default (see Security). Check CLAUDE.md in case a site uses something else.
 - Subdirectories with their own purpose (e.g. `/clients/*`, `/tools/*` under `public/`): ask whether they follow site-wide conventions or their own (inline styles allowed, looser CSP, etc.) before enforcing the rules above on them.
 
@@ -199,20 +200,25 @@ The attack surface is the contact form, the server, and anything that echoes req
 - **Escape all request input** printed into HTML with `e()`, including prefill values like `?service=`. Never print raw `$_GET`, `$_POST`, or `$_SERVER['REQUEST_URI']`.
 - **Contact forms:** send with the Mailgun HTTP API (curl POST to the messages endpoint), never bare `mail()`. The API key comes from `$secrets` in `config.local.php`. Submitted fields go in the message body only; the one exception is `h:Reply-To`, which gets the visitor's address only after `filter_var($email, FILTER_VALIDATE_EMAIL)` passes. Strip CR/LF from anything used in the subject. Add a honeypot field (Turnstile if spam gets past it), and don't echo submitted values back without `e()`.
 - **Own system user for new flat-site webapps** in RunCloud, even on a server shared with WordPress. Pick it at webapp creation; changing it later means recreating the webapp. Where an existing site shares a system user with WordPress, note it in CLAUDE.md.
-- **Tamper check:** the server copy should always match the repo. A daily cron running `git -C [webapp root] status --porcelain` that alerts on any output catches files changed outside a deploy (for example by a compromised WordPress site under the same user).
+- **Tamper check:** the server copy should always match the repo. A daily cron running `git -C [webapp root] status --porcelain` that alerts on any output catches files changed outside a deploy (for example by a compromised WordPress site under the same user). Use `bin/tamper-check` from this repo, copied to `~/bin/` on the box (outside the site, so a site can't edit its own checker), as a RunCloud cron job: `~/bin/tamper-check <webapp root> >>~/cron-logs/<app>-tamper.log 2>&1`. An empty log means healthy. Call the script rather than inlining the command, since cron reads `%` as a newline. Alerting by mail isn't wired yet; until it is, check the log.
 - **Nothing but site files in `public/`.** No `.bak`, `.old`, `~`, `.swp`, `phpinfo.php`, or test scripts. Check with `find public -name '*.bak' -o -name '*~' -o -name '*.swp' -o -name 'phpinfo*'` before calling a session done.
 - **`display_errors` off** in production. Log errors instead.
-- **Security headers** (set in the RunCloud NGINX config or `.htaccess` on hybrid): HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a CSP that allowlists only the third-party hosts the site actually loads (analytics, fonts, embeds). Use `frame-ancestors 'self'` in the CSP.
+- **Security headers** (set in the RunCloud NGINX config or `.htaccess` on hybrid): HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a CSP that allowlists only the third-party hosts the site actually loads (analytics, fonts, embeds). Use `frame-ancestors 'self'` in the CSP. RunCloud's nginx already sends `nosniff` and `X-Frame-Options: SAMEORIGIN` on every response, so check before adding duplicates. Ship the CSP as `Content-Security-Policy-Report-Only` first, load every page type in a browser (map, analytics hit, embeds), and switch to enforcing only once there are no violations. JSON-LD is a data block, and CSP doesn't govern it.
 - **Short-circuit WordPress bot traffic** with a bare nginx 404 for `/wp-*` and `/xmlrpc.php`, so it never reaches PHP or renders the branded 404.
 - Run the newest PHP version RunCloud offers. Nothing here pins an older one.
 
 ## Environments and launch
 
-Default flow: build on a staging webapp, launch to a fresh live webapp, then retire staging. No LocalWP step.
+Two launch paths; pick by circumstance (Michael, 11/13/2026). No LocalWP step either way.
+
+- **Replacing a live site** (a WordPress site being rebuilt, say): create the webapp that will go live and build on it under a staging subdomain. The old site stays untouched on its own webapp the whole time. At cutover, move the production domain onto the new webapp and reissue SSL; the old webapp is the rollback, deleted after a few weeks. No second webapp, no clone. See **Launch → Path A**.
+- **New site, or a big change to a live flat site:** build on a separate staging webapp, launch to a fresh live webapp (or merge into the existing one), then delete staging. See **Launch → Path B**.
 
 ### Staging
 - A subdomain on Michael's domain, on the same server the site will live on, so PHP version, nginx stack, and headers match production.
-- Private, not just unindexed. Every SSL cert is publicly logged, so the subdomain is discoverable. Add basic auth (`auth_basic`) and an `X-Robots-Tag: noindex` header in this webapp's nginx config. Both live at the server level, never in the repo, so neither can ship to live. Don't use a `robots.txt` disallow.
+- **Out of search, not hidden** (Michael, 11/13/2026). These are low-traffic sites with nothing to hide, so no basic auth. Send `X-Robots-Tag: noindex, nofollow` keyed on the host, so it fires on anything but the production domain. On a hybrid webapp that's one line in `public/.htaccess`:
+  `Header always set X-Robots-Tag "noindex, nofollow" "expr=%{HTTP_HOST} != 'example.com'"`
+  It can live in the repo because production never matches it, so there's nothing to remove at launch. Key HSTS and analytics on the production host the same way (HSTS on `== 'example.com'`, analytics printed only when the host matches) so staging never pins HSTS or pollutes GA. Don't use a `robots.txt` disallow: it stops Google from fetching the page, so it never sees the noindex and can still list the bare URL.
 
 ### Environment settings
 `config.php` holds production values. `config.local.php` (gitignored, written on the server by hand) overrides per environment:
@@ -229,6 +235,16 @@ $secrets = [
 ```
 
 ### Launch
+
+**Path A: domain move** (replacing a live site)
+1. Freeze and back up the old site; its webapp is the rollback.
+2. Add the 301s from the old site's URLs (on hybrid, in `.htaccess`; nginx hands missing files to Apache, so old media paths reach it too). Hard-code `https://%{HTTP_HOST}` in every redirect target: Apache sits behind nginx and never sees TLS, so its own redirects (mod_dir's trailing slash included; set `DirectorySlash Off`) say `http://`.
+3. On a closed or quiet day: remove the domains from the old webapp, add them to the new one, then delete and re-`POST` SSL for the new set (a PATCH doesn't reissue). HTTPS is broken for the minute in between.
+4. Check the www → apex 301, canonicals, HSTS and analytics on the real domain; resubmit the sitemap in Search Console.
+5. Remove the staging domain from the webapp and its DNS record, and reissue SSL without it.
+6. Disable the old site's cron; delete its webapp after 2–4 weeks with a final backup kept.
+
+**Path B: fresh live webapp**
 1. Create the live webapp (own system user where possible, public path `/public`).
 2. Clone the repo into it.
 3. Write `config.local.php` with `$env = 'production'`, the apex URL, and the client's form recipient.
@@ -247,7 +263,7 @@ Recreate staging only when:
 - The change can break the site in ways only visible on the server: security headers or CSP, nginx rules, the contact form or Mailgun setup.
 - The work spans several sessions and live has to stay untouched in the meantime.
 
-To recreate: new webapp on the subdomain, clone the repo, write a staging `config.local.php`, add auth and the noindex header. When the work merges and deploys, delete it again.
+To recreate: new webapp on the subdomain, clone the repo, write a staging `config.local.php`. The host-keyed noindex comes with the repo. When the work merges and deploys, delete it again.
 
 ## Converting an inherited site
 

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# tamper-check <repo-root> [<repo-root> ...]
+# Flat-site tamper check (flatsite.md, Security). A flat site's server copy should always match its repo, so any
+# `git status --porcelain` output means a file changed outside a deploy: an uncommitted edit, or something worse
+# (a compromised site under the same system user). Prints a dated block per dirty repo and exits 1; silent and
+# exit 0 when everything is clean. Run daily from a RunCloud cron job, appending to ~/cron-logs/:
+# a log that stays empty is the healthy state.
+# Lives outside the repos it checks, so a change to a site can't quietly edit its own checker.
+set -u
+status=0
+for repo in "$@"; do
+  if ! out=$(git -C "$repo" status --porcelain 2>&1); then
+    printf '%s %s: git status failed\n%s\n\n' "$(date -Is)" "$repo" "$out"; status=1; continue
+  fi
+  if [ -n "$out" ]; then
+    printf '%s %s: working tree differs from HEAD\n%s\n\n' "$(date -Is)" "$repo" "$out"; status=1
+  fi
+done
+exit $status
