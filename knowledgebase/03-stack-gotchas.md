@@ -4955,3 +4955,42 @@ Pair it with `scroll-margin-top` on the body's headings (`02` → post-content),
 **Why:** Editing the text of a hyperlink in Word leaves its target alone. The display was updated to the new brand; the targets still pointed at the old one.
 **Fix:** Read the targets, not the text: in a `.docx`, `word/_rels/document.xml.rels` lists every hyperlink `Target` (`grep -oE 'Target="[^"]+"'`, skipping `.xml`). Map each to the correct destination before building the page: root-relative for on-site links (`02` → Link), the Site Options shortcode for any email, and stop on any target not in the map. No converter on the box? A stdlib `zipfile`/`xml.etree` pass over `document.xml` + `numbering.xml` + the rels file covers headings (bold short paragraphs when no heading styles are used), lists and links.
 **First seen:** ETS, 2026-11-10 — an anti-trafficking policy whose "Content Removal" link pointed at another company's support site and whose two email links displayed the right address but opened a message to another company's inbox. Caught in the link audit before publishing.
+
+*⚠️ The two entries below come from the Millersburg Brewing (app-mbc25) closer, 2026-11-13. It is a Tier 2 site, so they go into the master's project section. Unharvested and unreviewed.*
+
+### ACF strips `<iframe>` (and anything outside kses `post`) from every field when a role without `unfiltered_html` saves, so an embed-code field saves empty
+**Symptom / When:** A client-facing ACF textarea for embed code (a tap list, a booking widget, a map) works when an admin saves it, but when the client's role (`shop_manager`, `editor` on multisite, any custom role) pastes the code and saves, the field comes back empty, or holds only the `<p>` credit line from the snippet. No error, and validation passed.
+**Why:** `acf_save_post()` (`includes/acf-form-functions.php`, ACF Pro 6.8.11) runs `$_POST['acf'] = wp_kses_post_deep( $_POST['acf'] )` whenever `acf_allow_unfiltered_html()` is false, **before** `do_action( 'acf/save_post' )`. `iframe` isn't in kses `post`. On an options page, though, `acf_validate_save_post()` runs first in the same request and sees the **raw** POST, so `acf/validate_value` gets the untouched paste.
+**Fix:** Don't widen the role (`unfiltered_html`) or the whole form (`acf/allow_unfiltered_html`). Parse in validation, store your own markup:
+```php
+add_filter( 'acf/validate_value/key=field_x', function ( $valid, $value ) {
+	if ( true !== $valid || '' === trim( (string) $value ) ) return $valid;
+	$embed = my_parse( wp_unslash( $value ) );        // extract src/title/height; allow-list the host
+	if ( ! $embed ) return 'That doesn\'t look like a <Vendor> embed code…';
+	my_validated( $embed );                           // static stash for this request
+	return $valid;
+}, 10, 2 );
+add_filter( 'acf/update_value/key=field_x', function ( $value ) {
+	$embed = my_parse( wp_unslash( (string) $value ) ) ?? my_validated(); // kses'd → fall back to the stash
+	return $embed ? my_markup( $embed ) : '';         // cleared field → stash is null → ''
+} );
+```
+Render from the parsed parts, never by echoing the stored HTML. **Test it as the client's user through ACF's real path**, not `update_field`/`acf_update_value` (WP-CLI is trusted and skips kses): `wp_set_current_user( <id> ); $_POST['acf'] = wp_slash( [ '<group key>' => [ '<field key>' => $paste ] ] ); acf_validate_save_post( false ); acf_save_post( 'options' );`, one process per case, because the stash is static. ⚠️ **Test trap:** `acf_update_value( $v, 'options', acf_get_field( '<subfield key>' ) )` on a **subfield** writes `options_<subfield name>` (`options_embed_code`), not `options_<group>_<subfield>`, and a read of the real option says "not saved". Delete the stray row and its `_options_…` twin.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-13. A Pourwall tap-list embed field in Site Options. Saved as `shopadmin`, it came back with nothing, then was rebuilt through validate → update. Full module: app-mbc25 `inc/tap-list.php`. *(Tier 2 site, master project section, unharvested.)*
+
+### A cross-origin embed iframe can't size itself: check for a resize message, then measure and set heights with container queries
+**Symptom / When:** A third-party widget iframe (tap list, menu, booking, reviews) shows an inner scrollbar or a block of empty space at the vendor's suggested `height` (e.g. `600px`), and the content height differs sharply between phone and desktop.
+**Why:** The parent page can't read a cross-origin document's height. Only the vendor can report it, with `parent.postMessage` (iframe-resizer and the like). Many vendors don't, and the suggested `height` is a guess. A `ResizeObserver` in the vendor bundle isn't proof of resize support: Pourwall's only one feeds its own scroll-depth analytics.
+**Fix:**
+1. **Check the bundle.** Fetch the embed URL, take its main JS, and `grep -oE '.{100}parent\.postMessage.{150}'` (also `iframeResizer`, `frameHeight`). No hit to the parent means the heights are ours to set.
+2. **Measure.** Use headless Chromium (`04`, headless Chrome without root): load the embed URL itself at a viewport equal to the iframe's real rendered width, and read `document.documentElement.scrollHeight`. Get the real width first from the live page (`$eval('<wrapper> iframe', f => f.getBoundingClientRect().width)`). Bisect for the vendor's layout breakpoint. It's in **iframe** width, not screen width.
+3. **Set heights with container queries on the wrapper**, so the steps match the vendor's breakpoint exactly with no viewport math. On the global class, as a literal selector (`%root%` isn't resolved from CLI, see `02`):
+```css
+.x__embed { container-type: inline-size; }
+.x__embed iframe { height: 2970px; }                                   /* narrowest */
+@container (min-width: 355px) { .x__embed iframe { height: 2650px; } }
+@container (min-width: 960px) { .x__embed iframe { height: 1335px; } } /* vendor's 2-col switch */
+```
+4. **Verify on the live page:** use Playwright's `contentFrame()` (cross-origin is readable from the automation side) and compare `scrollHeight` with `clientHeight` per width. Equal means no inner scroll.
+5. **Write down what the numbers depend on** (item count, options shown), because the heights go stale when the content grows. Tell the client in the field instructions to let you know when it does.
+**First seen:** Millersburg Brewing (app-mbc25), 2026-11-13. A Pourwall tap list at the snippet's `height="600px"` scrolled inside the frame. Measured content was 1,315px at two columns (iframe ≥ 960px) and 2,607–2,950px at one column, and the one-column height rises as the frame narrows. Verified at 13 viewports from 320 to 1920 with no inner scroll. *(Tier 2 site, master project section, unharvested.)*

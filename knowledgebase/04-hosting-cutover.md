@@ -1085,3 +1085,23 @@ RewriteRule ^ https://primary.example.com%{REQUEST_URI} [R=301,L]
 ```
 Nonexistent static paths (`.png`, `.css`) fall through to Apache and redirect too. Leaving `/.well-known/` alone keeps HTTP-01 renewals working. Test with `--resolve` before the DNS flip, then flip only the A records (leave MX/TXT) and issue LE on that webapp alone. A failure there can't touch the primary's cert. Domain API note: the `redirection` enum is `none` / `www` / `non-www` (`www_to_non_www` → 422).
 **First seen:** NFHL (app-nfhl → app-nfhl-org, mpd2025_01), 2026-11-11. `nationalfieldhockeyleague.org` (Google Workspace mail on it) moved off the old droplet the same afternoon the `.com` cert had been lost for an hour; the `.org` cert issued in 20 s on its own webapp. *(Tier 2 site, master project section, unharvested.)*
+
+*⚠️ The entry below comes from the Millersburg Brewing (app-mbc25) closer, 2026-11-13, on jbm001. Tier 2, master project section, unharvested.*
+
+### Headless Chromium on Ubuntu 20.04 (focal): the package names differ from 24.04, and Playwright's install error can be ignored
+**Symptom / When:** You're following *"Headless Chrome on a RunCloud box without root"* (above the seam) on an older box, and `apt-get download` fails on the `…t64` package names. Or `npx playwright-core install chromium` prints a host-requirements stack trace and looks failed.
+**Why:** The `t64` suffixes arrived with 24.04's 64-bit `time_t` transition, so 20.04 uses the plain names. Playwright's `validateHostRequirements` runs **after** the download and complains about the same missing libs, but the binary is already on disk. Also, `chromium-headless-shell` isn't a valid install target on Playwright 1.47.x. Use `chromium`.
+**Fix:** On focal, with no root and everything in a tool dir:
+```bash
+npm i playwright-core@1.47.2
+PLAYWRIGHT_BROWSERS_PATH=$PWD/browsers npx playwright-core install chromium   # ignore the trailing host-requirements error
+apt-get download libatk1.0-0 libatk-bridge2.0-0 libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 \
+  libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libpangocairo-1.0-0 libpangoft2-1.0-0 libthai0 \
+  libdatrie1 libpixman-1-0 libxcb-render0 libxcb-shm0 libwayland-server0 libfribidi0 libharfbuzz0b \
+  libgraphite2-3 libxrender1 libxi6 libasound2 libcups2 libavahi-client3 libavahi-common3 libxshmfence1
+for d in *.deb; do dpkg-deb -x "$d" libs; done
+export LD_LIBRARY_PATH=$(find $PWD/libs -name '*.so*' -printf '%h\n' | sort -u | tr '\n' ':')
+ldd browsers/chromium-*/chrome-linux/chrome | grep 'not found'   # expect nothing
+```
+That list cleared `ldd` in one pass (the first eleven are the direct misses, the rest are their deps). Launch with `executablePath` set to that `chrome` and `args: ['--no-sandbox']`.
+**First seen:** Millersburg Brewing (app-mbc25, jbm001), 2026-11-13. Built to measure a cross-origin tap-list iframe (`03`, "A cross-origin embed iframe can't size itself"). Extends the above-seam entry; it doesn't conflict with it. *(Tier 2 site, master project section, unharvested.)*
