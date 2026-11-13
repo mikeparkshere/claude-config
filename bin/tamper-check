@@ -6,14 +6,41 @@
 # exit 0 when everything is clean. Run daily from a RunCloud cron job, appending to ~/cron-logs/:
 # a log that stays empty is the healthy state.
 # Lives outside the repos it checks, so a change to a site can't quietly edit its own checker.
+#
+# Alerts: when something is found, it also emails the report through the Mailgun API (US region) if the key file
+# exists. Override with env vars: TAMPER_MG_KEY_FILE, TAMPER_MG_DOMAIN, TAMPER_FROM, TAMPER_TO. The key goes to curl
+# on stdin, never in argv. A failed send is reported on stderr, which the cron line appends to the log.
 set -u
+key_file=${TAMPER_MG_KEY_FILE:-$HOME/.secrets/mpd-mailgun-key}
+mg_domain=${TAMPER_MG_DOMAIN:-mailer.michaelparksdesign.com}
+from=${TAMPER_FROM:-"Tamper check <alerts@mailer.michaelparksdesign.com>"}
+to=${TAMPER_TO:-michael@michaelparks.me}
+
 status=0
+report=""
 for repo in "$@"; do
   if ! out=$(git -C "$repo" status --porcelain 2>&1); then
-    printf '%s %s: git status failed\n%s\n\n' "$(date -Is)" "$repo" "$out"; status=1; continue
+    report+=$(printf '%s %s: git status failed\n%s\n\n' "$(date -Is)" "$repo" "$out"); report+=$'\n\n'; status=1; continue
   fi
   if [ -n "$out" ]; then
-    printf '%s %s: working tree differs from HEAD\n%s\n\n' "$(date -Is)" "$repo" "$out"; status=1
+    report+=$(printf '%s %s: working tree differs from HEAD\n%s' "$(date -Is)" "$repo" "$out"); report+=$'\n\n'; status=1
   fi
 done
+
+[ $status -eq 0 ] && exit 0
+printf '%s' "$report"
+
+if [ -r "$key_file" ]; then
+  host=$(hostname)
+  body="Files on ${host} differ from their git repos. If you made these changes, commit them; if not, investigate.
+
+${report}Commit or revert to clear it. Log: ~/cron-logs/ on ${host}."
+  code=$(printf 'user = "api:%s"\n' "$(tr -d ' \r\n' < "$key_file")" | curl -s -o /dev/null -w '%{http_code}' -K - \
+    "https://api.mailgun.net/v3/${mg_domain}/messages" \
+    --data-urlencode "from=${from}" \
+    --data-urlencode "to=${to}" \
+    --data-urlencode "subject=Tamper check: changes on ${host}" \
+    --data-urlencode "text=${body}")
+  [ "$code" = 200 ] || echo "tamper-check: alert mail failed, Mailgun HTTP ${code}" >&2
+fi
 exit $status
