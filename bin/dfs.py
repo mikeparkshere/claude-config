@@ -11,6 +11,12 @@ dfs.py: DataForSEO client with spend guardrails. Agency-wide account, one ledger
   Any command: --dry-run (print the request + cost estimate, call nothing) · --fresh (skip the cache) · --note TEXT
 
 GUARDRAILS (read before raising any of them; raising one needs Michael's OK in the session):
+  0. SEO-retainer sites only. Paid calls run only for a webapp listed in "retainer" in ~/.dataforseo/config.json.
+     The webapp is the one you are inside (/webapps/<app>/), or --client NAME. Anything else is refused, including
+     "no webapp". A one-off exception is an "overrides" entry with an expiry, added only when Michael asks:
+       {"retainer": ["tab-staging"], "retainer_asked": "2026-11-13",
+        "overrides": {"app-x": {"until": "2026-11-20", "why": "Michael: one-off competitor read"}}}
+     No "retainer" key at all means the box was never asked: the session startup asks Michael and records it.
   1. Endpoint allowlist. Only the commands above. No generic passthrough, no task_post bulk queues.
   2. Size caps per call: serp depth <= 20, volume <= 100 keywords, ranked limit <= 200.
   3. Spend caps, checked BEFORE every paid call against a worst-case estimate:
@@ -53,9 +59,38 @@ def die(msg):
     sys.exit(f"dfs: {msg}")
 
 
+CLIENT = None  # set from --client
+
+
 def webapp():
+    if CLIENT:
+        return CLIENT
     parts = os.getcwd().split(os.sep)
     return parts[parts.index("webapps") + 1] if "webapps" in parts and parts.index("webapps") + 1 < len(parts) else "-"
+
+
+def config():
+    if not os.path.exists(CONFIG):
+        return {}
+    with open(CONFIG) as f:
+        return json.load(f)
+
+
+def retainer_gate():
+    """Paid calls only for SEO-retainer webapps, or a dated override Michael asked for."""
+    cfg, app = config(), webapp()
+    if "retainer" not in cfg:
+        die(f"this box has never recorded which webapps are on SEO retainer ({CONFIG} has no \"retainer\" key). "
+            "Ask Michael, record the list (an empty list is a valid answer), then retry.")
+    if app == "-":
+        die("can't tell which webapp this is for. Run it from /webapps/<app>/ or pass --client NAME.")
+    if app in cfg["retainer"]:
+        return f"retainer:{app}"
+    ov = (cfg.get("overrides") or {}).get(app)
+    if ov and datetime.now(timezone.utc).strftime("%Y-%m-%d") <= ov.get("until", ""):
+        return f"override:{app} until {ov['until']} ({ov.get('why', '')})"
+    die(f"{app} is not on SEO retainer on this box (retainer: {', '.join(cfg['retainer']) or 'none'}). "
+        "Paid DataForSEO calls need Michael to ask for an override.")
 
 
 def auth():
@@ -73,9 +108,7 @@ def auth():
 
 def caps():
     c = dict(DEFAULT_CAPS)
-    if os.path.exists(CONFIG):
-        with open(CONFIG) as f:
-            c.update({k: float(v) for k, v in json.load(f).items() if k in DEFAULT_CAPS})
+    c.update({k: float(v) for k, v in config().items() if k in DEFAULT_CAPS})
     return c
 
 
@@ -124,6 +157,7 @@ def call(cmd, body, args):
         print(f"(cached {age:.1f} h ago, no charge; --fresh to re-pull)", file=sys.stderr)
         with open(cp) as f:
             return json.load(f)
+    basis = retainer_gate()
     est = guard(cmd)
     if args.dry_run:
         print(json.dumps({"endpoint": ENDPOINTS[cmd]["path"], "body": body, "worst_case_usd": est}, indent=1))
@@ -139,7 +173,7 @@ def call(cmd, body, args):
     with open(LEDGER, "a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), "cmd": cmd,
-                            "cost": cost, "webapp": webapp(), "note": args.note or "",
+                            "cost": cost, "webapp": webapp(), "basis": basis, "note": args.note or "",
                             "what": body[0].get("keyword") or body[0].get("target") or
                                     f"{len(body[0].get('keywords', []))} keywords"}) + "\n")
     os.chmod(LEDGER, 0o600)
@@ -176,6 +210,11 @@ def cmd_spend(args):
     now = datetime.now(timezone.utc)
     today = spent(rows, now.strftime("%Y-%m-%dT00:00:00"))
     mtd = spent(rows, now.strftime("%Y-%m-01T00:00:00"))
+    cfg = config()
+    print("retainer: " + (", ".join(cfg["retainer"]) or "none" if "retainer" in cfg else "NEVER ASKED (ask Michael)"))
+    for app, ov in (cfg.get("overrides") or {}).items():
+        live = now.strftime("%Y-%m-%d") <= ov.get("until", "")
+        print(f"override: {app} until {ov.get('until')} ({ov.get('why', '')}){'' if live else ' EXPIRED'}")
     print(f"today ${today:.4f} of ${c['daily']:.2f} · month ${mtd:.4f} of ${c['monthly']:.2f} · per call ${c['per_call']:.2f}")
     by = {}
     for r in rows:
@@ -258,6 +297,7 @@ def main():
     common.add_argument("--json", action="store_true")
     common.add_argument("--note", default="")
     common.add_argument("--location", default="United States")
+    common.add_argument("--client", help="webapp name, when not running from inside /webapps/<app>/")
     sub.add_parser("balance", parents=[common])
     sub.add_parser("spend", parents=[common])
     s = sub.add_parser("serp", parents=[common]); s.add_argument("keyword")
@@ -266,6 +306,8 @@ def main():
     v = sub.add_parser("volume", parents=[common]); v.add_argument("keywords", nargs="+")
     r = sub.add_parser("ranked", parents=[common]); r.add_argument("target"); r.add_argument("--limit", type=int, default=100)
     args = p.parse_args()
+    global CLIENT
+    CLIENT = args.client
     {"balance": cmd_balance, "spend": cmd_spend, "serp": cmd_serp, "volume": cmd_volume, "ranked": cmd_ranked}[args.cmd](args)
 
 

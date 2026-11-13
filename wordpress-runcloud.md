@@ -45,6 +45,18 @@ If `CLAUDE.md` exists, read it and acknowledge the project context before procee
 
 > "No CLAUDE.md found for this webapp. I have environment context but no project context. You may want to create one before we proceed — or tell me about the project now."
 
+**3a. Once per box: which webapps are on SEO retainer (DataForSEO gate).**
+```bash
+python3 -c "import json,os;p=os.path.expanduser('~/.dataforseo/config.json');print('recorded' if os.path.exists(p) and 'retainer' in json.load(open(p)) else 'ASK')"
+```
+`ASK` means this box has never recorded it. Ask, listing the webapps from step 0:
+
+> "Which webapps on this server are on an SEO retainer? Only those get paid DataForSEO calls."
+
+Write the answer to `~/.dataforseo/config.json` as `"retainer": [...]` plus `"retainer_asked": "<today>"` (keep any
+other keys; `mkdir -m 700 ~/.dataforseo` first if needed; `chmod 600` the file). **None is a valid answer:** record
+`[]`. Once the key exists, don't ask again. A contract starting or ending is Michael's to raise, and the list is edited then.
+
 **4. If CLAUDE.md has a `## Status board` section, report board state before anything else:**
 
 Fetch with the master token from that section (contract and details: `client-status-board` skill):
@@ -420,6 +432,12 @@ python3 ~/claude-config/bin/dfs.py balance    # account balance (free)
 ```
 
 **It costs real money on one shared account, so:**
+- ⛔ **SEO-retainer sites only.** Paid calls run only for webapps in `"retainer"` in `~/.dataforseo/config.json`
+  (recorded at session startup, step 3a). The script refuses anything else, including a call it can't tie to a
+  webapp (use `--client NAME` outside `/webapps/<app>/`). **No retainer, no spend, unless Michael asks for an
+  override.** An override is a dated entry, added only at his request, with the reason in his words:
+  `"overrides": {"app-x": {"until": "2026-11-20", "why": "Michael: one-off competitor read"}}`. Keep it short;
+  it expires on its own. Every ledger row records whether it ran under retainer or override.
 - ⛔ **Raising a cap or adding an endpoint needs Michael's OK in the session.** Caps live in `~/.dataforseo/config.json`
   (defaults: **$0.25 per call · $2 per box per day · $15 per box per month**) and are checked before every paid call
   against a worst-case estimate. There is deliberately no flag to exceed one.
@@ -432,7 +450,7 @@ python3 ~/claude-config/bin/dfs.py balance    # account balance (free)
   it. That's a signal to look, not a bug to clear.
 - The caps are **per box**. The account-wide backstop is the spending limit in the DataForSEO dashboard.
 
-Setup on a new box: from the Mac, `scp` a one-line `login:password` file (the **API** login from the dashboard, not
+Setup on a new box: record the retainer list (step 3a), then from the Mac, `scp` a one-line `login:password` file (the **API** login from the dashboard, not
 the account password) to `~/.dataforseo/credentials`, then `chmod 700 ~/.dataforseo; chmod 600 ~/.dataforseo/credentials`.
 The script refuses a credentials file anyone else can read. Never in this repo, never in `~/.env`, never pasted
 into chat. Verify with `dfs.py balance`.
