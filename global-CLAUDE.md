@@ -171,17 +171,22 @@ hostname, so two Vultr boxes would each run the other's rows. On a Vultr box, wr
 `~/.fleet-host` (both tools read it first) and use that name as the row's host. vtla0225 does this; mpd2026's
 `tab-staging` row still uses `vultr` and works only because mpd2026 has no `~/.fleet-host`.
 
-## Cron (server jbm001, all 11 webapps)
+## Cron (server jbm001, all 9 webapps)
 WP-Cron disabled site-side (`DISABLE_WP_CRON=true` in every wp-config.php). Driven by the
 `runcloud` **user crontab** (hand-rolled, not RunCloud-managed — deliberate: identical reliability,
-keeps fine stagger control + inline comments). Frequency tiered to workload (retier 2026-06-30):
-- **1 min** — app-lwv, app-mbc25 (live WooCommerce / Action Scheduler; lwv also Mailster).
-- **5 min** — app-ahml (production), app-fmed (heaviest event load).
-- **10 min** — bbbrave, fmnb25, holdingspace, mediof, morristow, expert-t, app-highland (brochure).
+keeps fine stagger control + inline comments). Frequency tiered to workload (retier 2026-06-30;
+roster verified against `crontab -l` and every wp-config 2026-11-13):
+- **1 min** — app-mbc25 (live WooCommerce / Action Scheduler). Holds the tier alone since app-lwv left
+  2026-09-17 (moved to SiteGround).
+- **5 min** — app-ahml (production, digits 2/7), app-fmed (heaviest event load, digits 4/9).
+- **10 min** (brochure) — expert-t 0, bbbrave 1, app-highland 3, holdingspace 5, app-wcdems 6 (added
+  2026-09-30), morristow 8. Removed: fmnb25 (offboarded 2026-09-06), mediof.
+- Also in the crontab: the hourly `mail-monitor` (`:47`, mpd-mu-plugins) — not WP-Cron, reads the Mailgun API.
 
 Command form: `/usr/local/bin/wp cron event run --due-now --quiet --path=<webapproot>` (no `cd`).
-Once a tier runs out of distinct minutes, a site shares one with a `sleep <n>;` sub-offset ahead of the
-`wp` call — app-highland is the first to do this (digit 3, `sleep 30`). Keep that form when adding more.
+**The 10-minute digits are now full** (0/1/3/5/6/8; 2/4/7/9 belong to the 5-minute tier). The next site
+shares a digit with a `sleep <n>;` sub-offset ahead of the `wp` call. app-highland used this form
+(digit 3, `sleep 30`) until fmnb25's removal freed the slot, so no site uses it today.
 Stderr → `~/cron-logs/<app>.log` (empty on success; growth = a real recurring error).
 Crontab backup: `~/cron-handrolled.bak`. Restore: `crontab ~/cron-handrolled.bak`.
 ⚠️ **Refresh the backup in the same edit that changes the crontab.** On 2026-08-04 it was found 5 weeks
