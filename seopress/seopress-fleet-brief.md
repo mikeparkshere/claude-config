@@ -444,6 +444,35 @@ artifacts: `mpd2026` box, `~/backups/tab-seopress-2026-11-08/`. Reusable tools: 
   checklist, 2026-11-08). The Rank Math Slack "Written by: <login>" labels disappear. That's a fix, not a
   regression: they leak the WP login name.
 
+### 7e. Measured: A Home Made Life, 2026-11-13
+
+Fifth port, the **first on OpenLiteSpeed** (jbm001, lsphp84). 21 indexable URLs, 2 exact-match redirects, Rank Math
+schema module already off (all JSON-LD in `ahml-functionality/inc/schema.php`), Rank Math owning OG/X. TAB method:
+staged inert, two head captures with **0 differences**, then a **7-second flip** (activate SEOPress, deactivate RM Pro +
+RM, rewrite flush, LSCache + Cloudflare purge). Artifacts: jbm001 `~/backups/app-ahml/seopress-2026-11-13/`, including
+a self-contained `head_capture.py` (capture + diff at origin, cache-busted, sitemap-aware) and `configure.php` / `port.php`.
+
+- **`RedirectMatch` does not exist on OpenLiteSpeed.** The §7b/§7c `.htaccess` route is Apache-only. On an OLS box,
+  move a small Rank Math map into the core plugin (`template_redirect` priority 0, exact paths, trailing slash optional,
+  query passed through, `X-Redirect-By` set to the client prefix). Confirm with the header after RM is off: while
+  RM is active its redirect fires first and masks yours.
+- **SEOPress falls back to the site icon for `og:image`** when a page has no featured image and no global default
+  (`inc/functions/options-social.php`, last branch). On a Bricks site that's every Page, the homepage included, so
+  shares show a 512px favicon. Rank Math printed no image there. Set `seopress_social_facebook_img` (+ `_attachment_id`,
+  `_width`, `_height`) to a real photo, and leave `_img_default` unset so featured images still win.
+- **A CPT with zero published posts still gets a child sitemap listing its archive URL.** On AHML that advertised
+  `/areas/`, which 301s home while the section is dark. Keep such a CPT out of `seopress_xml_sitemap_post_types_list`
+  until it launches, and compare sitemap URL sets (not just child names) before and after.
+- **The Security role block doesn't stop the universal metabox from loading.** `ROLES_BLOCKED_FOR_USER` hides its tabs
+  client-side, but the block-editor sidebar, its scripts, the inline primary-term selector and the `wpseopress/*`
+  blocks still load for a blocked role. Close them with `seopress_can_enqueue_universal_metabox` → false,
+  `seopress_primary_term_inline_selector` → false (10.4+), and `allowed_block_types_all` minus `wpseopress/*`. The media
+  list's alt-text column is on `manage_media_columns`, not a post-type column filter. Reference: `ahml-functionality/inc/seopress.php`.
+- **OPcache revalidates every 60 s on these lsphp boxes.** An HTTP check of a PHP change made seconds earlier tests
+  the old code. Wait a minute before concluding a filter "doesn't work".
+- Service descriptions under `%%post_excerpt%%` were a 275-char ellipsis trim (Rank Math's `%excerpt%` gave 450).
+  Neither is a good description; the fix is per-post `_seopress_titles_desc`, as §5 says.
+
 ---
 
 ## 8. Decision inputs
@@ -462,7 +491,7 @@ artifacts: `mpd2026` box, `~/backups/tab-seopress-2026-11-08/`. Reusable tools: 
 - Migration cost is per-site and non-trivial for anything with schema or redirects.
 
 **Still unknown**
-- Four Rank Math ports executed (§7a–§7d), up to ~60 clicks/day, 37 redirects and plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
+- Five Rank Math ports executed (§7a–§7e), up to ~60 clicks/day, 37 redirects and plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
 - SEOPress Pro has been trialled once: MMHN ran PRO 10.2.1, and it was **removed 2026-10-08**, its Woo jobs moved to the core plugin (KB 03). Every port since has been Free.
 - No SEOPress site has been through a full indexing cycle yet, so there is no ranking or Search Console evidence either way.
 
