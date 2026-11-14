@@ -18,6 +18,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { extractHead } = require('./lib/head');
 
 const dir = process.argv[2];
 if (!dir) { console.error('usage: node reduce.js <harvest dir>'); process.exit(2); }
@@ -164,22 +165,7 @@ function seoFromMeta(p) {
 }
 function seoFromHtml(key) {
   const f = path.join(dir, 'raw/html', key + '.html');
-  if (!fs.existsSync(f)) return null;
-  const h = fs.readFileSync(f, 'utf8');
-  const head = (h.match(/<head[\s\S]*?<\/head>/i) || [h])[0];
-  const meta = (attr, name) => { const m = head.match(new RegExp('<meta[^>]+' + attr + '=["\']' + name + '["\'][^>]*>', 'i')); return m ? decode((m[0].match(/content=["']([^"']*)["']/i) || [])[1] || '') : ''; };
-  const types = []; (h.match(/<script[^>]+application\/ld\+json[^>]*>[\s\S]*?<\/script>/gi) || []).forEach(s => {
-    (s.match(/"@type"\s*:\s*("[^"]+"|\[[^\]]*\])/g) || []).forEach(t => { (t.match(/"([A-Za-z]+)"/g) || []).slice(1).forEach(x => types.push(x.replace(/"/g, ''))); });
-  });
-  const hosts = new Set(); (h.match(/<(script|link|iframe|img|source)\b[^>]+(src|href)=["']https?:\/\/[^"'/]+/gi) || []).forEach(x => hosts.add(x.replace(/^.*\/\//, '')));
-  return {
-    title: decode(((head.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim()),
-    description: meta('name', 'description'), robots: meta('name', 'robots'),
-    canonical: rel(((head.match(/<link[^>]+rel=["']canonical["'][^>]*>/i) || [''])[0].match(/href=["']([^"']+)/i) || [])[1] || ''),
-    og_title: meta('property', 'og:title'), og_description: meta('property', 'og:description'), og_image: meta('property', 'og:image'),
-    h1: (h.match(/<h1\b[\s\S]*?<\/h1>/gi) || []).map(one),
-    schema_types: Array.from(new Set(types)), generator: meta('name', 'generator'), third_party_hosts: Array.from(hosts),
-  };
+  return fs.existsSync(f) ? extractHead(fs.readFileSync(f, 'utf8'), home) : null;
 }
 
 /* ---------- per page ---------- */
