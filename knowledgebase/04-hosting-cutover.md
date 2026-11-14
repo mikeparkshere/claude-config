@@ -1105,3 +1105,25 @@ ldd browsers/chromium-*/chrome-linux/chrome | grep 'not found'   # expect nothin
 ```
 That list cleared `ldd` in one pass (the first eleven are the direct misses, the rest are their deps). Launch with `executablePath` set to that `chrome` and `args: ['--no-sandbox']`.
 **First seen:** Millersburg Brewing (app-mbc25, jbm001), 2026-11-13. Built to measure a cross-origin tap-list iframe (`03`, "A cross-origin embed iframe can't size itself"). Extends the above-seam entry; it doesn't conflict with it. *(Tier 2 site, master project section, unharvested.)*
+
+### A WordPress site restored from a backup shares the original's Redis namespace, because RunCloud Hub's config travels in `wp-content/`
+**Symptom:** A restored copy on a new domain renders links and images from the **original** domain although
+`search-replace` reported success and the database holds no old URLs. `wp option get home` also returns the old value
+after the replace.
+**Why:** RunCloud Hub's object-cache drop-in builds every Redis key from `wp-content/rcwp-redis-config.php` (`domain` +
+`prefix`), not from `WP_CACHE_KEY_SALT`. A Duplicator package or a files tarball carries that file, so the copy reads and
+writes the **original site's namespace**. The copy serves the original's cached objects, and the original (if it ever takes
+traffic again, e.g. a rollback) can serve the copy's. Setting a new `WP_CACHE_KEY_SALT` changes nothing.
+**Fix:** In the copy, before it takes traffic: run `wp cache flush` once (it's **selective** by default and clears only
+that `domain:prefix` namespace, not the whole Redis DB; check `RCWP_REDIS_SELECTIVE_FLUSH` isn't set to false), then edit
+`rcwp-redis-config.php` to the copy's own domain and a fresh 14-hex prefix. Confirm with
+`wp eval 'global $wp_object_cache; $r=new ReflectionProperty($wp_object_cache,"selective_key"); $r->setAccessible(true); echo $r->getValue($wp_object_cache);'`
+on both webapps: the namespaces must differ. Found 11/14/2026 restoring a retired site as a test fixture.
+**Same restore, also check:** Duplicator Pro's **schedules and storage credentials** come along too. With cron off they
+shouldn't fire, but if one did, the copy would push into the original's remote storage, where retention can rotate out
+real backups. Deactivate them in the copy (`ScheduleEntity::getAll()` → `setActive(false)` → `save()`). And
+`POST /servers/{id}/webapps/wordpress` needs `name`, `domainName`, `siteTitle`, `adminUsername`, `password`,
+`adminEmail` (plus `user`, `phpVersion`, `stack`, `stackMode`); a webapp of type `wordpress` comes with `open_basedir`
+already set to its own folder. `POST …/ssl` needs `provider`, `enableHttp`, `enableHsts` (`authorizationMethod: http-01`
+issues in about 20 s once DNS resolves).
+
