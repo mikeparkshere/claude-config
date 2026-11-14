@@ -151,6 +151,11 @@ reads `.htaccess` for them: `.html`, `.txt`, `.css`, `.js`, images and **`.zip`*
 `Require all denied` blocked a `.log` 403 while the `.zip` beside it stayed 200). So `.htaccess` cannot
 protect backup archives or static docs. Use file mode (`600`) or a panel NGINX rule
 (`location ^~ /path/ { return 404; }`). Full matrix: KB `04`, the hybrid static-files entry.
+⚠️ **`wp runcache purge` does not purge pages when RunCache's `page_cache_type` is `runcloud-native`** (found TAB
+2026-11-14). Pages then live in RunCloud's nginx cache; the plugin's purge only empties `wp-content/cache/runcache/`
+and prints Success anyway. Purge with the API: `POST /servers/{id}/webapps/{w}/runcache/purge-all` (async, ~10 s), then
+check **without** a cache-buster: `?cb=` bypasses the cache, so it shows new output over a stale page. Read the type
+with `GET …/webapps/{w}/runcache` (`page_cache_type` in `cacheSettings`). Pages also expire on `cache_expiry` (3600 s on TAB).
 
 ## Fleet mu-plugins (since 2026-10-19)
 Shared, byte-identical mu-plugins live in the **private repo `mikeparkshere/mpd-mu-plugins`** and are
