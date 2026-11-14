@@ -1,0 +1,5 @@
+.DS_Store
+*.log
+/includes/config.local.php
+/node_modules/
+/_harvest/

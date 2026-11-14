@@ -1,0 +1,9 @@
+{
+  "_about": "The reverse map: one entry per partial, written while it's built. wp_equivalent says how to rebuild it in WordPress (Bricks component and/or ACF group) without opening the flat site. Delete this key in a real project if you like.",
+  "hero": {
+    "file": "includes/partials/hero.php",
+    "block": "hero",
+    "args": ["heading", "subheading", "image", "cta_label", "cta_url"],
+    "wp_equivalent": "Bricks component 'Hero' with matching properties; or ACF group: heading (text), subheading (textarea), image (image), cta (link)"
+  }
+}
