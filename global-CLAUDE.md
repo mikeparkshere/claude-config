@@ -113,6 +113,13 @@ values *afterwards*: `PATCH /servers/{id}/webapps/{w}/settings/fpmnginx` is the 
 (verified for `openBasedir`, MMHN 2026-07-21, and for `processManager*` / `maxExecutionTime` / `maxInputVars`,
 vultr app-nfhl 2026-10-21). Send the **whole** `/settings` body (drop `databases`) with your changes merged in,
 then read `/settings` back. The panel form mirrors these field names one-to-one if you'd rather click.
+⚠️ **That PATCH rebuilds the whole pool file from the API body, so it erases any hand edit to the pool**
+(found TAB / mpd2026, 2026-11-15). TAB's pool had `set_time_limit` + `ignore_user_abort` removed by hand from
+`disable_functions` for Duplicator (07-23), but the API's `disableFunctions` still listed both. A body sent back as
+read would have disabled them again and broken the nightly backup. **Before any FPM PATCH, compare the GET's `disableFunctions`
+against the live pool** (`sudo grep disable_functions /etc/php*rc/fpm.d/<app>.conf`) and send what the site needs.
+`disableFunctions` **is** writable there, which makes it the durable home for that fix. Pool directives the API
+has no field for (e.g. `request_terminate_timeout`) go in `/etc/php-extra/<app>.conf`, which a rebuild keeps.
 ✅ **But set them at creation through the API** (verified 2026-10-01, MMHN): `POST /servers/{id}/webapps/custom`
 accepts the same `processManager*` / `memoryLimit` / `maxExecutionTime` / `timezone` fields and applies them, so
 a new webapp never has to ship on the 5-worker default. Read back `/settings` to confirm.
