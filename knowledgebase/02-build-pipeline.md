@@ -93,7 +93,7 @@ This mirrors the established pattern from prior projects: the first one or two s
 
 **Never guess Bricks internal schemas. Build one example in the builder, save, read it back, replicate the shape.**
 
-Bricks runs a JS-side tree validator when the builder loads a template. Unknown setting keys and malformed values are silently dropped, and the cleaned tree is re-saved on the next builder write. A guessed schema may work on first render and then vanish the next time the builder opens. A builder-verified schema sticks.
+A guessed key persists in the DB, survives builder saves, and emits nothing, or emits something by accident (a string `_padding` emitted valid CSS, MMHN 11/06). Neither a readback nor a save tells you whether it's right. **A shape is verified when it matches builder-written output or the control definition, and shows up correctly in the rendered page.** There is no general validator in the builder JS (2.4.5, read 11/15/2026); the only rewrite is the key-suffix migration under failure modes.
 
 Discovery workflow:
 
@@ -105,16 +105,11 @@ Discovery workflow:
 
 When a schema is not in the library below, this is how you get it. An incomplete schema library is expected — the golden rule is the method for filling it.
 
-### Verifying a CLI-written tree — a no-change save proves nothing (Bricks 2.4.5)
+### Verifying a CLI-written tree — read the render, not a save (Bricks 2.4.5)
 
-When a shape had to be written from control definitions (no builder-saved example anywhere), the builder still has to see it. **Opening and saving with no edits does not do that:** the save posts the global classes and a screenshot, but no `content`, so the tree is never re-submitted (`03` → "A Bricks builder save does not bump `post_modified`…", corrected 2026-11-10). Two methods that do work:
+When a shape had to be written from control definitions (no builder-saved example anywhere), verify it by what it **emits**: the rendered HTML/CSS for the element (`post-<id>.min.css` or the inline global-class CSS), and the element working on the page. A builder save adds nothing: a save with no edits posts no `content` (`03` → "A Bricks builder save does not bump `post_modified`…", corrected 2026-11-10), and a save that does carry the tree keeps unknown keys anyway. If you need to know what the builder itself makes of a key, read its in-memory tree after load (`document.querySelector('*')…__vue_app__.config.globalProperties.$_state.content`, element carrying `__vue_app__`) and diff it against the DB; the only difference to expect is the key-suffix migration below, and only for an element whose panel was opened. Headless recipe: Chromium on the box (`04` → "Headless Chrome on a RunCloud box without root"), an admin session from `WP_Session_Tokens::get_instance( $uid )->create( $exp )` plus `wp_generate_auth_cookie()` for `logged_in` and `secure_auth` (cookie file mode 600; `->destroy()` the token afterward), ready when `#bricks-toolbar-top` and `#bricks-builder-iframe` exist.
 
-1. **Builder memory after load.** The validator runs on load, so the builder's in-memory tree *is* the validated tree. Read `document.querySelector('*')…__vue_app__.config.globalProperties.$_state.content` (find the element carrying `__vue_app__`) and diff it against the DB, element by element.
-2. **A carried save.** Make a builder-only edit (an element `label`), save, and diff the DB tree against the pre-save snapshot: the label should be the only change. Then the tree has genuinely been through a builder save.
-
-Both run without a person at the builder: headless Chromium on the box (`04` → "Headless Chrome on a RunCloud box without root"), an admin session minted with `WP_Session_Tokens::get_instance( $uid )->create( $exp )` plus `wp_generate_auth_cookie()` for `logged_in` and `secure_auth` (cookie file mode 600; `->destroy()` the token afterward), ready when `#bricks-toolbar-top` and `#bricks-builder-iframe` exist (2.4.5), save with Ctrl+S. Capture save payloads by wrapping `XMLHttpRequest.prototype.send` in an init script: the network layer won't expose the multipart screenshot request.
-
-⚠️ **Entries below that say a shape "survived a builder open-and-save with no changes" or a "builder round-trip clean" without naming an edit were verified for render and for classes, not for the tree.** Treat their element-tree keys as source-read until re-checked by one of the two methods above.
+⚠️ **Entries below that cite "survived a builder save", a "builder round-trip clean" or a "builder-save readback" as evidence are verified only by their other evidence** (builder-written source, control definition, rendered result). The save itself verified nothing.
 
 **A sibling install is a legitimate golden-rule source.** When this install has no builder-saved example of a shape, read one from another project's builder-saved output — `bricks_global_classes` (an option, so no builder session needed) or a template's `_bricks_page_content_2`. It is builder-saved output either way, and cheaper than a discovery session. It is weaker only when the Bricks versions diverge, so compare versions first. Several WCDP schemas below were lifted this way from MMHN and then proven rendering on WCDP.
 
@@ -223,7 +218,7 @@ If a setting persisted in the DB but emitted no CSS, the schema shape is wrong �
 
 ## Failure modes
 
-**Silent strip on next builder load.** A write reports success, readback confirms the element, but after the builder opens, the element reverts or disappears. Cause: the JS-side tree validator dropped an unknown key. Fix: golden rule — any schema not builder-verified gets stripped.
+**A value reverts or disappears after a builder session.** First suspect a stale builder tab saving over a CLI write (`03`). Second, the one rewrite the builder does make (2.4.5 `main.min.js`, `migrateSettingKeys`): when an element's settings panel mounts, any key containing `_hover` becomes `:hover`, and any `_<breakpoint>` suffix (non-desktop, non-custom breakpoints) becomes `:<breakpoint>`, so `_padding_tablet_portrait` reads back as `_padding:tablet_portrait`. A narrow readback for the old name then finds nothing. Write the colon form. Beyond that it deletes only specific keys (`executeCode` without the permission, a duplicate `_cssId`, import-only keys). A wrong key does **not** vanish: it stays in the DB and emits nothing.
 
 **Global class crashes the site.** Site returns a critical error on every request after a `bricks_global_classes` write; error log shows `Cannot use object of type stdClass as array` in `bricks/includes/interactions.php`. Cause: `'settings' => new stdClass()` instead of `array()`. WordPress will not bootstrap, so WP-CLI fails — recovery is direct MySQL. Prevention: `'settings' => array()` always, even as a placeholder.
 

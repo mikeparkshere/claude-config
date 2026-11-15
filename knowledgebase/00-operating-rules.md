@@ -319,7 +319,7 @@ There are three surfaces for build work. They are complementary, not interchange
 | Bulk operations: batch class creation, global class CSS population, custom query types, dynamic tags, CPT scaffolding, ACF fields | **WP-CLI direct DB edit** — the back half of `02`. |
 | `[stack:acss]` Configuring ACSS to a brand: palette, type scale, radius, buttons, focus, tokens | **WP-CLI** — `Database_Settings::get_instance()->save_settings($merged, true)` (instance method, not static) after `wp_set_current_user( <admin_id> )` (a real administrator, see Authentication below); convention in `01`, procedure in `02`. The **color palette is the exception** — its shade ladder is dashboard-JS-derived, so prompt for the palette in the ACSS dashboard once (or a PHP derivation helper). Never browser-automate the ACSS dashboard for the scriptable settings. |
 
-When a WP-CLI edit stalls — Bricks stripping writes, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
+When a WP-CLI edit stalls — a value that won't render, a specificity war, a schema you don't have — the fix is almost always to drop into the builder, discover the schema there, and resume via WP-CLI. The builder is the source of truth for shapes; WP-CLI is the mechanism for replicating them at scale.
 
 The paste-into-Bricks-UI step from the older wireframe workflow is the thing the pipeline is built to eliminate. Default to the WP-CLI build path.
 
@@ -475,7 +475,7 @@ Two rules govern almost everything in a build. They are easy to confuse because 
 
 **Never guess Bricks schemas. Replicate a shape that has been saved through the builder — either by building a minimal example yourself, or by reading back one that already exists in the project.**
 
-This is the single most reliable principle for direct-DB work. Bricks runs a JS-side tree validator when the builder loads a template — unknown setting keys and malformed values get silently dropped, and the cleaned tree is re-saved on the next builder write. Every schema guess that is not builder-output-verified gets stripped. Every schema discovered this way sticks.
+This is the single most reliable principle for direct-DB work. Bricks accepts almost anything in a settings array: an unknown key or a wrong-shaped value **persists in the DB, survives builder saves, and emits nothing** (or, by accident, something). A guessed schema therefore fails silently and reads back fine. **A shape is verified when it matches output the builder wrote, or the control definition, and the rendered page shows it working.** Surviving a builder save proves nothing, and builder-save checks are not a verification step on any project (settled 11/15/2026; tested on Bricks 2.4.5 with planted bad keys, MMHN 11/06, and the builder JS read end to end, 11/15). The one known rewrite is narrow: when an element's settings panel opens, the builder renames old-style `_hover` / `_<breakpoint>` key suffixes to the `:` form (`02`, failure modes).
 
 The discovery workflow:
 

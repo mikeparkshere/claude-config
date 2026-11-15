@@ -336,9 +336,9 @@ Accessibility is structural — encode it in the markup at build time, not via r
 
 ---
 
-## Inheriting a project — the silent-strip startup audit
+## Inheriting a project — the dead-settings startup audit
 
-Bricks' validator silently drops settings with unknown keys at write time, and **the dropped values stay in the DB** — Bricks doesn't clean them up. The class still carries the wrong-key data; it just never renders. This matters on handover: learning a schema lesson fixes future scaffolds, it does **not** retroactively fix classes written before the lesson landed. A project built by someone else (or by you, before a gotcha was known) can be carrying dormant settings that were meant to do something.
+Bricks ignores settings with unknown keys when it generates CSS, and **the values stay in the DB**, through builder saves too — Bricks doesn't clean them up. The class still carries the wrong-key data; it just never renders. This matters on handover: learning a schema lesson fixes future scaffolds, it does **not** retroactively fix classes written before the lesson landed. A project built by someone else (or by you, before a gotcha was known) can be carrying dormant settings that were meant to do something.
 
 So on any project you weren't there for the build of, audit before you style:
 
