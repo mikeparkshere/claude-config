@@ -35,6 +35,14 @@ Writes the rules, `reduced/redirect-plan.md` (the table for `MIGRATION.md`) and 
   old media paths. No panel config needed.
 - Put the block **after** the site's own routing, which owns `RewriteEngine On`, robots and the www rule.
 
+- **Plugin redirects are data, not strings.** Rank Math stores each redirect's sources as a serialized PHP array
+  of `{pattern, comparison}`. They're parsed now; trashed or inactive redirects are skipped (one pointed at a page
+  that no longer existed), and anything but an exact match becomes a gap to write by hand.
+- **Rules keyed to content-hashed files go stale.** Old image URLs 301 to the new built file, whose name carries a
+  hash. After an image rebuild changes a set, regenerate the media map and the rules, or the old URL lands on a 404.
+- **The harvest can't see every referenced image.** Images only the rendered pages show (query loops, CSS) come in
+  as `rendered-only` in `media.json`; map them in `plan.media` like any other.
+
 ## Verifying
 
 1. The plan: run `redirect-tests.tsv` against the old site's URLs as you build. Parity-check does this.

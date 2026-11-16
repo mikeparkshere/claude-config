@@ -48,6 +48,31 @@ those win. Parity needs the rendered run.
 - **Content isn't always where its element says.** Review names typed into the review text stay in the text;
   the reducer reports the source faithfully rather than guessing.
 
+## Things the second port taught (11/16/2026, Bricks + ACSS + SEOPress + WS Form)
+
+- **Orphaned Bricks elements.** Deleting a parent in the builder can leave its children in the page data with a
+  `parent` id that no longer exists. Bricks never renders them. The reducer used to promote them to top-level
+  sections, which produced "hidden" sections, duplicated blocks and a missing image no visitor ever saw (166
+  orphans across six pages). Now they're skipped and counted in FLAGS. If a page note shows content the live page
+  doesn't, check the FLAGS for orphans before calling it hidden.
+- **Default templates.** A Bricks header or footer with **no conditions** applies site-wide unless Settings →
+  Templates → "Disable default templates" is on. The harvest records that setting; the reducer applies it.
+- **Attachment query loops** (a slider or gallery fed by a media folder, e.g. HappyFiles `taxonomy::term_id` filters)
+  are resolved by `harvest.php` while WordPress is loaded; their images reach `media/` and the page notes. Safety
+  net: `harvest.sh` sweeps the rendered pages for every uploads image (CDN-rewritten URLs included) and copies any the
+  data walk missed; `reduce.js` flags them and adds them to `media.json` as `rendered-only`.
+- **WS Form** keeps the live form as JSON in `wsf_form.published`; `wsf_field` has no `form_id` column. The harvest
+  reads fields, required flags, options and the email/message actions from that JSON. A form with no email action
+  only ever saved to the database: the inventory says so.
+- **List elements carry descriptions** (`items[].description`), e.g. a drink and its ingredients. The reducer keeps them.
+- **Optimizer-delayed CSS** (Perfmatters "Remove Unused CSS" + delayed stylesheets) makes a capture without user
+  interaction look broken, and a stale used-CSS snapshot can make the live site look broken to visitors too. `shot`
+  now nudges the mouse and wheel before capturing. Report a stale snapshot to Michael as a live-site finding.
+- **Background video** keeps the network busy, so `networkidle` never comes. `shot` falls back to DOM-ready plus a
+  settle time.
+- **Captures fire analytics** on the live site. `shot` blocks analytics and ad beacons by default
+  (`--allow-analytics` to let them through).
+
 ## Adding a builder
 
 One file in `scripts/reducers/<builder>.js` exporting `(elementsOrPost, ctx) => string[]`. `harvest.php`

@@ -19,7 +19,10 @@ ecommerce, member or course areas, or anything that needs a CMS. The inventory's
 
 Stop at each gate and wait for Michael.
 
-1. **Harvest** (read-only): `scripts/harvest.sh --path <wp root> --out <dir> --base-url https://<live host> --screens`
+1. **Harvest** (read-only): `scripts/harvest.sh --path <wp root> --out <dir> --base-url https://<live host> --screens`.
+   Same day, **test the old site's mail credentials** (one authenticated GET with the SMTP/API key it uses). A dead
+   key behind a silent transport means the client's form emails have already stopped: tell Michael at Gate 1, not at
+   cutover. → `reference/forms.md`
 2. **Reduce**: `node scripts/reduce.js <dir>`. Read `reduced/inventory.md` and `reduced/pages/`; **never** `raw/`.
 3. **Gate 1, inventory.** Fill `MIGRATION.md` (`templates/MIGRATION.md`) from the inventory: candidate verdict, page
    list, redirect plan (`node scripts/url-map.js <dir>`), form plan, every FLAG answered.

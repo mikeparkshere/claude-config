@@ -60,6 +60,18 @@ Self-hosted `woff2`, subset to the characters and weight axes actually used (the
 Font files carry no content hash, so **rename the file if it changes**. Flag Adobe Fonts or any licensed source at
 Gate 1 instead of downloading.
 
+**Synthetic bold.** If the old theme asked for a weight a font doesn't ship (a single-weight display face set to a
+heading weight of 600), the browser fakes the bold, and that can change the look entirely: on the second port a
+triple-line outline face rendered solid. Compare the live render with the face drawn at its own weight before
+matching it, and keep `font-weight` + `font-synthesis: weight` when the faux bold *is* the brand look.
+
+## Video
+
+A background video is the hero's motion, not its LCP: make a poster frame the LCP image (preloaded), and load the
+video after `load`, never under `prefers-reduced-motion` or Save-Data. Pick a cut by viewport in JS (portrait for
+phones, 1280, 1920); `<source media>` isn't reliable. Encode H.264 with no audio track and `+faststart`; name files by
+content hash like images. A 38 MB original is not a web asset: ask for cuts (the second port got 10/12/23 MB).
+
 ## Third parties
 
 - **Analytics:** load only on the production host, and as a file (`assets/js/ga.js`), not Google's inline snippet,
@@ -76,4 +88,6 @@ Lighthouse on the staging host. Analytics adds ~150 ms of TBT on production that
 ## Visual checks
 
 Headless Chrome (`~/tools/browser/shot`, where installed) at 390 and 1440 before calling any visual change done.
-Full-page captures need `--reduced-motion`, or scroll-revealed blocks come out blank.
+Full-page captures need `--reduced-motion`, or scroll-revealed blocks come out blank. `shot` blocks analytics by
+default, nudges the page so delayed CSS loads, and survives pages that never go network-idle (video). It lives only
+on the box (`~/tools/browser/`, not in a repo; the 11/16/2026 changes kept a `.bak` beside it).

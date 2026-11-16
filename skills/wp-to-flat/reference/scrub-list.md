@@ -24,6 +24,9 @@ placeholders are warnings, not failures.
   `url-map.js` output lives there.
 - **Shortcodes are checked in rendered text, not source.** In source the pattern matches `arr[i]`, `$x[key]` and
   CSS `[hidden]`. Scripts, styles, `<code>` and `<pre>` are stripped before matching.
+- **The local server must tell the truth about missing pages.** `php -S` on its own serves `index.php` for any path,
+  so a sitemap URL whose page was never built answered 200 and the lint passed (second port). The lint now runs it
+  behind a router (real files, directory `index.php`, else a real 404) and probes a nonsense path, which must 404.
 - **Local render, never production.** No analytics hits, nothing on the live site, and it works before the domain
   exists. Pages that key analytics or HSTS on the production host stay quiet on `127.0.0.1`.
 - **The size-suffix check needs the harvest.** A generic `-\d+x\d+\.` pattern fails on legitimate files like

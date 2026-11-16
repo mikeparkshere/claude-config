@@ -47,3 +47,45 @@ The skill was written *after* this port, from its retro, then validated against 
   in `wp-content/`. → `fixture.md` step 7; fleet KB 04.
 - The retired site's webapp held a no-DNS placeholder domain; pointing DNS at it brought the dark site back. →
   `cutover.md`: never reuse the placeholder.
+
+---
+
+## 2026-11 — second port (Bricks + ACSS + SEOPress + WS Form brochure site, 9 URLs → 6, three forms)
+
+The first port run end to end by the skill: harvest to cutover and decommission in one day.
+
+**Harvest and reduce**
+- 166 orphaned Bricks elements (parent deleted in the builder) read as hidden sections, duplicate blocks and a
+  "missing" image. Bricks never renders orphans. → The reducer skips and flags them.
+- Header and footer had no conditions and were reported unused; Bricks applies them as default templates. → The
+  harvest records "disable default templates"; the reducer applies the default.
+- A home-page photo strip came from attachment query loops filtered by a media-folder taxonomy; 17 images were
+  missed. → `harvest.php` resolves attachment loops; `harvest.sh` sweeps rendered pages for uploads images as a
+  safety net; `reduce.js` adds them to `media.json` as `rendered-only`.
+- WS Form fields came back empty (`wsf_field` has no `form_id`). → Read from `wsf_form.published`, actions included.
+- List descriptions (a drink and its ingredients) were dropped. → Kept.
+- Rank Math redirects came through as serialized PHP, one of them trashed. → Parsed; inactive skipped.
+- Live pages first-painted unstyled: an optimizer's "used CSS" snapshot predated a builder update and the real
+  stylesheets waited for user interaction. Captures inherited it, and a background video stopped `networkidle`
+  from ever arriving. → `shot` nudges the page, falls back from network-idle, and blocks analytics (the first
+  captures had logged page views on the live site).
+
+**Build**
+- A data file again earned its place: menus, gallery, hours, form definitions.
+- One definitions file for three forms (markup and validation from the same source); a conditional field in CSS
+  `:has()`; honeypot plus the old reCAPTCHA v3 key. → `forms.md` rewritten as tested.
+- A single-weight display face looked solid only because the old theme asked for weight 600 and the browser faked
+  it. → `architecture.md`: check for synthetic bold before matching a face.
+- The hero video was 38 MB; the client supplied cuts. → `architecture.md` → Video.
+- White on the brand pink failed contrast at button size; 19 px at weight 700 counts as large text and passed
+  without touching the color.
+- `partial()` didn't import `$secrets`, so the form rendered without the captcha key; caught at cutover by watching
+  which hosts the page loaded. → Skeleton fixed.
+
+**QA and cutover**
+- The scrub lint passed sitemap URLs whose pages didn't exist (`php -S` fallback). → Router + missing-page probe.
+- Parity: 0 FAIL, 15 REVIEW, all new H1s and meta descriptions (the old inner pages had neither).
+- The old site's mail key was dead and its transport silent; booking emails had stopped weeks before. Found only
+  when the new form failed on staging. → SKILL.md phase 1 and `forms.md`: test the mail credential at harvest.
+- Production and staging on the same server: cutover was a webapp domain move plus an SSL reissue, ~30 s of HTTPS
+  downtime. Decommissioning by API also removed the database and its user.
