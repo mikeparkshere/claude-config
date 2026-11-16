@@ -17,7 +17,7 @@ function asset(string $path): string {
 // A component: includes/partials/<name>.php, one BEM block, all variable content through $args.
 // Record each one in components.json (the way back to WordPress) when you write it.
 function partial(string $name, array $args = []): void {
-    global $site, $page, $data;
+    global $site, $page, $data, $secrets;   // $secrets: a form partial needs the reCAPTCHA/Turnstile site key
     include INC . '/partials/' . $name . '.php';
 }
 

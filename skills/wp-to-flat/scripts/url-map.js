@@ -105,13 +105,33 @@ redirect('routes', '(^|/)attachment/', '/', 301, 'attachment pages', '/some-page
 redirect('early', '^(sitemaps|sitemap_index|wp-sitemap|[a-z0-9_-]+-sitemap\\d*)\\.xml$', '/sitemap.xml', 301, 'old sitemap names', '/sitemap_index.xml', '/sitemap_index.xml, /page-sitemap.xml, /wp-sitemap.xml …');
 
 // Existing plugin redirects: carry them, pointed at their new targets
+// Rank Math stores `sources` as a PHP-serialized array of {pattern, comparison}; older harvests passed the raw string.
+// Only 'exact' sources become rules; other comparisons (contains, start, end, regex) are listed as gaps.
+const rankmathSources = (raw) => {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') return Object.values(raw);
+  const out = [], str = String(raw || '');
+  const re = /s:\d+:"pattern";s:\d+:"((?:[^"\\]|\\.)*)";s:\d+:"comparison";s:\d+:"([a-z]+)"/g;
+  let m; while ((m = re.exec(str))) out.push({ pattern: m[1], comparison: m[2] });
+  return out;
+};
 Object.keys(U.redirects || {}).forEach(src => (U.redirects[src] || []).forEach(r => {
-  let from = r.from || r.url || '', to = r.to || r.action_data || r.url_to || '';
-  if (src === 'rankmath') { try { const s = (typeof r.sources === 'string' && r.sources[0] === 'a') ? null : r.sources; from = s && s[0] ? s[0].pattern : String(r.sources); } catch (e) { from = String(r.sources); } }
-  if (!from || !to) return;
-  const fromPath = '/' + String(from).replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
-  const toPath = newPath(String(to).replace(U.home, '') || '/');
-  redirect('early', '^' + esc(fromPath.replace(/^\//, '')).replace(/\/$/, '') + '/?$', toPath, 301, 'existing redirect (' + src + ')', fromPath);
+  const to = r.to || r.action_data || r.url_to || '';
+  let froms = [r.from || r.url || ''];
+  if (src === 'rankmath') {
+    if (r.status && r.status !== 'active') return;            // trashed or inactive redirects are not live rules
+    froms = [];
+    rankmathSources(r.sources).forEach(sv => {
+      if ((sv.comparison || 'exact') === 'exact') froms.push(sv.pattern);
+      else gaps.push('Rank Math redirect "' + sv.pattern + '" (' + sv.comparison + ') -> ' + to + ': not exact-match, write it by hand');
+    });
+  }
+  froms.filter(Boolean).forEach(from => {
+    if (!to) return;
+    const fromPath = '/' + String(from).replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
+    const toPath = newPath(String(to).replace(U.home, '') || '/');
+    redirect('early', '^' + esc(fromPath.replace(/^\//, '')).replace(/\/$/, '') + '/?$', toPath, 301, 'existing redirect (' + src + ')', fromPath);
+  });
 }));
 
 // Extra rules from the plan

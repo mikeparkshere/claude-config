@@ -44,10 +44,25 @@ print("|".join(re.escape(x) for x in sorted(set(n))))' "$harvest/reduced/media.j
 elif [ -z "$harvest" ]; then echo "note: no --harvest, so the WP size-suffix check on image names was skipped"; fi
 
 # Layer 2
-: > "$tmp/render"; : > "$tmp/warn"
+: > "$tmp/render"; : > "$tmp/warn"; : > "$tmp/probe"
 if [ $render -eq 1 ]; then
   port=$(python3 -I -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-  (cd "$root/public" && exec php -S 127.0.0.1:$port -t "$root/public" >/dev/null 2>&1) & srv=$!
+  # Router: php -S on its own serves index.php for ANY missing path, so a sitemap URL whose page was never built
+  # would answer 200. Serve real files, directory index.php, else a genuine 404 (via 404.php when it exists).
+  cat > "$tmp/router.php" <<'PHP'
+<?php
+$root = $_SERVER['DOCUMENT_ROOT'];
+$path = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+$file = realpath($root . $path);
+if ($file !== false && strpos($file, realpath($root)) === 0) {
+    if (is_file($file)) return false;
+    if (is_dir($file) && is_file($file . '/index.php') && substr($path, -1) === '/') { chdir($file); require $file . '/index.php'; return true; }
+}
+http_response_code(404);
+if (is_file($root . '/404.php')) { require $root . '/404.php'; }
+return true;
+PHP
+  (cd "$root/public" && exec php -S 127.0.0.1:$port -t "$root/public" "$tmp/router.php" >/dev/null 2>&1) & srv=$!
   for i in $(seq 1 30); do curl -s -o /dev/null "http://127.0.0.1:$port/" && break; sleep 0.2; done
   { [ -f "$root/public/sitemap.xml" ] && grep -oE '<loc>[^<]+' "$root/public/sitemap.xml" | sed -E 's#<loc>https?://[^/]+##'; } > "$tmp/paths"
   [ -s "$tmp/paths" ] || echo / > "$tmp/paths"
@@ -56,6 +71,9 @@ if [ $render -eq 1 ]; then
     n=$((n+1)); code=$(curl -s -o "$tmp/page$n.html" -w '%{http_code}' "http://127.0.0.1:$port$p")
     printf '%s\t%s\t%s\n' "$p" "$code" "$tmp/page$n.html" >> "$tmp/fetched"
   done < "$tmp/paths"
+  # A path that can't exist must 404, or the server above isn't telling the truth about missing pages.
+  code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/scrub-lint-missing-probe-$$/")
+  [ "$code" = 404 ] || printf '%s\t%s\n' "(missing-page probe)" "answered $code, expected 404: the local server is masking missing pages" > "$tmp/probe"
   if [ -f "$root/public/404.php" ]; then
     code=$(curl -s -o "$tmp/page404.html" -w '%{http_code}' "http://127.0.0.1:$port/404.php")
     printf '%s\t%s\t%s\n' '(404 page)' "$code" "$tmp/page404.html" >> "$tmp/fetched"
@@ -76,7 +94,7 @@ for line in open(fetched):
     for m in re.finditer(r'\[/?[a-z][a-z0-9_-]*(\s[^\]\n]{0,80})?\]', text): print(f"{path}: leftover shortcode: {m.group(0)}")
     for m in re.finditer(r'\[[A-Z][A-Z ,]{3,}\]', text): print(f"{path}: placeholder: {m.group(0)}", file=sys.stderr)
 PY
-  filter < "$tmp/render.raw" > "$tmp/render"
+  filter < "$tmp/render.raw" > "$tmp/render"; cat "$tmp/probe" >> "$tmp/render"
   echo "rendered: $(wc -l < "$tmp/fetched") pages via php -S"
 fi
 

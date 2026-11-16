@@ -86,6 +86,41 @@ for p in b["posts"]: print(p["type"] + "-" + p["slug"] + "\t" + p["url"].replace
     echo "$code $rel" >> "$out/raw/html/status.txt"
   done < "$out/raw/url-list.tsv"
   say "html: $(grep -c '^200' "$out/raw/html/status.txt" || true) of $(wc -l < "$out/raw/url-list.tsv") returned 200 (see raw/html/status.txt)"
+  # Images the data walk can miss (query loops, shortcodes, CSS backgrounds) still show up in the rendered HTML,
+  # often behind an image CDN. Collect every uploads path, strip WordPress size suffixes, and copy the best master
+  # (optimizer backup > unscaled > upload) of any file not already in media/. reduce.js reads rendered-media.json.
+  python3 -I - "$out/raw/bundle.json" "$out/raw/html" > "$out/raw/rendered-media.tsv" <<'PY'
+import json, os, re, sys
+b = json.load(open(sys.argv[1])); site = b["site"]
+up = site.get("uploads_path", "/wp-content/uploads").rstrip("/")
+pat = re.compile(re.escape(up) + r"/((?:\d{4}/\d{2}/)?[^\"'\s)?,]+?\.(?:jpe?g|png|webp|gif|avif|svg))", re.I)
+seen = {}
+for f in sorted(os.listdir(sys.argv[2])):
+    if not f.endswith(".html") or f.startswith(("404-probe", "robots")): continue
+    for rel in set(pat.findall(open(os.path.join(sys.argv[2], f), errors="replace").read())):
+        if rel.split("/")[0] in ("bricks", "automatic-css", "ShortpixelBackups", "cache"): continue
+        rel = re.sub(r"-\d+x\d+(?=\.\w+$)", "", rel)
+        rel = re.sub(r"-scaled(?=\.\w+$)", "", rel)
+        seen.setdefault(rel, set()).add(f[:-5])
+json.dump({k: sorted(v) for k, v in sorted(seen.items())}, open(os.path.join(os.path.dirname(sys.argv[2]), "rendered-media.json"), "w"), indent=1)
+for rel in sorted(seen): print(rel)
+PY
+  basedir=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["site"].get("uploads_basedir",""))' "$out/raw/bundle.json")
+  if [ $media -eq 1 ] && [ -n "$basedir" ]; then
+    rn=0
+    while read -r rel; do
+      [ -f "$out/media/$rel" ] && continue
+      ext="${rel##*.}"; stem="${rel%.*}"
+      src=''
+      for cand in "$basedir/ShortpixelBackups/wp-content/uploads/$rel" "$basedir/$rel" "$basedir/$stem-scaled.$ext"; do
+        if run test -f "$cand" 2>/dev/null; then src=$cand; break; fi
+      done
+      [ -n "$src" ] || continue
+      mkdir -p "$(dirname "$out/media/$rel")"
+      if [ -n "$ssh" ]; then scp -q -o BatchMode=yes "$ssh:$src" "$out/media/$rel" 2>>"$log" && rn=$((rn+1)); else cp -p "$src" "$out/media/$rel" 2>>"$log" && rn=$((rn+1)); fi
+    done < "$out/raw/rendered-media.tsv"
+    say "rendered-only media: $(wc -l < "$out/raw/rendered-media.tsv") upload images on the pages, $rn more copied to media/"
+  fi
   if [ $screens -eq 1 ] && [ -x "$HOME/tools/browser/shot" ]; then
     mkdir -p "$out/screens"
     while IFS=$'\t' read -r key rel; do

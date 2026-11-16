@@ -50,6 +50,7 @@ $theme = wp_get_theme();
 $B['site'] = [
 	'name' => get_bloginfo('name'), 'tagline' => get_bloginfo('description'),
 	'home' => home_url('/'), 'siteurl' => site_url('/'), 'language' => get_bloginfo('language'),
+	'uploads_basedir' => $uploads['basedir'], 'uploads_path' => wp_make_link_relative($uploads['baseurl']),
 	'timezone' => wp_timezone_string(), 'permalink_structure' => get_option('permalink_structure'),
 	'blog_public' => (int) get_option('blog_public'), 'wp_version' => get_bloginfo('version'), 'php' => PHP_VERSION,
 	'show_on_front' => get_option('show_on_front'), 'page_on_front' => (int) get_option('page_on_front'),
@@ -134,6 +135,8 @@ if (get_template() === 'bricks' || defined('BRICKS_VERSION')) {
 		'custom_fonts' => array_map(fn($f) => ['id' => $f->ID, 'name' => $f->post_title, 'faces' => get_post_meta($f->ID, 'bricks_font_faces', true)],
 			get_posts(['post_type' => 'bricks_fonts', 'numberposts' => -1, 'post_status' => 'publish'])),
 		'google_fonts_disabled' => !empty($gs['disableGoogleFonts']),
+		// Bricks applies a header/footer with no conditions site-wide unless "Disable default templates" is on.
+		'default_templates_disabled' => !empty($gs['defaultTemplatesDisabled']),
 	];
 }
 
@@ -195,7 +198,11 @@ $B['seo'] = [
 	]),
 	'redirects' => [],
 ];
-if (($t = $table('rank_math_redirections')) && ($r = $wpdb->get_results("SELECT sources, url_to, header_code, status FROM $t", ARRAY_A))) $B['seo']['redirects']['rankmath'] = $r;
+if (($t = $table('rank_math_redirections')) && ($r = $wpdb->get_results("SELECT sources, url_to, header_code, status FROM $t", ARRAY_A))) {
+	// sources is a serialized array of {pattern, comparison, ignore}; ship it as data, not a PHP string.
+	foreach ($r as &$row) { $row['sources'] = array_values((array) maybe_unserialize($row['sources'])); } unset($row);
+	$B['seo']['redirects']['rankmath'] = $r;
+}
 if (($t = $table('redirection_items')) && ($r = $wpdb->get_results("SELECT url, action_data, action_code, status FROM $t", ARRAY_A))) $B['seo']['redirects']['redirection'] = $r;
 $sp = get_posts(['post_type' => 'seopress_404', 'numberposts' => -1, 'post_status' => 'any']);
 if ($sp) $B['seo']['redirects']['seopress'] = array_map(fn($p) => ['from' => $p->post_title, 'to' => get_post_meta($p->ID, '_seopress_redirections_value', true),
@@ -227,10 +234,26 @@ $B['menus'] = array_map(fn($m) => [
 /* ---------- forms (definitions only; never submissions) ---------- */
 $forms = [];
 if ($t = $table('wsf_form')) {
-	foreach ($wpdb->get_results("SELECT id, label, status FROM $t WHERE status <> 'trash'") as $f) {
-		$ft = $wpdb->prefix . 'wsf_field';
-		$forms[] = ['plugin' => 'ws-form', 'id' => (int) $f->id, 'title' => $f->label, 'status' => $f->status,
-			'fields' => $wpdb->get_results($wpdb->prepare("SELECT label, type FROM $ft WHERE form_id = %d ORDER BY sort_index", $f->id), ARRAY_A)];
+	// WS Form keeps the live form as JSON in wsf_form.published (wsf_field has no form_id column; fields hang off
+	// sections and groups). Read fields, required flags, options and the email/message actions from that JSON.
+	foreach ($wpdb->get_results("SELECT id, label, status, published FROM $t WHERE status <> 'trash'") as $f) {
+		$j = json_decode((string) $f->published);
+		$fields = []; $actions = [];
+		foreach ((array) ($j->groups ?? []) as $g) foreach ((array) ($g->sections ?? []) as $sec) foreach ((array) ($sec->fields ?? []) as $fl) {
+			if (in_array($fl->type, ['submit', 'recaptcha', 'hcaptcha', 'turnstile', 'html', 'divider', 'spacer'], true)) { if ($fl->type !== 'submit') $actions[] = ['spam' => $fl->type]; continue; }
+			$m = $fl->meta ?? new stdClass; $opts = [];
+			foreach (['data_grid_select', 'data_grid_radio', 'data_grid_checkbox'] as $k) if (isset($m->$k->groups[0]->rows)) foreach ($m->$k->groups[0]->rows as $r) $opts[] = $r->data[0] ?? '';
+			$fields[] = array_filter(['label' => $fl->label, 'type' => $fl->type, 'required' => ($m->required ?? '') === 'on', 'placeholder' => $m->placeholder ?? '',
+				'options' => $opts, 'conditional' => !empty($j->meta->conditional->groups[0]->rows ?? null)], fn($v) => $v !== '' && $v !== [] && $v !== false);
+		}
+		foreach ((array) ($j->meta->action->groups[0]->rows ?? []) as $r) {
+			$d = json_decode($r->data[1] ?? '{}'); $am = $d->meta ?? new stdClass;
+			if (($d->id ?? '') === 'email') $actions[] = ['email' => array_map(fn($x) => $x->action_email_email ?? '', (array) json_decode(is_string($am->action_email_to ?? null) ? $am->action_email_to : wp_json_encode($am->action_email_to ?? []))),
+				'subject' => $am->action_email_subject ?? '', 'from' => $am->action_email_from_email ?? ''];
+			elseif (($d->id ?? '') === 'message') $actions[] = ['message' => $am->action_message_message ?? ''];
+			else $actions[] = ['action' => $d->id ?? ($r->data[0] ?? '')];
+		}
+		$forms[] = ['plugin' => 'ws-form', 'id' => (int) $f->id, 'title' => $f->label, 'status' => $f->status, 'fields' => $fields, 'actions' => $actions];
 	}
 }
 foreach (get_posts(['post_type' => 'wpcf7_contact_form', 'numberposts' => -1]) as $f) {
@@ -303,6 +326,36 @@ foreach ($B['posts'] as $p) {
 	foreach (['_seopress_social_fb_img', 'rank_math_facebook_image', '_yoast_wpseo_opengraph-image'] as $k) if (!empty($p['seo'][$k])) $scan_urls((string) $p['seo'][$k], "$by (og)");
 }
 foreach ($B['bricks']['templates'] ?? [] as $t) { $walk($t['elements'], "template:{$t['slug']}"); $scan_urls(wp_json_encode($t['elements'], JSON_UNESCAPED_SLASHES), "template:{$t['slug']}"); }
+
+// Bricks query loops over attachments (a slider or gallery fed by a media folder): run the query here, while WordPress
+// is loaded, so the images reach media/ and the page notes. Uses Bricks's own query-var builder when it exists.
+// Tax filters are stored as "taxonomy::term_id" strings (e.g. HappyFiles folders).
+$B['loops'] = [];
+$resolve_loops = function ($elements, $by) use (&$B, $add) {
+	foreach ((array) $elements as $e) {
+		$st = $e['settings'] ?? [];
+		if (empty($st['hasLoop']) || !in_array('attachment', (array) ($st['query']['post_type'] ?? []), true)) continue;
+		$q = $st['query'];
+		$args = [];
+		if (class_exists('\Bricks\Query') && method_exists('\Bricks\Query', 'prepare_query_vars_from_settings')) {
+			try { $args = \Bricks\Query::prepare_query_vars_from_settings(['query' => $q]); } catch (\Throwable $x) { $args = []; }
+		}
+		if (!$args) {
+			$args = ['post_type' => 'attachment', 'posts_per_page' => (int) ($q['posts_per_page'] ?? -1) ?: -1,
+				'orderby' => $q['orderby'] ?? 'date', 'order' => $q['order'] ?? 'DESC'];
+			$tax = [];
+			foreach ((array) ($q['tax_query'] ?? []) as $tq) if (is_string($tq) && strpos($tq, '::') !== false) { [$tx, $term] = explode('::', $tq, 2); $tax[] = ['taxonomy' => $tx, 'field' => 'term_id', 'terms' => [(int) $term]]; }
+			if ($tax) $args['tax_query'] = $tax;
+		}
+		$args = array_merge($args, ['post_type' => 'attachment', 'post_status' => 'inherit', 'fields' => 'ids', 'no_found_rows' => true, 'suppress_filters' => false]);
+		if (($args['posts_per_page'] ?? -1) < 0 || $args['posts_per_page'] > 200) $args['posts_per_page'] = 200;
+		$ids = array_map('intval', (new WP_Query($args))->posts);
+		$B['loops'][$e['id']] = $ids;
+		foreach ($ids as $id) $add($id, "$by (loop)");
+	}
+};
+foreach ($B['posts'] as $p) if ($p['bricks']) $resolve_loops($p['bricks'], $p['type'] . ':' . $p['slug']);
+foreach ($B['bricks']['templates'] ?? [] as $t) $resolve_loops($t['elements'], "template:{$t['slug']}");
 if (!empty($B['bricks']['components'])) $walk($B['bricks']['components'], 'components');
 if ($B['acf']) {
 	$acf_walk = function ($fields, $by) use (&$acf_walk, $add) {

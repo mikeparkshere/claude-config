@@ -80,6 +80,7 @@ function condScore(c, p, isError) {
     default: return 0;   // archives, terms, search: not a singular URL
   }
 }
+pick.warned = {};
 function pick(type, p, isError) {
   let best = null, bestScore = 0;
   templates.filter(t => t.type === type).forEach(t => {
@@ -89,6 +90,14 @@ function pick(type, p, isError) {
     if (sc > bestScore) { best = t; bestScore = sc; }
   });
   if (!best && type === 'error') best = templates.find(t => t.type === 'error') || null;
+  // Bricks "default templates": with nothing matching, a header/footer that has no conditions applies site-wide,
+  // unless Settings > Templates > "Disable default templates" is on. (First port: header and footer had no
+  // conditions and the reducer reported them unused.)
+  if (!best && ['header', 'footer'].includes(type) && !bricks.default_templates_disabled) {
+    const plain = templates.filter(t => t.type === type && !(t.conditions || []).length).sort((a, b) => a.id - b.id);
+    if (plain.length > 1 && !pick.warned[type]) { pick.warned[type] = true; flag(plain.length + ' ' + type + ' templates have no conditions; assumed "' + plain[0].title + '" (lowest id) is the Bricks default: check the live page'); }
+    best = plain[0] || null;
+  }
   return best;
 }
 
@@ -119,14 +128,15 @@ function makeCtx(postId) {
       return l.type || '';
     },
     withPost: (id, fn) => { stack.push(String(id)); try { fn(); } finally { stack.pop(); } },
+    loopItems: elId => (B.loops && B.loops[elId]) || null,   // attachment ids harvest.php resolved for a query loop
     featured: () => { const p = byId[stack[stack.length - 1]]; return p && p.featured ? media[p.featured] || null : null; },
     postContent: () => { const p = byId[stack[stack.length - 1]]; return p ? text(p.post_content) : ''; },
   };
   return ctx;
 }
 
-function reduceTree(elements, postId) {
-  return reducers.bricks(elements, makeCtx(postId)).join('\n');
+function reduceTree(elements, postId, where) {
+  return reducers.bricks(elements, makeCtx(postId), { where: where }).join('\n');
 }
 
 /* ---------- SEO, from plugin meta (+ rendered head when raw/html exists) ---------- */
@@ -175,10 +185,10 @@ const pageRows = [];
 posts.forEach(p => {
   const header = pick('header', p), footer = pick('footer', p);
   let source, body;
-  if (p.builder === 'bricks') { source = 'Bricks (own content)'; body = reduceTree(p.bricks, p.id); }
+  if (p.builder === 'bricks') { source = 'Bricks (own content)'; body = reduceTree(p.bricks, p.id, 'page ' + rel(p.url)); }
   else {
     const single = pick('content', p);
-    if (single) { source = 'Bricks template "' + single.title + '"' + (p.builder !== 'empty' ? ' + ' + p.builder + ' post content' : ''); body = reduceTree(single.elements, p.id); }
+    if (single) { source = 'Bricks template "' + single.title + '"' + (p.builder !== 'empty' ? ' + ' + p.builder + ' post content' : ''); body = reduceTree(single.elements, p.id, 'template "' + single.title + '" for ' + rel(p.url)); }
     else if (reducers[p.builder]) { source = p.builder; body = reducers[p.builder](p, makeCtx(p.id)).join('\n'); }
     else if (p.builder === 'classic' || p.builder === 'gutenberg') { source = p.builder + ' (plain text extraction)'; body = text(p.post_content); }
     else if (p.builder === 'empty') { source = 'empty'; body = '(no content)'; flag('Empty page: ' + rel(p.url)); }
@@ -223,7 +233,7 @@ if (errTpl) {
 Object.keys(usedTemplates).forEach(id => {
   const t = usedTemplates[id];
   const conds = (t.conditions || []).map(c => (c.exclude ? 'not ' : '') + c.main + (c.postType ? ' ' + [].concat(c.postType).join(',') : '') + (c.ids ? ' ' + [].concat(c.ids).join(',') : '')).join('; ');
-  fs.writeFileSync(path.join(OUT, 'templates', t.type + '-' + t.slug + '.md'), ['# ' + t.type + ': ' + t.title, '', '- Applies to: ' + (conds || '(no conditions)'), '', reduceTree(t.elements, null)].join('\n') + '\n');
+  fs.writeFileSync(path.join(OUT, 'templates', t.type + '-' + t.slug + '.md'), ['# ' + t.type + ': ' + t.title, '', '- Applies to: ' + (conds || (['header', 'footer'].includes(t.type) && !bricks.default_templates_disabled ? '(no conditions: Bricks default template, site-wide)' : '(no conditions)')), '', reduceTree(t.elements, null, t.type + ' template "' + t.title + '"')].join('\n') + '\n');
 });
 templates.filter(t => !usedTemplates[t.id] && !['content', 'error'].includes(t.type)).forEach(t => flag('Bricks ' + t.type + ' template "' + t.title + '" applies to no public URL (unused?)'));
 templates.filter(t => t.type === 'content' && !posts.some(p => p.builder !== 'bricks' && pick('content', p) === t)).forEach(t => flag('Bricks content template "' + t.title + '" applies to no public URL'));
@@ -239,7 +249,20 @@ fs.writeFileSync(path.join(OUT, 'urls.json'), JSON.stringify({ home: home, urls:
 
 /* ---------- media.json ---------- */
 fs.writeFileSync(path.join(OUT, 'media.json'), JSON.stringify((B.media || []).map(m => ({ id: m.id, file: m.rel, alt: m.alt, caption: m.caption, width: m.width, height: m.height, mime: m.mime, master: m.source_kind, used_by: m.referenced_by, missing: m.missing || undefined })), null, 1));
-(B.media || []).filter(m => m.missing).forEach(m => flag('Referenced media #' + m.id + ' is not an attachment (deleted?) — used by ' + m.referenced_by.join(', ')));
+(B.media || []).filter(m => m.missing).forEach(m => flag('Referenced media #' + m.id + ' is not an attachment (deleted?) — used by ' + m.referenced_by.join(', ') + ' (if every referrer is an orphaned element, nothing showed it)'));
+// Safety net: upload images on the rendered pages that the data walk never saw (query loops, shortcodes, CSS
+// backgrounds, plugin output). harvest.sh writes raw/rendered-media.json and copies the files into media/.
+(() => {
+  const f = path.join(dir, 'raw/rendered-media.json');
+  if (!fs.existsSync(f)) return;
+  const seen = JSON.parse(fs.readFileSync(f, 'utf8')), known = new Set((B.media || []).map(m => m.rel));
+  const extra = Object.keys(seen).filter(r => !known.has(r));
+  if (!extra.length) return;
+  const mj = JSON.parse(fs.readFileSync(path.join(OUT, 'media.json'), 'utf8'));
+  extra.forEach(r => mj.push({ file: r, master: 'rendered-only', used_by: seen[r] }));
+  fs.writeFileSync(path.join(OUT, 'media.json'), JSON.stringify(mj, null, 1));
+  flag(extra.length + ' upload image(s) appear on rendered pages but not in the harvested data (query loop, shortcode or CSS?): ' + extra.slice(0, 6).join(', ') + (extra.length > 6 ? ' …' : '') + '. Added to media.json as rendered-only.');
+})();
 const noAlt = (B.media || []).filter(m => !m.missing && !m.alt && /^image\//.test(m.mime || '') && m.referenced_by.some(r => !/site icon/.test(r)));
 if (noAlt.length) flag('Media-library alt text empty for ' + noAlt.length + ' image(s): ' + noAlt.map(m => m.rel.split('/').pop()).join(', ') + ' (the element may set its own alt; see page files)');
 
@@ -297,7 +320,12 @@ h('Menus');
 if (!(B.menus || []).length) inv.push('(none)');
 
 h('Forms');
-if ((B.forms || []).length) B.forms.forEach(f => inv.push('- ' + f.plugin + ' #' + f.id + ' "' + f.title + '"' + (f.to ? ' → ' + f.to : '') + ': ' + f.fields.map(x => x.label + ' (' + x.type + ')').join(', ')));
+if ((B.forms || []).length) B.forms.forEach(f => {
+  inv.push('- ' + f.plugin + ' #' + f.id + ' "' + f.title + '"' + (f.to ? ' → ' + f.to : '') + ': ' + (f.fields.length ? f.fields.map(x => x.label + (x.required ? '*' : '') + ' (' + x.type + (x.options ? ': ' + x.options.join('/') : '') + ')').join(', ') : '**no fields found: check the harvest**'));
+  (f.actions || []).forEach(a => inv.push('  - ' + (a.email ? 'email → ' + a.email.join(', ') + (a.subject ? ', subject "' + a.subject + '"' : '') + (a.from ? ', from ' + a.from : '') : a.message ? 'message: "' + a.message + '"' : a.spam ? 'spam check: ' + a.spam : 'action: ' + a.action)));
+  if (f.plugin === 'ws-form' && f.actions && !f.actions.some(a => a.email)) inv.push('  - **no email action**: submissions only land in the WordPress database');
+  if ((f.fields || []).some(x => x.conditional)) inv.push('  - has conditional logic: check which fields show when');
+});
 else inv.push('No form-plugin forms. (Bricks form elements, if any, show up in the page files as [form].)');
 
 h('Integrations and injected scripts');

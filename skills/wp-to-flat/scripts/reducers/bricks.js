@@ -6,7 +6,11 @@
  *
  * reduceBricks(elements, ctx) -> string[]
  * ctx (from reduce.js): text(html) dyn(str) postId link(linkObj) media(id) menu(id) posts(type) withPost(id)
- *                       template(id) classNames postContent()
+ *                       template(id) classNames postContent() loopItems(elementId) flag(msg)
+ *
+ * Orphans: an element whose parent id isn't in the tree (its parent was deleted in the builder) is never rendered by
+ * Bricks. They are skipped and counted, never promoted to top-level sections: on the first real port, 166 orphans
+ * read as hidden sections, duplicate blocks and a "missing" image that no visitor ever saw.
  */
 
 const CONTAINERS = new Set(['section', 'container', 'block', 'div']);
@@ -17,7 +21,21 @@ function reduceBricks(elements, ctx, opts) {
   const els = (elements || []).filter(e => e && e.id);
   const byId = {};
   els.forEach(e => { byId[e.id] = e; });
-  const isRoot = e => !e.parent || e.parent === 0 || e.parent === '0' || !byId[e.parent];
+  const isTop = e => !e.parent || e.parent === 0 || e.parent === '0';
+  // Reachable = its parent chain ends at the top level. Anything else is an orphan Bricks won't render.
+  const reach = {};
+  const reachable = e => {
+    if (reach[e.id] !== undefined) return reach[e.id];
+    reach[e.id] = false;                                   // cycle guard
+    return (reach[e.id] = isTop(e) || (!!byId[e.parent] && reachable(byId[e.parent])));
+  };
+  const orphans = els.filter(e => !reachable(e));
+  if (orphans.length && ctx.flag && !opts.nested) {
+    const named = orphans.filter(e => e.label).map(e => e.label);
+    ctx.flag(orphans.length + ' orphaned Bricks element(s) skipped in ' + (opts.where || 'a tree') + ' (parent deleted; Bricks never renders them)'
+      + (named.length ? ': ' + [...new Set(named)].slice(0, 8).join(', ') : ''));
+  }
+  const isRoot = e => isTop(e) && reachable(e);
   const kids = e => (e.children || []).map(id => byId[id]).filter(Boolean);
   const out = [];
   const pad = d => '  '.repeat(d);
@@ -88,7 +106,7 @@ function reduceBricks(elements, ctx, opts) {
     let types = q.post_type || (q.objectType === 'post' || !q.objectType ? ['post'] : []);
     if (!Array.isArray(types)) types = [types];
     if (q.objectType && q.objectType !== 'post') return { label: q.objectType + ' query (not expanded)', posts: [] };
-    const posts = [].concat.apply([], types.map(t => ctx.posts(t)));
+    const posts = [].concat.apply([], types.filter(t => t !== 'attachment').map(t => ctx.posts(t)));
     return { label: types.join(', '), posts: posts };
   }
 
@@ -98,6 +116,15 @@ function reduceBricks(elements, ctx, opts) {
 
     // Query loops: render the children once per matching post, with that post as dynamic-data context.
     if (st.hasLoop) {
+      // Attachment loops (galleries, sliders fed by a media folder): harvest.php resolves them inside WordPress.
+      const q = st.query || {};
+      if ([].concat(q.post_type || []).includes('attachment')) {
+        const ids = ctx.loopItems ? ctx.loopItems(e.id) : null;
+        if (!ids) { line(d, '[loop over attachment: not resolved by the harvest (re-harvest with the current harvest.php)]'); if (ctx.flag) ctx.flag('An attachment query loop was not resolved: its images are missing from media/ and the page notes'); return; }
+        line(d, '[loop over attachment: ' + ids.length + ' image' + (ids.length === 1 ? '' : 's') + ']');
+        ids.forEach(id => line(d + 1, '[image] ' + imageLabel({ id: id })));
+        return;
+      }
       const lp = loopPosts(st);
       line(d, '[loop over ' + lp.label + ': ' + lp.posts.length + ' item' + (lp.posts.length === 1 ? '' : 's') + ']');
       lp.posts.forEach(p => ctx.withPost(p.id, () => {
@@ -152,7 +179,7 @@ function reduceBricks(elements, ctx, opts) {
         break;
       }
       case 'list':
-        (st.items || []).forEach(it => line(d, '- ' + [textOf(it.title), it.meta ? textOf(it.meta) : ''].filter(Boolean).join(' — ') + (it.link ? linkStr(it.link) : '')));
+        (st.items || []).forEach(it => line(d, '- ' + [textOf(it.title), it.meta ? textOf(it.meta) : '', it.description ? textOf(it.description) : ''].filter(Boolean).join(' — ') + (it.link ? linkStr(it.link) : '')));
         break;
       case 'testimonials':
         (st.items || []).forEach(it => {
