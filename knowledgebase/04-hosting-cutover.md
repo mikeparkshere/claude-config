@@ -203,6 +203,25 @@ It writes `mpd-suspended.html` to the webroot and prepends a marked `# BEGIN/END
 Limits: static files nginx serves itself (images, CSS, JS, `.html`) still resolve by direct URL, the same blind spot as the static-files entry above. A webapp owned by another system user (e.g. `parkshere`) needs the script run as that user. On a **Cloudflare-proxied** site, purge the zone too if a cache rule caches HTML. Non-WP webapps need `--url` for the verify step; a `public/` subdir is detected.
 **First seen:** etbauer (parkshere2022), 2026-11-01 — billing hold. Verified: `/`, `/feed/`, `/wp-json/` → 503; `off` restored `.htaccess` byte-identical to the backup.
 
+### `RedirectMatch` with a literal space takes the whole site down
+**Symptom / When:** Appending generated `RedirectMatch` lines to the root `.htaccess` makes every Apache request
+500 at once. The error log says "RedirectMatch takes two or three arguments".
+**Why:** Apache splits directive arguments on whitespace. A space inside the regex (here a character class
+`[ -]` meant to match a space in an old URL) turns one regex into two arguments, and one bad line invalidates the file.
+nginx's page cache keeps serving cached pages, which hides how total it is.
+**Fix:** No literal spaces in a pattern: use `\s`. Check every generated line has exactly 4 fields
+(`awk 'NF!=4'`). **Prove the block in a throwaway webroot directory first**: its `.htaccess` errors 500 only that folder,
+so request `/probe/x.php` (404 = parses), and include a known-bad control line once to confirm the probe can fail.
+Deploy with an automatic rollback: append, request the homepage, restore on anything but 200.
+**First seen:** NLTA, 2026-11-17: 8 seconds of 500s (S21 redirects).
+
+### Restoring a served file with `cp -p` from a `chmod 600` backup gives 403
+**Symptom / When:** You restore `.htaccess` (or any file Apache reads) from a backup and the site turns 403.
+**Why:** Backup folders here get `chmod 600`. `cp -p` carries that mode onto the live file, which Apache can't read.
+**Fix:** Restore with plain `cp`, or `cp -p` then `chmod 644` in the same command. Better: keep a known-good copy in
+the scratchpad at normal mode for the deploy window.
+**First seen:** NLTA, 2026-11-17: 7 seconds of 403s, right after the RedirectMatch outage above.
+
 ### RunCloud hybrid — PHP `error_log()` lands in the apache2 dir; there is NO app-local logs dir
 **Symptom / When:** You go looking for `webapps/<app>/logs/` and it doesn't exist. Docs (including older project notes) that reference one are simply wrong, so you conclude logging is broken.
 **Why:** On **hybrid** apps (nginx → Apache → FPM), PHP `error_log()` output is captured by `proxy_fcgi` and lands in Apache's log — the same hybrid architecture behind the static-file entry above.

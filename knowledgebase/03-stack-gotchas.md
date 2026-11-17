@@ -40,7 +40,7 @@ Some facts referenced here have their full canonical home in bedrock — the `wp
 
 ## Index
 
-346 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
+349 entries. Every title is written as what you would search for, so this list is the lookup surface: scan it, find the entry, then grep the file for that exact title. Titles ending `[stack:acss]` apply only on the ACSS stack (`00`, read protocol step 4).
 
 **Do not read this file cover to cover.** At ~35,000 words it will evict the knowledgebase that sent you here — see `00`, the fourth layer. The index exists so that instruction is followable rather than aspirational.
 
@@ -315,6 +315,9 @@ Group labels below are bold rather than headings on purpose — `###` here would
 - `wp_rank_math_internal_links` is stale, and a raw HTML link count is inflated by nav/footer chrome
 - Rank Math: `wp plugin update` leaves `rank_math_version` behind the code, and a file rollback then puts it AHEAD — Pro re-runs its updater on every admin load
 - SEOPress on a Bricks site — eight defaults to correct before it is trusted (free and PRO)
+- Rank Math: a per-term robots override beats the taxonomy-wide noindex
+- Rank Math's live description isn't always its stored template
+- SEOPress Free: posts page title, `%%page%%`, and untrimmed excerpts
 
 **Mailster**
 
@@ -3315,6 +3318,37 @@ Two riders: **(1)** check `$rank_math_min_version` in `rank-math-pro.php` before
 
 For CPTs where one template can't make titles unique (recurring events), build titles and descriptions in `seopress_titles_title` / `seopress_titles_desc`, and step aside when `_seopress_titles_title` / `_desc` is set on the post. Keep the whole config as an idempotent script that backs up the option first. Verified on SEOPress 10.2; all six filter names confirmed in its source.
 **First seen:** WCDP, 2026-09-30. · **Extended:** MMHN, 2026-09-29 — a second `WebSite` graph on the home page right after activation on defaults (SEOPress 10.2 / PRO 10.2.1). · MMHN, 2026-10-08 — PRO removed; its Woo noindex and three other jobs moved to the core plugin, with `<head>` byte-identical on 11 URLs.
+
+### Rank Math: a per-term robots override beats the taxonomy-wide noindex
+**Symptom / When:** A taxonomy is set to noindex in Rank Math (Titles & Meta), yet one of its terms serves
+`index, follow` and nothing in the settings screen shows why.
+**Why:** The term's own SEO box stores `rank_math_robots` (plus title/description) in term meta, and that wins over the
+taxonomy default. One save on one term is enough.
+**Fix:** For anything that's noindex for **privacy**, enforce it in code at output time, not in a plugin setting:
+`rank_math/frontend/robots` + `rank_math/sitemap/exclude_taxonomy`, and the SEOPress / core equivalents
+(`seopress_titles_robots_attrs`, `option_seopress_xml_sitemap_option_name`, `wp_robots`, `wp_sitemaps_taxonomies`).
+Audit with `SELECT … FROM wp_termmeta WHERE meta_key LIKE 'rank\_math\_%'`.
+**First seen:** NLTA, 2026-11-17: one casting archive (a privacy-noindex taxonomy) was indexed (`nlta-core/includes/class-privacy-guard.php`).
+
+### Rank Math's live description isn't always its stored template
+**Symptom / When:** Porting to another SEO plugin by copying Rank Math's post-type description template changes the
+snippets on most of that post type.
+**Why:** On NLTA, `pt_models_description` held a generic "<name> is an Adult Model…" line, but every model **with
+an excerpt** actually showed the excerpt. The template only appeared on models without one.
+**Fix:** Port from a **captured `<head>`**, not from the settings. A before/after diff of the meta description per URL
+shows which source each post type really used. Here the SEOPress parity value was `%%post_excerpt%%`.
+**First seen:** NLTA, 2026-11-17 (Rank Math → SEOPress; 45 profiles).
+
+### SEOPress Free: posts page title, `%%page%%`, and untrimmed excerpts
+**Symptom / When:** After a Rank Math → SEOPress switch: the static posts page shows WordPress's own
+"Page – Site" title with no `og:title`; archive page 2 reads "Models 2"; auto descriptions run 300+ characters.
+**Why:** SEOPress titles a static posts page **only** when that page has its own `_seopress_titles_title`.
+`%%current_pagination%%` is a bare number; `%%page%%` is " - Page 2 of 2" (Rank Math's `%page%`, written with
+non-breaking spaces). `%%post_excerpt%%` is `wp_trim_words(…, 50)`, about 300 characters; Rank Math cut at ~160.
+**Fix:** Set `_seopress_titles_title` on the posts page. Use `%%cpt_plural%%%%page%% %%sep%% %%sitetitle%%` for CPT
+archives. Trim generated descriptions in the core plugin on `seopress_titles_desc`, `seopress_social_og_desc` and
+`seopress_social_twitter_card_desc` (the last two pass the whole `<meta>` tag), skipping hand-written values.
+**First seen:** NLTA, 2026-11-17 (`NLTA_SEOPress::shorten`).
 
 ## Mailster
 

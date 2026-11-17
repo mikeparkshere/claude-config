@@ -473,6 +473,32 @@ a self-contained `head_capture.py` (capture + diff at origin, cache-busted, site
 - Service descriptions under `%%post_excerpt%%` were a 275-char ellipsis trim (Rank Math's `%excerpt%` gave 450).
   Neither is a good description; the fix is per-post `_seopress_titles_desc`, as §5 says.
 
+### 7f. Measured: Nexxxt Level Talent Agency, 2026-11-17
+
+Sixth port, **the largest by redirects**: 250 captured URLs (~240 sitemap), 123 Rank Math redirects (65K lifetime hits),
+Rank Math-owned base graph with core-injected Person/Breadcrumb/BlogPosting. Same box and kind of site as ECT (§7c), whose
+`capture.py` / `configure.php` / `port.php` were adapted. TAB method (§7d): **5.2-second** flip. Artifacts: vtla0225
+`~/backups/app-nlta25/seopress-switch/` (RUNBOOK, scripts, before/after captures, diffs); plan `app-nlta25/docs/seopress-migration.md`.
+
+- **Core took the whole JSON-LD graph first**, plugin-neutral: one `<script id="nlta-schema">`, Rank Math silenced with
+  `rank_math/json_ld` → `[]` at `PHP_INT_MAX` (its printer bails on empty), SEOPress pre-silenced with
+  `seopress_schemas_graph_enabled` false + `_graph_html` / `_website_html` / `_organization_html` → ''. Verified on Rank
+  Math before the switch, so the head diff could require JSON-LD **identical** rather than "accepted". It was.
+- **Redirects: 96 to `.htaccess`, 27 to the core plugin's existing `/model/<slug>/` pattern handler**, which Rank Math's
+  exact rules had been shadowing (two pointed at `/talent` for a performer who has a live profile again). 26 targets lacked
+  a trailing slash (an extra hop each); one pointed at a deleted term. Check targets, not just sources, before moving a map.
+  ⚠️ The first deploy took the site down for 8 s: a literal space in one regex (KB 04, "`RedirectMatch` with a literal space…").
+- **A per-term Rank Math robots override had indexed a privacy-noindex archive** (KB 03). Privacy rules moved to code under
+  either plugin (`rank_math/frontend/robots`, `seopress_titles_robots_attrs`, `option_seopress_xml_sitemap_option_name`, `wp_robots`).
+- **The first diff found what config-reading missed** (KB 03, two entries): Rank Math's live model description was the
+  excerpt, not its stored template; the static posts page needs `_seopress_titles_title`; `%%page%%`, not
+  `%%current_pagination%%`, reproduces Rank Math's "- Page 2 of 2"; `%%post_excerpt%%` runs ~300 characters (core trims to 160).
+- **All 53 `rank_math_primary_category` values were stale** (gotcha #14 at full scale), so none were ported.
+- **Leftover SEOPress Pro data from a 2024 install** (14 options incl. a GA4 measurement ID, 53 `seopress_404` posts, 3
+  tables) was deleted before install. Reinstalling over it would have printed a second gtag. Check `wp_options LIKE 'seopress%'` first.
+- **Business Manager lockout verified over HTTPS:** no controls render. SEOPress's admin CSS/JS still load for the role, and its
+  per-post REST routes need only `edit_post`, so the UI lock isn't a capability lock. Accepted for trusted internal staff.
+
 ---
 
 ## 8. Decision inputs
@@ -491,8 +517,8 @@ a self-contained `head_capture.py` (capture + diff at origin, cache-busted, site
 - Migration cost is per-site and non-trivial for anything with schema or redirects.
 
 **Still unknown**
-- Five Rank Math ports executed (§7a–§7e), up to ~60 clicks/day, 37 redirects and plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
-- SEOPress Pro has been trialled once: MMHN ran PRO 10.2.1, and it was **removed 2026-10-08**, its Woo jobs moved to the core plugin (KB 03). Every port since has been Free.
+- Six Rank Math ports executed (§7a–§7f), up to ~60 clicks/day, 123 redirects and plugin-owned schema. **The next useful experiment is a dry-run port on a staging clone of a Tier 3 site** — that produces the number the fleet decision actually turns on.
+- SEOPress Pro has been trialled once: MMHN ran PRO 10.2.1, and it was **removed 2026-10-08**, its Woo jobs moved to the core plugin (KB 03). Every port since has been Free (NLTA, 2026-11-17, included).
 - No SEOPress site has been through a full indexing cycle yet, so there is no ranking or Search Console evidence either way.
 
 ---
