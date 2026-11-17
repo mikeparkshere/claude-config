@@ -149,7 +149,7 @@ DEV ends at whichever comes first: real data loading in, or the first client rev
 - **Logs:** {RunCloud paths — PHP/Apache and Nginx}
 - **DB backups:** {location / naming convention}
 - **Token map:** {location of the per-project token map — the extracted ACSS map on `acss`, the stack's token spec on others}
-- **Notion CLAUDE.md:** {Notion URL — a **published view, not canonical**. This project's `CLAUDE.md` is the source of truth; CC pushes it to Notion on request, one-way. Never edit the Notion copy — an edit there is silently lost at the next sync.}
+- **Notion project page:** {Notion URL — the **portfolio/CRM view, not canonical**. This project's `CLAUDE.md` is the source of truth; CC updates the project page on request, one-way. Its `CLAUDE.md` child page is a **signpost** to the on-box path, never a copy (fleet rule 2026-11-17, `global-CLAUDE.md` § Project conventions).}
 - **Brand assets:** {location}
 - **Social:** {handles}
 
