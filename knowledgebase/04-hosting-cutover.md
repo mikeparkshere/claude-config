@@ -1185,3 +1185,27 @@ issues in about 20 s once DNS resolves).
 **Why:** Same mechanism as the established *"a new webapp ships an `index.html` that SHADOWS your `index.php`"*: creation drops `index.html` into the public path. That entry's incident was a WordPress install; custom webapps get it too.
 **Fix:** Delete `public/index.html` at scaffold; check the rendered `<title>`, not the code. Now a step in `flatsite.md` → Staging. At harvest, fold this into the established entry.
 **First seen:** EA Millwork flat rebuild (app-eacm), 2026-11-19 — the build's home page sat behind it until a smoke test read the `<title>`. *(master project section, unharvested.)*
+
+### rsync `--exclude='upgrade/'` (unanchored) also skips every plugin's `upgrade/` and `cache/` subfolder, and WordPress fatals
+**Symptom / When:** Pulling `wp-content` from an old host with excludes meant for top-level leftovers (`cache/`, `upgrade/`, `*.log`). The rsync reports success, the DB imports, and then every request and every WP-CLI call dies: `Class "Elementor\Core\Upgrade\Manager" not found`.
+**Why:** An rsync exclude without a leading `/` matches that name **at any depth**. `upgrade/` also matched `plugins/elementor/core/upgrade/`, and `cache/` matched library folders inside plugins (404 Post SMTP files). Nothing in the output says a plugin folder was skipped.
+**Fix:** Anchor excludes to the transfer root: `--exclude='/cache/' --exclude='/upgrade/' --exclude='/wflogs/'`. If it already happened, rerun the same rsync with anchored excludes and `--itemize-changes`; the `>f` lines are what was missing (`grep -c '^>f'`).
+**First seen:** Nativity Worcester (app-nativity, mpd2026), 2026-11-18. 431 files missing (Post SMTP 404, Elementor 7, Elementor Pro 2, Duplicator 4); fixed by the anchored re-sync. *(Migration, master project section, unharvested.)*
+
+### Cloudflare "Import DNS records" (BIND file) proxied every proxyable record, including `ssh`/`ftp`/`mysql` and Google Sites CNAMEs
+**Symptom / When:** Importing a zone copied from the old DNS host before a nameserver switch, under a gray-cloud-first plan. Every A/CNAME came in **proxied** (TTL auto): `ssh.`, `ftp.`, `mysql.` (non-HTTP, which the proxy doesn't carry), Google Sites `ghs.googlehosted.com` CNAMEs (Google can't issue certs behind it), Mailgun `email.mg` tracking, apex and `www`.
+**Why:** The import dialog has a "Proxy imported DNS records" option, and it ended up on. The import result doesn't make the proxy state obvious. After the nameserver switch, those services break while the website still looks fine.
+**Fix:** Before the nameserver switch, list the zone with `dns_records?proxied=true` and `PATCH {"proxied":false,"ttl":60}` each one (DNS Edit scope is enough). Then diff answers from the assigned Cloudflare nameserver against the old host for every record (`dig +short <name> <type> @<cf-ns>` vs `@<old-ns>`) before touching the registrar. Also: the old host may refuse AXFR (DreamHost does), so build the BIND file by querying its nameserver name by name (apex types, ~70 common hostnames, DKIM selectors at the apex **and** on the mail subdomain), and have the client check it against the old panel.
+**First seen:** Nativity Worcester, 2026-11-18. 10 of 21 records proxied on import; all set back before the switch; zone went active with identical answers. *(Migration, master project section, unharvested.)*
+
+### A staging copy of a site with an API mailer (Mailgun/Post SMTP) sends real mail; block `wp_mail` by host, not by a flag
+**Symptom / When:** A live DB lands on staging carrying the live mailer's API keys. Any form test, password reset or cron notice on staging emails real staff from the real domain. Scheduled backups (Duplicator Pro) would likewise push staging archives into the live remote storage and could rotate out real ones.
+**Why:** Mailer and backup settings live in the DB and come over with the copy. There's no local MTA to fail safely; the API works from anywhere.
+**Fix:** Before the import, drop an mu-plugin that hooks `pre_wp_mail` (priority 1), returns `true` and logs the drop **unless `home_url()`'s host is the live domain**. It switches itself off at cutover even if nobody remembers to remove it, and forms still show success. Deactivate the backup plugin on staging (`wp plugin deactivate duplicator-pro`) and put "reactivate at cutover" on the cutover list. Set `WP_ENVIRONMENT_TYPE` to `staging`.
+**First seen:** Nativity Worcester, 2026-11-18 (`wp-content/mu-plugins/mpd-staging-mail-block.php`). *(Migration, master project section, unharvested.)*
+
+### RunCloud `/webapps/wordpress` webapp came up with autoSSL **off**; no cert ever arrives on its own
+**Symptom / When:** A new webapp, staging DNS pointed at the box, and you wait for the automatic Let's Encrypt cert. `GET …/webapps/{w}/ssl` keeps saying `SSL not installed!` and the server log has no SSL entry.
+**Why:** `GET …/ssl/advanced` returned `{"advancedSSL":false,"autoSSL":false}`. The entry above about adding a domain under advanced SSL describes webapps where both are `true`; it isn't a box-wide default. The handoff had assumed it was on.
+**Fix:** Read `…/ssl/advanced` the day a webapp is created. If `autoSSL` is false, `POST …/ssl` with the Let's Encrypt body once DNS resolves to the box. This one issued in ~40 s.
+**First seen:** Nativity Worcester (mpd2026), 2026-11-18. *(Migration, master project section, unharvested.)*
