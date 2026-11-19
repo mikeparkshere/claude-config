@@ -248,7 +248,7 @@ $secrets = [
 6. Disable the old site's cron; delete its webapp after 2–4 weeks with a final backup kept.
 
 **Path B: fresh live webapp**
-1. Create the live webapp (own system user where possible, public path `/public`).
+1. Create the live webapp under the shared `runcloud` system user (see Security), public path `/public`.
 2. Clone the repo into it.
 3. Write `config.local.php` with `$env = 'production'`, the apex URL, and the client's form recipient.
 4. Run `php tools/build-sitemap.php`.

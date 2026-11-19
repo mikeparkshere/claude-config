@@ -105,6 +105,7 @@ foreach ($types as $t) {
 			'is_front' => $p->ID === (int) get_option('page_on_front'), 'is_posts_page' => $p->ID === (int) get_option('page_for_posts'),
 			'post_content' => $builder === 'bricks' ? '' : $p->post_content,
 			'bricks' => $builder === 'bricks' ? array_values($bricks) : null,
+			'elementor' => $builder === 'elementor' ? (json_decode((string) $m['_elementor_data'], true) ?: []) : null,
 			'seo' => $seo,
 		];
 	}
@@ -137,6 +138,34 @@ if (get_template() === 'bricks' || defined('BRICKS_VERSION')) {
 		'google_fonts_disabled' => !empty($gs['disableGoogleFonts']),
 		// Bricks applies a header/footer with no conditions site-wide unless "Disable default templates" is on.
 		'default_templates_disabled' => !empty($gs['defaultTemplatesDisabled']),
+	];
+}
+
+/* ---------- Elementor: theme-builder and saved templates, kit globals ----------
+ * Theme-builder templates (header, footer, single, archive, 404) carry their display conditions as strings like
+ * "include/singular/projects"; reduce.js maps them onto the same picker the Bricks templates use. Saved templates
+ * (section, container, loop-item, global widgets) come along so template/global widgets can be expanded. The kit's
+ * global colors and typography feed the design-token step. */
+$B['elementor'] = null;
+if (defined('ELEMENTOR_VERSION')) {
+	$etpls = [];
+	foreach (get_posts(['post_type' => 'elementor_library', 'post_status' => 'publish', 'numberposts' => -1, 'suppress_filters' => true]) as $t) {
+		$etype = (string) get_post_meta($t->ID, '_elementor_template_type', true);
+		if ($etype === 'kit') continue;
+		$etpls[] = [
+			'id' => (int) $t->ID, 'title' => $t->post_title, 'slug' => $t->post_name, 'type' => $etype,
+			'conditions' => array_values(array_filter((array) (get_post_meta($t->ID, '_elementor_conditions', true) ?: []), 'is_string')),
+			'elements' => json_decode((string) get_post_meta($t->ID, '_elementor_data', true), true) ?: [],
+		];
+	}
+	$kit_id = (int) get_option('elementor_active_kit');
+	$ks = $kit_id ? (array) get_post_meta($kit_id, '_elementor_page_settings', true) : [];
+	$B['elementor'] = [
+		'version' => ELEMENTOR_VERSION,
+		'pro' => defined('ELEMENTOR_PRO_VERSION') ? ELEMENTOR_PRO_VERSION : null,
+		'templates' => $etpls,
+		'kit' => array_intersect_key($ks, array_flip(['system_colors', 'custom_colors', 'system_typography', 'custom_typography', 'container_width', 'site_name'])),
+		'kit_custom_css_chars' => strlen((string) ($ks['custom_css'] ?? '')),
 	];
 }
 
@@ -226,7 +255,7 @@ $B['archives'] = [
 /* ---------- menus ---------- */
 $locs = get_nav_menu_locations();
 $B['menus'] = array_map(fn($m) => [
-	'id' => $m->term_id, 'name' => $m->name, 'locations' => array_keys(array_filter($locs, fn($id) => $id === $m->term_id)),
+	'id' => $m->term_id, 'name' => $m->name, 'slug' => $m->slug, 'locations' => array_keys(array_filter($locs, fn($id) => $id === $m->term_id)),
 	'items' => array_map(fn($i) => ['id' => $i->ID, 'parent' => (int) $i->menu_item_parent, 'title' => $i->title, 'url' => $i->url,
 		'object' => $i->object, 'object_id' => (int) $i->object_id, 'type' => $i->type, 'target' => $i->target], wp_get_nav_menu_items($m->term_id) ?: []),
 ], wp_get_nav_menus());
@@ -322,10 +351,11 @@ foreach ($B['posts'] as $p) {
 	$by = $p['type'] . ':' . $p['slug'];
 	if ($p['featured']) $add($p['featured'], "$by (featured)");
 	if ($p['bricks']) { $walk($p['bricks'], $by); $scan_urls(wp_json_encode($p['bricks'], JSON_UNESCAPED_SLASHES), $by); }
+	if ($p['elementor']) { $walk($p['elementor'], $by); $scan_urls(wp_json_encode($p['elementor'], JSON_UNESCAPED_SLASHES), $by); }
 	if ($p['post_content']) { $scan_urls($p['post_content'], $by); if (preg_match_all('~wp-image-(\d+)~', $p['post_content'], $mm)) foreach ($mm[1] as $id) $add($id, $by); }
 	foreach (['_seopress_social_fb_img', 'rank_math_facebook_image', '_yoast_wpseo_opengraph-image'] as $k) if (!empty($p['seo'][$k])) $scan_urls((string) $p['seo'][$k], "$by (og)");
 }
-foreach ($B['bricks']['templates'] ?? [] as $t) { $walk($t['elements'], "template:{$t['slug']}"); $scan_urls(wp_json_encode($t['elements'], JSON_UNESCAPED_SLASHES), "template:{$t['slug']}"); }
+foreach (array_merge($B['bricks']['templates'] ?? [], $B['elementor']['templates'] ?? []) as $t) { $walk($t['elements'], "template:{$t['slug']}"); $scan_urls(wp_json_encode($t['elements'], JSON_UNESCAPED_SLASHES), "template:{$t['slug']}"); }
 
 // Bricks query loops over attachments (a slider or gallery fed by a media folder): run the query here, while WordPress
 // is loaded, so the images reach media/ and the page notes. Uses Bricks's own query-var builder when it exists.
@@ -375,7 +405,7 @@ foreach ($refs as $id => $by) {
 	$a = get_post($id);
 	if (!$a || $a->post_type !== 'attachment') { $media[] = ['id' => $id, 'missing' => true, 'referenced_by' => array_keys($by)]; continue; }
 	$file = get_attached_file($id);
-	$orig = function_exists('wp_get_original_image_path') ? wp_get_original_image_path($id) : $file;   // pre "-scaled" upload
+	$orig = (function_exists('wp_get_original_image_path') ? wp_get_original_image_path($id) : '') ?: $file;   // pre "-scaled" upload; false for non-images (video, PDF)
 	$rel = ltrim(str_replace($uploads['basedir'], '', (string) $orig), '/');
 	$sp = $uploads['basedir'] . '/ShortpixelBackups/' . ltrim(str_replace(ABSPATH, '', $uploads['basedir']), '/') . '/' . $rel;
 	$md = wp_get_attachment_metadata($id) ?: [];

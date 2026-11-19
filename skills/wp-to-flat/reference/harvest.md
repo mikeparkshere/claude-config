@@ -73,9 +73,32 @@ those win. Parity needs the rendered run.
 - **Captures fire analytics** on the live site. `shot` blocks analytics and ad beacons by default
   (`--allow-analytics` to let them through).
 
+## Things the third port taught (11/19/2026, Elementor + Elementor Pro + Rank Math + WS Form)
+
+- **Elementor support is three parts.** `harvest.php` stores each post's `_elementor_data` as `elementor`, plus
+  `B.elementor`: every published `elementor_library` template with its `_elementor_conditions`, and the active kit's
+  global colors and typography. `reduce.js` maps the theme-builder templates onto the Bricks picker (header, footer,
+  `single*` → content, `error-404` → error; `include/general`, `include/singular/<type>[/<id>]`, `front_page`,
+  `not_found404`) and writes archive templates to `reduced/templates/`, since a CPT archive in the menu becomes a
+  listing page. `reducers/elementor.js` reads the tree.
+- **Elementor's dynamic tags are not rendered at harvest** (Bricks's are). The reducer resolves the common ones
+  itself: post title/excerpt/URL/featured image, site title/logo, ACF text/image/gallery by the field name after the
+  colon in the tag's `key`. Anything else prints `{tag-name}` and is flagged.
+- **The kit globals are the token step's starting point.** The inventory lists them under "Elementor kit globals".
+- **The site owner's user may not be `runcloud`.** On a box with a second system user, run `harvest.sh` as that user
+  (copy `harvest.sh` + `harvest.php` into its home first: it can't traverse `~/.claude`), then move the output to
+  `runcloud`. The harvest is read-only either way.
+- **Media outside uploads is invisible to the harvest.** Videos under a root `/assets/` showed up only as URLs in the
+  page notes; copy them by hand to `media/_outside-uploads/`.
+- **Non-image attachments** (MP4, PDF) used to get an empty path, because `wp_get_original_image_path()` returns false
+  for them. Fixed: they fall back to the attached file.
+- **`url-map.js`: an archive whose plan target is its own path is kept** (tested 200, no rule), for a CPT archive
+  that becomes a real page.
+
 ## Adding a builder
 
 One file in `scripts/reducers/<builder>.js` exporting `(elementsOrPost, ctx) => string[]`. `harvest.php`
 detects the builder per post (`bricks`, `elementor`, `divi`, `wpbakery`, `gutenberg`, `classic`, `empty`);
 classic and Gutenberg fall back to plain text extraction. A builder with no reducer is a Gate 1 flag, and
-writing it is part of that port.
+writing it is part of that port. Reducers exist for `bricks` and `elementor`. A builder with its own template system
+(theme builder) needs its templates normalized in `reduce.js` too, the way Elementor's are.

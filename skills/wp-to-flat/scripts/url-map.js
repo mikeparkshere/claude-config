@@ -24,7 +24,7 @@
  * plan.json (all keys optional):
  *   { "host": "example.com",
  *     "pages":    { "/old-path/": "/new-path/" },            // rename; null = dropped (-> home)
- *     "archives": { "/team/": "/#team" },                    // target for an archive/term/author URL
+ *     "archives": { "/team/": "/#team" },                    // target for an archive/term/author URL; its own path = keep as a page
  *     "media":    { "2024/04/photo.webp": "/assets/img/photo.webp" },  // uploads path, no size suffix
  *     "extra":    [ { "from": "/old/", "to": "/new/", "code": 301 } ] }
  *
@@ -87,6 +87,8 @@ if (U.urls.some(u => u.kind === '404')) tests.push(['/wp-to-flat-missing-page/',
 // Archives, terms, authors
 U.urls.filter(u => ['term', 'author', 'archive'].includes(u.kind)).forEach(u => {
   const to = (plan.archives && plan.archives[u.path]) || '/';
+  // Target = its own path: the archive becomes a real page on the flat site (a CPT listing in the menu). Keep it.
+  if (to === u.path) { tests.push([u.path, 200, '']); rows.push([u.path, u.path, 200, (u.kind === 'archive' ? 'post type' : u.kind) + ' archive kept as a page']); return; }
   redirect('early', '^' + esc(u.path.replace(/^\//, '')).replace(/\/$/, '') + '/?$', to, 301, u.kind + ' archive', u.path);
 });
 // Plan archives that WordPress didn't list (e.g. a CPT base with no archive page)
@@ -129,7 +131,11 @@ Object.keys(U.redirects || {}).forEach(src => (U.redirects[src] || []).forEach(r
   froms.filter(Boolean).forEach(from => {
     if (!to) return;
     const fromPath = '/' + String(from).replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
-    const toPath = newPath(String(to).replace(U.home, '') || '/');
+    let toPath = newPath(String(to).replace(U.home, '') || '/');
+    // Plugin targets are often typed without the trailing slash ("/projects"). Every flat page is a directory with
+    // a slash, so a bare target would 301 a second time (a chain). Add the slash when that names a kept URL.
+    // (Third port, 11/19/2026: Rank Math /portfolio -> /projects failed parity as a chain.)
+    if (!/[/?#]$|\.[a-z0-9]+$/i.test(toPath) && (U.urls.some(u => u.keep !== false && u.path === toPath + '/') || (plan.archives && plan.archives[toPath + '/'] === toPath + '/'))) toPath += '/';
     redirect('early', '^' + esc(fromPath.replace(/^\//, '')).replace(/\/$/, '') + '/?$', toPath, 301, 'existing redirect (' + src + ')', fromPath);
   });
 }));

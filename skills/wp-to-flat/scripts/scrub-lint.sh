@@ -58,6 +58,15 @@ if ($file !== false && strpos($file, realpath($root)) === 0) {
     if (is_file($file)) return false;
     if (is_dir($file) && is_file($file . '/index.php') && substr($path, -1) === '/') { chdir($file); require $file . '/index.php'; return true; }
 }
+// Internal rewrites from public/.htaccess (a template route like `RewriteRule ^projects/([a-z0-9-]+)/?$ /projects/project.php?slug=$1 [L]`).
+// php -S ignores .htaccess, so without this every templated URL lints as a 404. External redirects are skipped.
+foreach (is_file($root . '/.htaccess') ? file($root . '/.htaccess') : [] as $line) {
+    if (!preg_match('~^\s*RewriteRule\s+(\S+)\s+(/[^\s?]+\.php)(\?\S*)?\s~', $line, $r)) continue;
+    if (!preg_match('~' . str_replace('~', '\~', $r[1]) . '~', ltrim($path, '/'), $m)) continue;
+    $q = preg_replace_callback('~\$(\d)~', fn($x) => $m[(int) $x[1]] ?? '', ltrim($r[3] ?? '', '?'));
+    parse_str($q, $vars); $_GET = $vars + $_GET;
+    if (is_file($root . $r[2])) { chdir(dirname($root . $r[2])); require $root . $r[2]; return true; }
+}
 http_response_code(404);
 if (is_file($root . '/404.php')) { require $root . '/404.php'; }
 return true;

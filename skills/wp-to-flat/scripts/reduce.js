@@ -62,10 +62,35 @@ const one = s => text(s).replace(/\n/g, ' ');
 const posts = B.posts;
 const byId = {}; posts.forEach(p => { byId[p.id] = p; });
 const media = {}; (B.media || []).forEach(m => { media[m.id] = m; });
-const menus = {}; (B.menus || []).forEach(m => { menus[m.id] = m; });
+const menus = {}; (B.menus || []).forEach(m => { menus[m.id] = m; if (m.slug) menus[m.slug] = m; });
 const bricks = B.bricks || { templates: [], class_names: {}, components: [] };
-const templates = bricks.templates.filter(t => t.post_type === 'bricks_template');
-const tplById = {}; bricks.templates.forEach(t => { tplById[t.id] = t; });
+bricks.templates.forEach(t => { t.builder = 'bricks'; });
+
+/* Elementor theme-builder templates, normalized onto the Bricks picker. Condition strings look like
+ * "include/singular/projects", "include/general", "exclude/singular/page/42", "include/archive/category". */
+const ELEMENTOR_TYPE = { header: 'header', footer: 'footer', single: 'content', 'single-post': 'content', 'single-page': 'content', 'error-404': 'error' };
+function elementorCond(s) {
+  const [mode, scope, sub, id] = String(s).split('/');
+  const c = { exclude: mode === 'exclude', raw: s };
+  if (scope === 'general') c.main = 'any';
+  else if (scope === 'singular') {
+    if (!sub) c.main = 'any';
+    else if (sub === 'front_page') c.main = 'frontpage';
+    else if (sub === 'not_found404') c.main = 'error';
+    else if (id) { c.main = 'ids'; c.ids = [+id]; }
+    else if (/^(in_|by_author|child_of|any_child_of)/.test(sub)) c.main = 'unsupported';
+    else { c.main = 'postType'; c.postType = sub; }
+  } else c.main = scope || 'unknown';   // archive, search: not a singular URL
+  if (c.main === 'unsupported') flag('Elementor condition "' + s + '" is not modeled by the reducer: check which pages that template covers');
+  return c;
+}
+const elementorTpls = ((B.elementor && B.elementor.templates) || []).map(t => ({
+  id: t.id, title: t.title, slug: t.slug, post_type: 'elementor_library', builder: 'elementor', etype: t.type,
+  type: ELEMENTOR_TYPE[t.type] || t.type, conditions: (t.conditions || []).map(elementorCond), elements: t.elements,
+}));
+const templates = bricks.templates.filter(t => t.post_type === 'bricks_template').concat(elementorTpls);
+const tplById = {}; bricks.templates.concat(elementorTpls).forEach(t => { tplById[t.id] = t; });
+const builderName = t => (t && t.builder === 'elementor' ? 'Elementor' : 'Bricks');
 const dyn = (B.dynamic && B.dynamic.values) || {};
 const frontId = String((B.dynamic && B.dynamic.front_page) || B.site.page_on_front || '');
 
@@ -94,7 +119,7 @@ function pick(type, p, isError) {
   // unless Settings > Templates > "Disable default templates" is on. (First port: header and footer had no
   // conditions and the reducer reported them unused.)
   if (!best && ['header', 'footer'].includes(type) && !bricks.default_templates_disabled) {
-    const plain = templates.filter(t => t.type === type && !(t.conditions || []).length).sort((a, b) => a.id - b.id);
+    const plain = templates.filter(t => t.builder === 'bricks' && t.type === type && !(t.conditions || []).length).sort((a, b) => a.id - b.id);
     if (plain.length > 1 && !pick.warned[type]) { pick.warned[type] = true; flag(plain.length + ' ' + type + ' templates have no conditions; assumed "' + plain[0].title + '" (lowest id) is the Bricks default: check the live page'); }
     best = plain[0] || null;
   }
@@ -131,12 +156,17 @@ function makeCtx(postId) {
     loopItems: elId => (B.loops && B.loops[elId]) || null,   // attachment ids harvest.php resolved for a query loop
     featured: () => { const p = byId[stack[stack.length - 1]]; return p && p.featured ? media[p.featured] || null : null; },
     postContent: () => { const p = byId[stack[stack.length - 1]]; return p ? text(p.post_content) : ''; },
+    // Used by the Elementor reducer (dynamic tags resolve here rather than by rendering in WordPress).
+    post: () => byId[stack[stack.length - 1]] || null,
+    acf: name => (((B.acf && B.acf.posts[stack[stack.length - 1]]) || {})[name]) || null,
+    site: B.site,
+    form: (plugin, id) => (B.forms || []).find(f => f.plugin === plugin && String(f.id) === String(id)) || null,
   };
   return ctx;
 }
 
-function reduceTree(elements, postId, where) {
-  return reducers.bricks(elements, makeCtx(postId), { where: where }).join('\n');
+function reduceTree(elements, postId, where, builder) {
+  return reducers[builder || 'bricks'](elements, makeCtx(postId), { where: where }).join('\n');
 }
 
 /* ---------- SEO, from plugin meta (+ rendered head when raw/html exists) ---------- */
@@ -188,7 +218,7 @@ posts.forEach(p => {
   if (p.builder === 'bricks') { source = 'Bricks (own content)'; body = reduceTree(p.bricks, p.id, 'page ' + rel(p.url)); }
   else {
     const single = pick('content', p);
-    if (single) { source = 'Bricks template "' + single.title + '"' + (p.builder !== 'empty' ? ' + ' + p.builder + ' post content' : ''); body = reduceTree(single.elements, p.id, 'template "' + single.title + '" for ' + rel(p.url)); }
+    if (single) { source = builderName(single) + ' template "' + single.title + '"' + (p.builder !== 'empty' ? ' + ' + p.builder + ' post content' : ''); body = reduceTree(single.elements, p.id, 'template "' + single.title + '" for ' + rel(p.url), single.builder); }
     else if (reducers[p.builder]) { source = p.builder; body = reducers[p.builder](p, makeCtx(p.id)).join('\n'); }
     else if (p.builder === 'classic' || p.builder === 'gutenberg') { source = p.builder + ' (plain text extraction)'; body = text(p.post_content); }
     else if (p.builder === 'empty') { source = 'empty'; body = '(no content)'; flag('Empty page: ' + rel(p.url)); }
@@ -226,17 +256,25 @@ const errTpl = pick('error', null, true);
 if (errTpl) {
   const h = pick('header', null, true), f = pick('footer', null, true);
   [h, f].forEach(t => { if (t) usedTemplates[t.id] = t; });
-  fs.writeFileSync(path.join(OUT, 'pages', '404.md'), ['# 404 page', '', '- Content source: Bricks template "' + errTpl.title + '"', '- Header: ' + (h ? h.title : 'none') + '; footer: ' + (f ? f.title : 'none'), '', '## Content', reduceTree(errTpl.elements, null)].join('\n') + '\n');
+  fs.writeFileSync(path.join(OUT, 'pages', '404.md'), ['# 404 page', '', '- Content source: ' + builderName(errTpl) + ' template "' + errTpl.title + '"', '- Header: ' + (h ? h.title : 'none') + '; footer: ' + (f ? f.title : 'none'), '', '## Content', reduceTree(errTpl.elements, null, '404 template', errTpl.builder)].join('\n') + '\n');
 }
+
+// Elementor archive templates draw archive URLs (a CPT archive in the menu, say). Those URLs aren't harvested as
+// pages, but the layout is what a flat listing page would replace, so reduce them too.
+elementorTpls.filter(t => t.type === 'archive').forEach(t => { usedTemplates[t.id] = t; });
+// Saved Elementor templates (sections, containers, loop items, global widgets, popups) are building blocks pulled in
+// by widgets, not page templates: never "unused".
+const ELEMENTOR_PARTS = new Set(['section', 'container', 'page', 'loop-item', 'widget', 'popup']);
 
 // Shared templates
 Object.keys(usedTemplates).forEach(id => {
   const t = usedTemplates[id];
-  const conds = (t.conditions || []).map(c => (c.exclude ? 'not ' : '') + c.main + (c.postType ? ' ' + [].concat(c.postType).join(',') : '') + (c.ids ? ' ' + [].concat(c.ids).join(',') : '')).join('; ');
-  fs.writeFileSync(path.join(OUT, 'templates', t.type + '-' + t.slug + '.md'), ['# ' + t.type + ': ' + t.title, '', '- Applies to: ' + (conds || (['header', 'footer'].includes(t.type) && !bricks.default_templates_disabled ? '(no conditions: Bricks default template, site-wide)' : '(no conditions)')), '', reduceTree(t.elements, null, t.type + ' template "' + t.title + '"')].join('\n') + '\n');
+  const conds = (t.conditions || []).map(c => c.raw || ((c.exclude ? 'not ' : '') + c.main + (c.postType ? ' ' + [].concat(c.postType).join(',') : '') + (c.ids ? ' ' + [].concat(c.ids).join(',') : ''))).join('; ');
+  const none = ['header', 'footer'].includes(t.type) && t.builder === 'bricks' && !bricks.default_templates_disabled ? '(no conditions: Bricks default template, site-wide)' : '(no conditions)';
+  fs.writeFileSync(path.join(OUT, 'templates', t.type + '-' + t.slug + '.md'), ['# ' + t.type + ': ' + t.title + ' (' + builderName(t) + ')', '', '- Applies to: ' + (conds || none), '', reduceTree(t.elements, null, t.type + ' template "' + t.title + '"', t.builder)].join('\n') + '\n');
 });
-templates.filter(t => !usedTemplates[t.id] && !['content', 'error'].includes(t.type)).forEach(t => flag('Bricks ' + t.type + ' template "' + t.title + '" applies to no public URL (unused?)'));
-templates.filter(t => t.type === 'content' && !posts.some(p => p.builder !== 'bricks' && pick('content', p) === t)).forEach(t => flag('Bricks content template "' + t.title + '" applies to no public URL'));
+templates.filter(t => !usedTemplates[t.id] && !['content', 'error'].includes(t.type) && !(t.builder === 'elementor' && ELEMENTOR_PARTS.has(t.etype))).forEach(t => flag(builderName(t) + ' ' + t.type + ' template "' + t.title + '" applies to no public URL (unused?)'));
+templates.filter(t => t.type === 'content' && !posts.some(p => (t.builder === 'elementor' || p.builder !== 'bricks') && pick('content', p) === t)).forEach(t => flag(builderName(t) + ' content template "' + t.title + '" applies to no public URL'));
 
 /* ---------- urls.json ---------- */
 const urls = posts.map(p => ({ path: rel(p.url), kind: 'page', type: p.type, id: p.id, title: p.title, keep: true }));
@@ -273,7 +311,7 @@ const h = s => inv.push('', '## ' + s, '');
 inv.push('# Harvest inventory: ' + S.name, '', '_Harvested ' + B.harvested_at.slice(0, 16).replace('T', ' ') + ' UTC from ' + S.home + '. Generated by reduce.js; feeds MIGRATION.md._');
 
 h('Site');
-inv.push('- Name: ' + S.name + (S.tagline ? ' — ' + S.tagline : ''), '- WordPress ' + S.wp_version + ', PHP ' + S.php + ', theme ' + S.theme.name + ' ' + S.theme.version + (bricks.version ? ', Bricks ' + bricks.version : ''),
+inv.push('- Name: ' + S.name + (S.tagline ? ' — ' + S.tagline : ''), '- WordPress ' + S.wp_version + ', PHP ' + S.php + ', theme ' + S.theme.name + ' ' + S.theme.version + (bricks.version ? ', Bricks ' + bricks.version : '') + (B.elementor ? ', Elementor ' + B.elementor.version + (B.elementor.pro ? ' + Pro ' + B.elementor.pro : '') : ''),
   '- Language ' + S.language + ', timezone ' + S.timezone + ', permalinks `' + S.permalink_structure + '`', '- Front page: ' + (S.show_on_front === 'page' ? (byId[S.page_on_front] ? byId[S.page_on_front].title : '#' + S.page_on_front) : 'latest posts'),
   '- Search engines: ' + (S.blog_public ? 'allowed' : 'discouraged'));
 if (!S.blog_public) flag('blog_public is 0 (search engines discouraged): rendered robots/SEO may not match production');
@@ -299,7 +337,7 @@ inv.push('- **Verdict: ' + verdict + '** (' + pages + ' public URLs)');
 h('Pages');
 inv.push('| URL | Title | Type | Content source | Header / footer | Modified |', '| --- | --- | --- | --- | --- | --- |');
 pageRows.forEach(r => inv.push('| `' + rel(r.p.url) + '` | ' + r.p.title + ' | ' + r.p.type + ' | ' + r.source + ' | ' + (r.header ? r.header.title : '–') + ' / ' + (r.footer ? r.footer.title : '–') + ' | ' + r.p.modified.slice(0, 10) + ' |'));
-if (errTpl) inv.push('| (404) | 404 | – | Bricks template "' + errTpl.title + '" | | |');
+if (errTpl) inv.push('| (404) | 404 | – | ' + builderName(errTpl) + ' template "' + errTpl.title + '" | | |');
 
 h('SEO (' + (B.seo.plugin || 'no SEO plugin') + ')');
 inv.push('| URL | Title | Description | Notes |', '| --- | --- | --- | --- |');
@@ -352,7 +390,19 @@ if (S.mu_plugins.length) inv.push('- Must-use: ' + S.mu_plugins.join(', '));
 h('Fonts');
 inv.push('- On disk: ' + ((B.fonts_on_disk || []).join(', ') || 'none'));
 if (bricks.custom_fonts && bricks.custom_fonts.length) inv.push('- Bricks custom fonts: ' + bricks.custom_fonts.map(f => f.name).join(', '));
-inv.push('- Bricks Google Fonts: ' + (bricks.google_fonts_disabled ? 'disabled' : 'enabled (check rendered pages for fonts.googleapis.com)'));
+if (bricks.version) inv.push('- Bricks Google Fonts: ' + (bricks.google_fonts_disabled ? 'disabled' : 'enabled (check rendered pages for fonts.googleapis.com)'));
+
+// Elementor kit globals: the site's own color and type system, the starting point for the design-token step.
+if (B.elementor && B.elementor.kit) {
+  const K = B.elementor.kit;
+  h('Elementor kit globals');
+  const colors = (K.system_colors || []).concat(K.custom_colors || []);
+  inv.push('- Colors: ' + (colors.map(c => c.title + ' ' + c.color).join(', ') || 'none'));
+  const size = v => (v && typeof v === 'object' && v.size !== undefined && v.size !== '' ? v.size + (v.unit || 'px') : '');
+  (K.system_typography || []).concat(K.custom_typography || []).forEach(t => inv.push('- Type "' + t.title + '": ' + [t.typography_font_family, t.typography_font_weight, size(t.typography_font_size), size(t.typography_line_height) && 'line-height ' + size(t.typography_line_height)].filter(Boolean).join(' ')));
+  if (K.container_width) inv.push('- Container width: ' + size(K.container_width));
+  if (B.elementor.kit_custom_css_chars) { inv.push('- Kit custom CSS: ' + B.elementor.kit_custom_css_chars + ' chars'); flag('Elementor kit has custom CSS (' + B.elementor.kit_custom_css_chars + ' chars): skim it for brand rules before the token step'); }
+}
 
 h('Media (' + (B.media || []).length + ' referenced)');
 (B.media || []).forEach(m => inv.push('- ' + (m.missing ? '#' + m.id + ' MISSING' : m.rel + ' (' + m.width + 'x' + m.height + ', master: ' + m.source_kind + ')' + (m.alt ? ' alt="' + m.alt + '"' : ' no alt')) + ' — ' + m.referenced_by.join(', ')));
