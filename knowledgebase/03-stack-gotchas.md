@@ -5058,3 +5058,38 @@ Render from the parsed parts, never by echoing the stored HTML. **Test it as the
 **Why / constraints:** A **domain sending key** can `GET /v4/domains/<d>` (whose `sending_dns_records` include a new, not-yet-active DKIM selector and its full value) but gets **401** on `/v1/dkim/keys`, so the key itself must be created in the dashboard. A 2048-bit public key is ~400 chars, over DNS's 255-char string limit.
 **Fix:** (1) Create a 2048 key in the Mailgun dashboard with a new selector (e.g. `cw2026`), **don't activate**. (2) Read its value via the domain-details call, confirm 2048-bit with openssl, publish the TXT via the Cloudflare API with the content pre-split into quoted 255-char strings, and `cmp` the resolved value against Mailgun's. (3) Verify + activate in the dashboard. (4) Send a test, confirm `dkim=pass` with the new `s=` in the received headers. (5) Delete the old selector's record **a week later**, so mail in flight still verifies.
 **First seen:** Clemente, 2026-11-16 — `mailo` (1024) → `cw2026` (2048); delivered and `dkim=pass` the same hour.
+
+### WS Form retention, 1.12.19: Auto Delete can hard-delete, old rows can be backfilled, trash is never purged
+*Amends the established entry "WS Form submission retention hides in a JSON-inside-serialized-PHP blob" above the seam; three of its bullets are out of date for this version.*
+- `action_database_expire` is now a **select**, not a checkbox: `''` Off · `'on'` Move to Trash · `'delete'`
+  Permanently Delete (label "Auto Delete" on the **Save Submission** action). `''` is still off.
+- **`'delete'` hard-deletes.** The hourly WP-Cron hook `ws_form_wp_cron_action_database` runs `db_delete_expired()`,
+  which reads each form's method (`db_get_form_auto_delete_method()`) and calls `db_delete()` on `delete` forms. The
+  "never hard-deletes" bullet holds only for `'on'`.
+- **Existing rows *can* be caught**: stamp them yourself.
+  `UPDATE wp_wsf_submit SET date_expire = DATE_ADD(date_added, INTERVAL <days> DAY) WHERE form_id = <id> AND status <> 'trash' AND date_expire IS NULL`.
+  The next hourly run purges anything already past due, so check the dates before running it on a form whose
+  oldest rows are already past the period.
+- **The purge skips trashed rows** (`NOT status = 'trash'` in the query), so anything already in WS Form's trash
+  stays until someone empties it by hand. Count trash separately before promising a retention period.
+- Writing the setting: the narrow action-grid pattern (`03`, WS Form action rows) with `--user=<admin>` (the form read
+  throws `Insufficient user capabilities (read_form)` as user 0), then `db_publish()`. Read the result back from the
+  **`published`** column; `db_read()` returns the draft.
+- A retention period promised in a privacy policy should match these settings, and the email copies need their own
+  deletion, which WS Form can't do.
+
+**First seen:** Clemente, 2026-11-19. Matching WS Form to a new privacy policy (forms 1/4/5 at 90 days, form 2 at 365);
+15 existing rows backfilled, 2 trashed rows left for a manual delete. ⚠️ **Conflict, flagged for harvest:** amends the
+established entry above the seam, which says checkbox, trash-only, and "not retroactive". *(Tier 2 site, master
+project section, unharvested.)*
+
+### A curl audit counts two H1s on every page that renders a WS Form, and one of them isn't real
+
+**Symptom / When:** A heading sweep (`grep -o '<h1'`) on the raw HTML reports two H1s on any page with a WS Form on
+it, footer newsletter forms included, so the whole site looks like it has a duplicate-H1 problem.
+**Cause:** WS Form prints its form config as inline JSON, and the default Send Email template inside it contains
+`<h1>#email_subject<\/h1>`. It's a string in a script, not markup, and no browser or screen reader sees it.
+**Fix:** Match real tags only, e.g. `grep -o '<h1[^>]*>' | grep -v '\\'`, or count `<h1 ` with a class or id, or
+strip `<script>` blocks first. Then look at the real H1s.
+**First seen:** Clemente, 2026-11-19, in the sweep for the accessibility statement (one real H1 per page).
+*(Tier 2 site, master project section, unharvested.)*
