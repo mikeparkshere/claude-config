@@ -12,6 +12,11 @@ and logged nothing, and the client had been missing booking requests for weeks w
 them. Distinguish the domain from the key: if another key on the account can send for the domain, the domain is fine
 and only the key is dead. A domain sending key (send-only) is the right credential for the new site.
 
+Testing a key: a send-only domain key answers **401 to every read** (`/domains`, `/events`), so a GET can't tell a
+working key from a dead one. Use a test-mode send (`o:testmode=yes`): Mailgun accepts it and delivers nothing.
+**Post SMTP stores keys base64-encoded** in `postman_options` (`mailgun_api_key`); the raw value 401s on everything
+(third port, 11/19/2026).
+
 ## Porting a form
 
 1. **Inventory** (Gate 1): `reduced/inventory.md` → Forms lists plugin forms (WS Form, CF7, Gravity, WPForms,
@@ -31,8 +36,14 @@ and only the key is dead. A domain sending key (send-only) is the right credenti
 6. **Test** on staging, then once on production after cutover, and confirm the message actually arrives (Mailgun
    "accepted" is not "delivered"). Check the sending subdomain has its `mxa`/`mxb.mailgun.org` MX records, or
    Exchange-style receivers reject every message while Gmail tests pass.
-7. **Spam:** honeypot first. Add Turnstile when spam gets past it; its script host then needs a CSP entry.
-   Reusing the old site's **reCAPTCHA v3** key works, with two catches: the key's domain list in the reCAPTCHA
+7. **Spam:** honeypot first. **Check the old captcha's version before planning to reuse it** (WS Form: the `ws_form`
+   option's `recaptcha_recaptcha_type`): a v2 checkbox key doesn't fit the invisible flow. The third port moved to
+   **Cloudflare Turnstile**: explicit render on first focus (`api.js?render=explicit&onload=…`), `appearance:
+   interaction-only`, token field `cf-turnstile-response`; the handler verifies with `remoteip`, checks the returned
+   `hostname` is ours, and fails closed; no-JS visitors get a call/email notice. The widget's hostname list must
+   include the staging host. Headless Chrome renders the widget but never gets a token, so the last test is a send
+   from a real browser. CSP: `challenges.cloudflare.com` in script, connect and frame.
+   Reusing an old **reCAPTCHA v3** key also works (second port), with two catches: the key's domain list in the reCAPTCHA
    admin usually doesn't include the staging host (run staging on the honeypot alone, secret unset), and a headless
    browser scores 0, so production tests of the send path need the secret off for the seconds of the test, then
    back on. Load Google's script on first focus of a form, not on page load.

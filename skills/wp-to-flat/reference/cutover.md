@@ -7,7 +7,8 @@ Don't duplicate the runbook here.
 ## Before (the day before is fine)
 
 - **Back up the WordPress site, twice over:** a Duplicator package to off-site storage, plus a DB export and a files
-  tarball on the server (mode 600, outside any webroot). Confirm the off-site upload completed.
+  tarball on the server (mode 600, outside any webroot). Confirm the off-site upload completed. If the old site has no
+  off-site storage configured, take the local pair now and make the off-site copy before decommission (third port).
 - `parity-check.js` against the staging host: zero FAILs, every REVIEW answered.
 - `scrub-lint.sh`: clean.
 - Old sitemaps, `?p=` IDs and media paths are in the redirect rules (`url-map.js`), and the rules were exercised in a
@@ -18,6 +19,11 @@ Don't duplicate the runbook here.
 
 RunCloud won't leave a webapp with zero domains, so before the production domain can leave the WordPress webapp it
 needs a **placeholder domain with no DNS** (e.g. `old-<site>.michaelparksdesign.com`). Record which name it is.
+**SSL:** check `GET …/webapps/{id}/ssl/advanced` first. In basic mode (`advancedSSL: false`) issue with
+`POST …/webapps/{id}/ssl`, which covers every domain on the webapp; a cert posted to `…/domains/{d}/ssl` records a
+`validUntil` and never deploys (KB 04). Issued that way, the cert reached nginx in 10–30 s on the third port.
+Retiring staging afterwards is another delete + issue (~10 s gap), then delete its DNS record.
+
 ⚠️ Never give that placeholder DNS later, and never reuse it for anything: a record pointing at it brings the dark
 WordPress site back online. Use a fresh name for a test fixture.
 

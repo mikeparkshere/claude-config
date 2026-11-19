@@ -12,6 +12,10 @@ original handoff, it says so.
   *Retro over handoff:* the handoff said "no content data layer". The first port needed one on day one, because hours
   appear in the header, the hours page, the footer and the schema.
 - **Copy unique to one page stays in that page's file**, passed into components as arguments.
+- **Includes share file scope.** On the third port `header.php`'s `foreach ($site['pages'] as $key => $p)` overwrote a
+  template's `$p` record; the fatal came after the 200, so only the PHP error log showed it. Name records for what they
+  are (`$project`), and make smoke tests read the error log, not just status codes. A template that finds no record
+  includes a shared not-found body; including `404.php` re-requires the bootstrap.
 - **A custom post type becomes a data-file list plus one thin page file per item** where the old site had a URL
   per item (a 3-line file that sets the slug and includes a shared profile partial).
 
@@ -42,6 +46,11 @@ CSS transitions plus a small IntersectionObserver for scroll reveals; `prefers-r
 CSS and the observer. **No GSAP by default.** *Retro over handoff:* the first port dropped GSAP entirely and lost
 nothing. Add it, self-hosted and on the pages that need it only, when a timeline or sequence earns it.
 
+
+**No-JS fallbacks key on `@media (scripting: none)`, not a `.no-js` class.** Deferred JS removes the class after first
+paint, so anything laid out differently for no-JS moves: on the third port the mobile menu sat in flow until `main.js`
+ran (CLS 0.3 on mobile). Scroll reveals likewise go under `@media (scripting: enabled)`.
+
 ## Images
 
 - Masters in `src/img/`, never in `public/`. A build script (`sharp`, run by hand with nvm's Node; system Node is too
@@ -71,6 +80,12 @@ A background video is the hero's motion, not its LCP: make a poster frame the LC
 video after `load`, never under `prefers-reduced-motion` or Save-Data. Pick a cut by viewport in JS (portrait for
 phones, 1280, 1920); `<source media>` isn't reliable. Encode H.264 with no audio track and `+faststart`; name files by
 content hash like images. A 38 MB original is not a web asset: ask for cuts (the second port got 10/12/23 MB).
+
+
+Check the first second before picking the poster: a film that **opens on a fade from black** makes frame 0 a black
+LCP image. Start the cuts after the fade (`-ss`) and take the poster from the same frame, so the handoff doesn't jump.
+Probe the audio: a track at a few kb/s is silence, and the cuts can drop it. No ffmpeg on the box: `ffmpeg-static` as a
+dev dependency, run by hand like `sharp` (third port).
 
 ## Third parties
 

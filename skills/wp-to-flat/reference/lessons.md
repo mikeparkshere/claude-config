@@ -89,3 +89,50 @@ The first port run end to end by the skill: harvest to cutover and decommission 
   when the new form failed on staging. → SKILL.md phase 1 and `forms.md`: test the mail credential at harvest.
 - Production and staging on the same server: cutover was a webapp domain move plus an SSL reissue, ~30 s of HTTPS
   downtime. Decommissioning by API also removed the database and its user.
+
+---
+
+## 2026-11 — third port (Elementor + Elementor Pro + Rank Math + WS Form brochure site, 26 URLs → 18, two forms)
+
+The first non-Bricks port. Harvest to cutover in one day; 10 project pages from one template and a data file.
+
+**Scope**
+- The inventory said "not a candidate": a blog, and 26 URLs. The blog was dormant (newest post two and a half years
+  old) and the CPT was a title plus an ACF gallery per item. Dropping the blog with 301s and rendering the CPT from a
+  data file brought it inside scope. → Nothing changed: Gate 1 is where that call belongs, and it was made there.
+- The old site ran as a second system user, and `runcloud` couldn't read its webroot. → `harvest.md`: harvest as the
+  owner, move the output.
+
+**Harvest and reduce**
+- No Elementor reducer. → `reducers/elementor.js`, Elementor in `harvest.php`, its theme-builder templates mapped
+  onto the existing picker in `reduce.js`. Dynamic tags are resolved by the reducer (Elementor doesn't render them
+  at harvest the way Bricks does).
+- Non-image attachments (video) lost their path, because `wp_get_original_image_path()` returns false for them. →
+  Fixed in `harvest.php`.
+- Video under a root `/assets/` folder, outside uploads, was invisible to the media walk. → `harvest.md`: copy by hand.
+- The mail check returned 401 for a working key: Post SMTP stores keys base64-encoded, and a send-only key 401s on
+  every read endpoint. → `forms.md`: decode, then test with a test-mode send.
+
+**Build**
+- The hero film opened on a fade from black, so frame 0 made a black LCP poster. → `architecture.md` → Video.
+- `.no-js` fallbacks laid the mobile menu out in flow until deferred JS removed the class: CLS 0.3. → Keyed on
+  `@media (scripting: none)`; `architecture.md` → Motion.
+- A header loop variable overwrote the project template's record (includes share file scope). The fatal came after
+  a 200, so only the PHP error log showed it. → `architecture.md` → Content: name records specifically; smoke tests
+  read the error log.
+- The old site's captcha was reCAPTCHA **v2**; the skill's form flow assumes v3. Moved to Cloudflare Turnstile. →
+  `forms.md` → Spam. Headless Chrome never gets a Turnstile token, so the last form test is a real-browser send.
+- Every image lacked alt text (4 of 140 had any). Alt was written from contact sheets of the photos; project meta
+  descriptions came from the same look. Slow, but the old boilerplate description repeated ×10 was a parity REVIEW
+  and an SEO loss.
+
+**QA and cutover**
+- Parity found one FAIL: a plugin redirect to a slashless target chained. → `url-map.js` adds the slash.
+- The scrub lint 404'd every templated URL (`php -S` ignores `.htaccess`). → Its router follows internal rewrites.
+- Two staging certs recorded `validUntil` and never deployed: the webapp was in basic SSL mode and they'd been issued
+  at the domain level. → `cutover.md`, `flatsite.md`, KB 04.
+- RunCloud's placeholder `index.html` shadowed the home page; the KB already had it. → `flatsite.md` scaffold step.
+- Cutover HTTPS gap: ~18 s, then ~10 s to retire staging. Parity on production 0 FAIL; CSP enforcing after a
+  production check with GTM and Turnstile loaded.
+- The old site had no off-site backup storage. → `cutover.md`: local DB + tarball at cutover; off-site before
+  decommission.

@@ -218,6 +218,8 @@ Two launch paths; pick by circumstance (Michael, 11/13/2026). No LocalWP step ei
 - **New site, or a big change to a live flat site:** build on a separate staging webapp, launch to a fresh live webapp (or merge into the existing one), then delete staging. See **Launch → Path B**.
 
 ### Staging
+- **A new webapp ships RunCloud's placeholder `public/index.html`, which shadows `index.php`.** Delete it when you
+  scaffold, and check the rendered `<title>`, not the status code (KB 04).
 - A subdomain on Michael's domain, on the same server the site will live on, so PHP version, nginx stack, and headers match production.
 - **Out of search, not hidden** (Michael, 11/13/2026). These are low-traffic sites with nothing to hide, so no basic auth. Send `X-Robots-Tag: noindex, nofollow` keyed on the host, so it fires on anything but the production domain. On a hybrid webapp that's one line in `public/.htaccess`:
   `Header always set X-Robots-Tag "noindex, nofollow" "expr=%{HTTP_HOST} != 'example.com'"`
@@ -242,7 +244,7 @@ $secrets = [
 **Path A: domain move** (replacing a live site)
 1. Freeze and back up the old site; its webapp is the rollback.
 2. Add the 301s from the old site's URLs (on hybrid, in `.htaccess`; nginx hands missing files to Apache, so old media paths reach it too). Hard-code `https://%{HTTP_HOST}` in every redirect target: Apache sits behind nginx and never sees TLS, so its own redirects (mod_dir's trailing slash included; set `DirectorySlash Off`) say `http://`.
-3. On a closed or quiet day: remove the domains from the old webapp, add them to the new one, then delete and re-`POST` SSL for the new set (a PATCH doesn't reissue). HTTPS is broken for the minute in between.
+3. On a closed or quiet day: remove the domains from the old webapp, add them to the new one, then delete and re-`POST` SSL for the new set (at the **webapp** level when `…/ssl/advanced` says `advancedSSL: false`; KB 04) (a PATCH doesn't reissue). HTTPS is broken for the minute in between.
 4. Check the www → apex 301, canonicals, HSTS and analytics on the real domain; resubmit the sitemap in Search Console.
 5. Remove the staging domain from the webapp and its DNS record, and reissue SSL without it.
 6. Disable the old site's cron; delete its webapp after 2–4 weeks with a final backup kept.
