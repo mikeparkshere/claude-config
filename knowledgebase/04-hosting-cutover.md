@@ -429,6 +429,20 @@ The double-slash form maps to the same file, so one rule covers both. Verify wit
 **Server-side fix: restore the IP in nginx, once per webapp.** RunCloud's nginx-rc ships no `set_real_ip_from` / `real_ip_header` for a webapp, `/etc/nginx-rc/` is root-only, and the API can't write nginx config (see the static-files entry). So it's a panel job: Web Application → NGINX Config, either RunCloud's Cloudflare real-IP template or a custom config with one `set_real_ip_from <cidr>;` per Cloudflare range plus `real_ip_header CF-Connecting-IP;`. Because the trust is limited to Cloudflare's ranges, a forged header sent straight to the origin is ignored, the same guarantee the PHP-side check gives. Do it in the same hour as the proxy flip: every log line before it is unattributable. **Verify in the Apache access log** (unbuffered, and the layer PHP sees); the nginx access log may sit silent after the redeploy (see "RunCloud nginx access logs are BUFFERED"). Keep the PHP-side check in hand-written handlers anyway: it costs nothing and survives a webapp whose nginx config was never touched.
 **First seen:** Nametank, 2026-10-20. · **Clemente, 2026-09-08** — first request after the proxy flip logged a Cloudflare edge address; the panel real-IP template was applied the same evening, and a later sample of 300 Apache access-log lines held no Cloudflare addresses. `REMOTE_ADDR` inside PHP was not probed separately. The project notes said "no Cloudflare in front," but DNS had moved to Cloudflare after kickoff, and the form's rate limit was keyed on edge IPs. The same pass found another webapp on the same box with both bugs: `REMOTE_ADDR` in its contact handler, and an unchecked `CF-Connecting-IP` in its portal.
 
+### Distributed login brute force beats per-IP limiters — challenge `wp-login.php` at Cloudflare, and match with `ends_with`
+**Symptom / When:** The login limiter (ASE, Limit Login Attempts, Wordfence) logs hundreds of failures a day and never locks anyone
+out. Every attempt comes from a different IP (Nativity: 349 failures from 349 IPs in one day), so a "5 per IP" rule never trips.
+The usernames tried are telling: whatever the site leaks (hashed author slugs ASE publishes, the real login from oEmbed `author_name`).
+**Fix:** a zone custom rule (dashboard: Security → **Security rules** → Create rule → Custom rules; the old "Security → WAF" path is gone),
+action **Managed Challenge**:
+`(ends_with(http.request.uri.path, "/wp-login.php") and not ip.src eq <office IP>)`, plus a **Block** rule on
+`ends_with(http.request.uri.path, "/xmlrpc.php")`. Use `ends_with`, not `eq "/wp-login.php"`: **319 of 832 bot POSTs used `//wp-login.php`**,
+which an exact match misses. Close the leaks too (`mp-user-enumeration-hardening`, `01`). The zone DNS/SSL token can't write rules, so add
+them in the dashboard. "Zone lockdown request failed" on that page is a paid feature failing to load on a free zone. Ignore it.
+**Verify:** `curl -sI <site>/wp-login.php` → 403 with `cf-mitigated: challenge` (and the `//` form). XML-RPC's 403 body should be
+Cloudflare's "you have been blocked", not WordPress's. A real browser login passes the challenge on its own.
+**First seen:** Nativity, 2026-11-21, on cutover day. Compare the limiter's daily failure count the next day to decide whether it can go.
+
 ### Cloudflare's "Redirect from WWW to root" template only matches https
 **Symptom / When:** `https://www.<domain>/…` 301s to the apex correctly, but `http://www.<domain>/` returns a **404 from the origin**, served through Cloudflare (`cf-cache-status: DYNAMIC`, no `location`).
 **Why:** The template's request-URL wildcard is `https://www.*`, so plain-http requests never match. They fall through to the origin, and RunCloud's nginx has no vhost for `www` (only the apex is attached to the webapp), so the default server answers 404.
@@ -785,6 +799,17 @@ add_filter( 'perfmatters_defer_js', $off );
 **First seen:** NLTA, 2026-07-06 — a front-end submission form's Add Image was dead; the same config already carried a `ws-form` delay exclusion for the same failure class.
 **Extended (MMHN, 2026-10-02) — mechanism 2 hits any page that loads `@wordpress` packages, not just the media modal.** Product pages threw `wp is not defined`, `_ is not defined`, `Cannot read properties of undefined (reading 'debounce')` (10 errors per page) once Stripe's product-page express buttons were on; cart/checkout were clean. Defer had been added to `lodash`, `wp-hooks`, `wp-i18n`, `wp-api-fetch`, `wp-data`, `underscore`, while their inline companions (`lodash-js-after`, `wp-i18n-js-after`, `wp-api-fetch-js-after`, `wp-data-js-after`) ran at parse time. **Prefer not loading the packages there**: Stripe express buttons on cart + checkout only (`express_checkout_button_locations` = `[cart, checkout]`). If a page genuinely needs them, add those handles' files to the Perfmatters defer exclusions and accept the render-blocking cost on those pages only. Trace with a Playwright `pageerror` listener per page; the stack names the consumer.
 
+### ShortPixel — settings set from CLI are reverted by a settings tab opened earlier, and a bulk run then uses the stale values
+**Symptom / When:** You set `spio_settings` from WP-CLI and verify them, then someone saves the ShortPixel settings page (or the save
+fires on the way to the bulk screen) from a tab loaded **before** your change. Every field on that form goes back to what the tab held.
+On Nativity that was ShortPixel's defaults: `deliverWebp` 0 (no `<picture>`, so no AVIF delivered), `resizeImages` off, `resizeType` outer,
+and **`optimizePdfs` on**. The bulk run that followed compressed all 46 PDFs (342 → 96 MB) when PDF optimization was meant to be off.
+**Fix:** reload the settings page before saving it, and re-read `spio_settings` right before starting a bulk run. Set values through the model:
+`$s = wpSPIO()->settings(); $s->deliverWebp = 1;` (magic setters persist on shutdown; `save()` is protected and fatals from `wp eval`).
+**Values:** `deliverWebp` 1 = Global `<picture>` (output buffer), 2 = WP-hooks `<picture>`, 3 = `.htaccess`. `resizeType` `inner` = Contain
+(both sides within the box, the usual "max 1920"), `outer` = Cover. Heartbeat-style `max` values aren't involved here.
+**First seen:** Nativity, 2026-11-21 (6.6.2). The PDFs turned out fine on review, and Michael kept PDF optimization on by choice.
+
 ### ShortPixel — WebP/AVIF images don't render in Outlook desktop, and there's no JPEG to fall back to
 **Symptom / When:** Images are blank or broken boxes in Outlook desktop (Windows) email, but fine in Gmail and Apple Mail. Site media is served as `.webp` / `.avif`.
 **Why:** Outlook desktop uses the Word rendering engine, which can't display WebP/AVIF. Worse, ShortPixel's CDN delivery (`spcdn.shortpixel.ai/spio/…,to_auto,s_webp:avif/…`) serves WebP **even to clients that never send `Accept: image/webp`** when the origin file is itself `.webp` + `to_auto` — there is no JPEG fallback. ShortPixel only optimizes *toward* next-gen formats; `to_jpg` against a webp origin just 307-redirects back to the webp. **So no JPEG exists anywhere to link to.**
@@ -871,6 +896,17 @@ Matching images skip the count and are lazy-loaded normally.
 **Reusing a storage's credentials for an arbitrary upload** (e.g. a large file kept out of the archives): clone the storage entity **in memory** (never save the clone), change `config['storage_folder']`, null `adapter`, and loop `copyToStorage($src, $dst, $offset, $chunk, 0, $extra, $gen)`; it validates the remote size at the end. A separate folder keeps Duplicator's retention from ever touching the file. Rerun after the file changes; skip when the remote size already matches.
 **Defaults worth changing:** the stock template includes "other" root files, so tooling, caches and big static assets in the web root all ship in every archive (MMHN: 5.8 GB → 490 MB after exclusions). SSL verification for remote uploads shipped **disabled**.
 **First seen:** MMHN, 10/08/2026 — configured by an idempotent `wp eval-file` script that backs up the entity rows first; a 4.66 GB map-tile file copied to remote storage through the cloned-entity route.
+
+### `wp plugin deactivate duplicator-pro` can report success and leave it active — read the status back
+**Symptom / When:** WP-CLI prints `Warning: Could not deactivate the 'duplicator-pro' plugin.` and `Success: Deactivated 1 of 1 plugins.`
+in the same run, and `wp plugin get duplicator-pro --field=status` still says `active`. A second identical command works.
+**Why:** Not traced to a line. It reproduced on two hosts the same day (DreamHost VPS, PHP 8.2; and RunCloud right after a DB import,
+where the decrypt of license data was failing for a missing `DUPLICATOR_AUTH_KEY`). The cost is real: a staging copy "deactivated" this
+way came back on and **ran the live site's weekly schedule toward the live Backblaze bucket**. It failed only because staging lacked the
+auth key.
+**Fix:** after any Duplicator deactivate, `wp plugin get duplicator-pro --field=status` and repeat until `inactive`. On a staging copy of a
+site with remote schedules, also check that `active_plugins` in the DB has no `duplicator-pro`.
+**First seen:** Nativity, 2026-11-21 (both hosts, during cutover).
 
 ## Email delivery
 

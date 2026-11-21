@@ -168,8 +168,8 @@ with `GET …/webapps/{w}/runcache` (`page_cache_type` in `cacheSettings`). Page
 Shared, byte-identical mu-plugins live in the **private repo `mikeparkshere/mpd-mu-plugins`** and are
 deployed by its `bin/mu-sync`; `fleet.conf` there assigns plugins to sites (KB 01, the exception to the
 core-plugin rule). First plugin: **`mpd-mailgun-mailer`** — the standard mail transport on MPD and JBM properties alike (`MPD_*` constants). jbm001's sites run its predecessor `jbm-mailgun-mailer` and stay on it. Rollout steps: `docs/mailer-rollout-playbook.md` in that repo.
-⚠️ **Rollout is incomplete. `fleet.conf` covers jbm001's sites plus single rows on mpd2026 (tab-staging, on the mailer
-since 2026-11-15) and vtla0225, app-nfhl + app-mpdclient on mpd2025_01, and app-mmhn on mmhn26 (2026-11-15); every other box is unlisted.** On any other box, at the start of a
+⚠️ **Rollout is incomplete. `fleet.conf` covers jbm001's sites plus rows on mpd2026 (tab-staging, on the mailer
+since 2026-11-15; app-nativity, on the mailer since 2026-11-21, replacing Post SMTP) and vtla0225, app-nfhl + app-mpdclient on mpd2025_01, and app-mmhn on mmhn26 (2026-11-15); every other box is unlisted.** On any other box, at the start of a
 WordPress session, check whether this server is listed (`gh api repos/mikeparkshere/mpd-mu-plugins/contents/fleet.conf
 --jq .content | base64 -d`, or a local clone; a box without `gh` gets its own deploy key, since one key can't be a deploy key on two repos and a key's write access can't be edited later, so decide it at creation; mmhn26 uses alias `github-mu`) and **tell Michael if it isn't** — then offer to: add its rows
 (host = this box's ssh alias), and for each site note how mail is sent — `mpd-mailgun-mailer` or `jbm-mailgun-mailer` already present
