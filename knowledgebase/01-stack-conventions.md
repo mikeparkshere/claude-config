@@ -61,6 +61,30 @@ define( 'MP_UEH_GENERIC_LOGIN_ERRORS', false );   // client objects to the wordi
 
 The stakes scale with what is behind the login, not with whether the leak exists — it is identical on every install. A site with WooCommerce, customer PII, and card gateways in PCI scope is handing an attacker a confirmed super-admin username to spray against.
 
+**Post-update checklist: run after every major WordPress update, and after deploying the plugin.** The plugin hooks stable core APIs and rarely needs a code change. What can change is core, which might add a new way to read users. Four checks, each one curl, run anonymously from outside:
+
+```bash
+S=https://example.org   # the live site
+curl -s -o /dev/null -w 'REST users        %{http_code} (expect 401)\n' "$S/wp-json/wp/v2/users?cb=$RANDOM"
+curl -s -o /dev/null -w 'REST users, plain %{http_code} (expect 401)\n' "$S/?rest_route=/wp/v2/users&cb=$RANDOM"
+curl -s -o /dev/null -w '?author=1         %{http_code} %{redirect_url} (expect 404, no redirect)\n' "$S/?author=1&cb=$RANDOM"
+curl -s -o /dev/null -w 'author archive    %{http_code} (expect 404)\n' "$S/author/<a-real-author-slug>/?cb=$RANDOM"
+curl -s "$S/wp-json/oembed/1.0/embed?url=$S/&cb=$RANDOM" | grep -oE '"author_(name|url)"' || echo 'oEmbed            no author fields (expect this line)'
+```
+
+| Check | Pass | Fail means |
+|---|---|---|
+| `/wp-json/wp/v2/users` (and the `?rest_route=` form) | `401` `rest_forbidden` | display names and login slugs are public again |
+| `/?author=1` | `404`, no `Location` | a 301 to `/author/<slug>/` hands over the login slug |
+| `/author/<slug>/` | `404` | author archives are back (fine only if `MP_UEH_BLOCK_AUTHOR_ARCHIVES` is `false` on purpose) |
+| oEmbed `embed?url=` | no `author_name` / `author_url` | the embed names the post author, often the admin's login |
+
+Two ways this check lies:
+- **A malformed URL fakes a pass.** `…/wp/v2/users&cb=123` (an `&` with no `?`) is a different route, and `rest_no_route` 404 looks like success. The REST check must come back **401 `rest_forbidden`**, not 404.
+- **A page cache serves the pre-change answer.** The cache-buster matters for `?author=` and `/author/` on a site with RunCache or another page cache. REST and oEmbed run through `wp-json`, which RunCache bypasses.
+
+A Bricks login form is checked separately, on the rendered form with a wrong password (see above).
+
 **First applied:** PAWS (pawsforwcds.org), 2026-10-15 — found during a PCI remediation. Live Tier 2 site, not a new build, so note the scope seam in `00`: this standard is fleet-wide, while the knowledgebase is otherwise scoped to new builds. Treat it as a backfill item for existing sites, not just a kickoff step.
 
 ---
