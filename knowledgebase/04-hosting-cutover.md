@@ -645,6 +645,20 @@ Writes the consts and installs `object-cache.php`. Redis password = `/etc/redis/
 - Install/uninstall each flush rewrites again — `wp rewrite flush` afterwards (canary entry above).
 **First seen:** MMHN, 2026-10-02 — 61 GB of `proxy_temp` in ~4 minutes, disk down to 4 GB free before the nginx restart stopped it; the database never hit full. Reinstalled with `/tiles` excluded: bypass verified, 40 parallel range requests = +1 MB.
 
+### RunCache 1.3.0 — a URL exclusion with `?` or `*` is treated as a glob and escaped, so a regex quantifier kills it
+**Symptom / When:** A regex exclusion saves fine and `send-settings` reports success, but the matching URLs still go `MISS` → `HIT`.
+**Why:** `Runcloud::glob_to_regex_if_needed()` checks `strpbrk($pattern, '*?')`. Any hit runs the whole pattern through `preg_quote()`
+and maps `\*`→`.*`, `\?`→`.`. So `\.(pdf|docx?)$` ships as `\\\.\(pdf\|docx.\)\$`, a literal string that matches nothing.
+Patterns without `*`/`?` are sent as PCRE untouched.
+**Fix:** spell alternatives out instead of `?`: `\.(pdf|docx|doc|xlsx|xls|pptx|ppt|csv|zip)$`. Or use a plain glob (`*.pdf`).
+Test a pattern by calling the private method through Reflection before saving. Verify with two requests at origin: expect `BYPASS` both times.
+Also new in 1.3.0: `Rules::save_settings()` fires `runcache_rules_updated`, which syncs to nginx by itself (0.1.0 needed `send-settings`).
+**Install by API:** `POST /servers/{s}/webapps/{w}/runcache` `{"cacheType":"native","redisObjectCache":false,"cacheFolderSize":50,"cacheValidMinute":480}`
+→ "Installation will begin shortly", `status: Completed` ~15 s later. The rewrite-flush canary above fired on this install too (372 → 95).
+**Find what Apache serves before enabling:** an Apache ETag looks like `"22266-64b9214f01149"` (size-mtime in µs, no cache-control). nginx's
+looks like `"673a0c0c-a83c"` and comes with `cache-control: max-age=2592000`. On a hybrid webapp, **PDFs went through Apache, so through the cache.**
+**First seen:** Nativity, 2026-11-21 — `docx?` regex dead on arrival; a 2026 PDF went MISS → HIT before the fix. Annual-report PDFs here run to 58 MB.
+
 ## LiteSpeed Cache / OpenLiteSpeed
 
 *New section at the MBC harvest, 2026-08-25. OpenLiteSpeed boxes run LiteSpeed Cache rather than RunCache, and its optimisation features fail in ways that look like application bugs. All three LSCache entries below cost real debugging time before the cache was suspected.*
