@@ -54,7 +54,7 @@ Read every numbered file it contains, 00 through 04, in order, honoring whatever
 
 Then read the project CLAUDE.md if one exists, at the project root or at app/public/wp-content/.
 
-**Dispatch on its `stack:` line** (`00`, read protocol step 4). No line, or `stack: acss`, means every `[stack:acss]` rule applies — the fleet default. `stack: bricks-native` means load the stack file the CLAUDE.md names and apply its replacements instead; the ACSS-specific CSS locations further down this file do not exist on that stack.
+**Dispatch on its `stack:` line** (`00`, read protocol step 4). No line, or `stack: acss`, means every `[stack:acss]` rule applies — the fleet default. `stack: bricks-native` means load the stack file the CLAUDE.md names and apply its replacements instead; the ACSS-specific CSS locations further down this file do not exist on that stack. `stack: classic-theme` means load `stacks/classic-theme.md`: no Bricks and no ACSS, so the builder and ACSS sections of this file don't apply.
 
 The knowledgebase is the operating authority for this session. Where anything below in this file disagrees with it, the knowledgebase wins.
 

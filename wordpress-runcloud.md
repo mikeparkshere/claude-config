@@ -41,7 +41,7 @@ Do not continue under the unloaded gate. If Michael explicitly chooses to stay i
 cat CLAUDE.md
 ```
 
-If `CLAUDE.md` exists, read it and acknowledge the project context before proceeding. Read its `stack:` line and dispatch on it (`knowledgebase/00`, read protocol step 4): absent or `acss` = the `[stack:acss]` rules apply; `bricks-native` = load the stack file it names, and ignore the ACSS-only paths and rules in this file. If it does not exist, flag this to the user:
+If `CLAUDE.md` exists, read it and acknowledge the project context before proceeding. Read its `stack:` line and dispatch on it (`knowledgebase/00`, read protocol step 4): absent or `acss` = the `[stack:acss]` rules apply; `bricks-native` = load the stack file it names, and ignore the ACSS-only paths and rules in this file; `classic-theme` = load `stacks/classic-theme.md`, and ignore the ACSS paths and the Bricks-specific sections of this file (no builder on that stack). If it does not exist, flag this to the user:
 
 > "No CLAUDE.md found for this webapp. I have environment context but no project context. You may want to create one before we proceed — or tell me about the project now."
 

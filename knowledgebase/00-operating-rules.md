@@ -124,7 +124,8 @@ At the start of any session:
 
    - Rules tagged **`[stack:acss]`** apply only when `stack: acss`, **or when no stack is declared** — the grandfathered fleet default. Every pre-carve-out project is an ACSS site, so an unmarked project falls back to the rules it was built under, the same way an unmarked phase falls back to LIVE.
    - When `stack: bricks-native`, load the stack file named in the project `CLAUDE.md` (master: `stacks/bricks-native.md`) and apply its replacements in place of every `[stack:acss]` rule. A project `CLAUDE.md` suspended-rules table is the per-project override and wins over the stack file where they differ — flag the difference, don't pick one silently.
-   - **Untagged rules apply to every stack:** BEM, no `__inner`, the clickable-parent and focus-parent *patterns*, phase gates, the authorization gradient, the golden rule, typed-settings-first, compaction safeguards.
+   - When `stack: classic-theme`, load `stacks/classic-theme.md`: it replaces every `[stack:acss]` rule **and** suspends the untagged rules that are about Bricks (the golden rule, typed-settings-first, Bricks write cautions), since there is no builder. Same project-override rule as above.
+   - **Untagged rules apply to every stack** (except where `classic-theme` suspends the Bricks ones): BEM, no `__inner`, the clickable-parent and focus-parent *patterns*, phase gates, the authorization gradient, the golden rule, typed-settings-first, compaction safeguards.
 
    **Engagement dispatch, same step.** Read `engagement:` too (`grep -m1 '^engagement:' CLAUDE.md`) and state it next to the stack. Absent means `build`. `seo-retainer` loads `seo/retainer-method.md` (via the `mpd-seo-retainer` skill). If `CLAUDE.md` says `seo-retainer` but the box's `~/.dataforseo/config.json` doesn't list the webapp, or the reverse, that's a drift report for Mike, not something to fix.
 
