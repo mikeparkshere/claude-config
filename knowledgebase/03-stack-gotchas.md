@@ -5072,6 +5072,12 @@ Render from the parsed parts, never by echoing the stored HTML. **Test it as the
   oldest rows are already past the period.
 - **The purge skips trashed rows** (`NOT status = 'trash'` in the query), so anything already in WS Form's trash
   stays until someone empties it by hand. Count trash separately before promising a retention period.
+  **A manual trash keeps `date_expire`** (`db_set_status()` writes `status` only), so the fix is one hook on WS Form's
+  own hourly event at priority 20: select `status = 'trash' AND date_expire < WS_Form_Common::get_mysql_date()`, skip
+  forms where `db_get_form_auto_delete_method( $id, true )` isn't `'delete'`, and call `db_delete( true, true, true )`
+  per row (removes meta and notes, fires `wsf_submit_delete_permanent`, works under cron). Clemente
+  `clemente-functionality/inc/submission-retention.php`, 2026-11-27, tested with a past-due row (purged with its meta)
+  and a future-dated control (kept). *(Unharvested.)*
 - Writing the setting: the narrow action-grid pattern (`03`, WS Form action rows) with `--user=<admin>` (the form read
   throws `Insufficient user capabilities (read_form)` as user 0), then `db_publish()`. Read the result back from the
   **`published`** column; `db_read()` returns the draft.
@@ -5093,3 +5099,15 @@ it, footer newsletter forms included, so the whole site looks like it has a dupl
 strip `<script>` blocks first. Then look at the real H1s.
 **First seen:** Clemente, 2026-11-19, in the sweep for the accessibility statement (one real H1 per page).
 *(Tier 2 site, master project section, unharvested.)*
+
+### `WS_Form_Field::db_create()` with a label already set skips the field type's defaults
+**Symptom / When:** Fields created from a script render, but `wp_wsf_field_meta` holds only the keys you passed. A builder-made field of the same type has 30 or more more (`data_grid_datalist`, `rows`, `input_type_textarea`, `dedupe`, `field_user_roles`…). The script prints `Undefined variable $field_type_config` at `class-ws-form-field.php:115`.
+**Why:** `db_create()` loads `$field_type_config` only inside the `if ( $this->label === '' )` branch, then passes it to `build_meta_data()`. With a label set, the variable is undefined, so no defaults are built, and the new field gets `section_id` plus your `$field->meta` (WS Form Pro 1.12.19).
+**Fix:** Either create with an empty label and set the label afterward, or do what Clemente did: create, then copy every key the new field lacks from a builder-made field of the same type (`WS_Form_Meta`, `object = 'field'`, `db_update_from_object( $missing, false, true )`), then `db_publish( true )`. Skip keys you don't want inherited: a copied `help` came across verbatim. Diff the key sets afterward (`comm -3` on sorted `meta_key` lists). Only your intended differences should remain.
+**First seen:** Clemente, 2026-11-27, adding three tribute-notice fields to form 5. *(Tier 2 site, master project section, unharvested.)*
+
+### WS Form Google Sheets: a mapping to a missing header drops that one field, silently
+**Symptom / When:** You add a field mapping before the sheet has the column. The action logs "Successfully added" and the row appears, minus that field.
+**Why:** The add-on reads row 1 live on each submit and loops over the **sheet's** headers, looking each one up in the mapping by exact text (`ws-form-google-sheets.php:880-911`, add-on 1.1.4). A mapping with no matching header is never visited. Only a completely empty row 1 makes the action return early (`:550`).
+**Fix:** Write the header first, with exact text (case and whitespace count), then the mapping. Check with one real submission. Corrects an earlier Clemente note that called it a whole-action no-op.
+**First seen:** Clemente, 2026-11-27 (source-read before adding columns G–J). *(Tier 2 site, master project section, unharvested.)*
